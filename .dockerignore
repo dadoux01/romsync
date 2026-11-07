@@ -1,0 +1,8 @@
+.git
+**/node_modules
+web/dist
+server/bin
+server/internal/webui/dist
+data
+client
+3ds

@@ -24,6 +24,15 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	// `romsync healthcheck` is used by the container health check: the
+	// distroless image has no shell nor curl.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
 		os.Exit(1)
@@ -80,6 +89,23 @@ func run() error {
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func healthcheck() error {
+	cfg, err := config.FromEnv()
+	if err != nil {
+		return err
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	res, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/healthz", cfg.Port))
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", res.StatusCode)
 	}
 	return nil
 }

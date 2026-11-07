@@ -1,0 +1,30 @@
+# RomSync — example deployment.
+#   cd deploy && docker compose up -d
+# then open http://<server>:8080 to create the administrator account.
+services:
+  romsync:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: romsync:latest
+    container_name: romsync
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - romsync-data:/data
+    environment:
+      ROMSYNC_PORT: "8080"
+      ROMSYNC_DATA_DIR: /data
+      # Maximum size of an uploaded save, in bytes (16 MiB).
+      ROMSYNC_MAX_UPLOAD: "16777216"
+      # Proxies whose X-Forwarded-For header is trusted (comma-separated IPs
+      # or CIDR networks). Empty: the TCP peer address is used. See the README
+      # section about Tailscale.
+      ROMSYNC_TRUSTED_PROXIES: ""
+      ROMSYNC_RETENTION_INTERVAL: 1h
+
+volumes:
+  # Holds the SQLite database (romsync.db) and the save files (blobs/).
+  # Back it up by copying it, after `sqlite3 romsync.db "VACUUM INTO 'backup.db'"`.
+  romsync-data:
