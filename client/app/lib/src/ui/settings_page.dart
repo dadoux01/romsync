@@ -80,6 +80,19 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               for (final id in emulatorIds) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
               const Divider(),
+              Text('Barre système', style: text.titleMedium),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: c.config.keepInTray,
+                onChanged: c.setKeepInTray,
+                title: const Text('Garder RomSync dans la barre système à la fermeture'),
+                subtitle: const Text(
+                  'Les saves des jeux lancés sans passer par RomSync sont alors envoyées automatiquement. '
+                  'Les saves plus récentes du serveur sont signalées par une notification, et téléchargées '
+                  'au prochain lancement depuis RomSync.',
+                ),
+              ),
+              const Divider(),
               Text('Copies de sécurité', style: text.titleMedium),
               ListTile(
                 title: const Text('Copies .backup gardées par save'),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import 'src/app_controller.dart';
+import 'src/desktop_shell.dart';
 import 'src/keyring_token_store.dart';
 import 'src/ui/home_page.dart';
 import 'src/ui/pairing_page.dart';
@@ -18,6 +19,14 @@ Future<void> main() async {
     profiles: await loadBundledProfiles(rootBundle),
   );
   await controller.init();
+  try {
+    await DesktopShell(controller).init();
+  } catch (e) {
+    // No tray on this desktop (e.g. GNOME without the AppIndicator
+    // extension): the app still works, closing the window quits it.
+    debugPrint('system tray unavailable: $e');
+    controller.config.keepInTray = false;
+  }
   runApp(RomSyncApp(controller: controller));
 }
 

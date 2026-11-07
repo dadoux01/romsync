@@ -105,6 +105,7 @@ class ClientConfig {
     Map<String, String>? gameEmulators,
     this.backupCount = 10,
     this.tokenStorage = TokenStorage.keyring,
+    this.keepInTray = true,
     Map<String, RomChoice>? romChoices,
   }) : romFolders = romFolders ?? [],
        emulators = emulators ?? {},
@@ -133,6 +134,10 @@ class ClientConfig {
   int backupCount;
   TokenStorage tokenStorage;
 
+  /// Closing the window keeps RomSync in the system tray, watching the
+  /// saves of games launched without it.
+  bool keepInTray;
+
   /// Choices for ROMs sharing a game identifier, by ROM key.
   final Map<String, RomChoice> romChoices;
 
@@ -148,6 +153,7 @@ class ClientConfig {
     'game_emulators': gameEmulators,
     'backup_count': backupCount,
     'token_storage': tokenStorage.name,
+    'keep_in_tray': keepInTray,
     'rom_choices': {for (final e in romChoices.entries) e.key: e.value.toJson()},
   };
 
@@ -169,6 +175,7 @@ class ClientConfig {
     },
     backupCount: (j['backup_count'] as int?) ?? 10,
     tokenStorage: TokenStorage.values.byName((j['token_storage'] as String?) ?? 'keyring'),
+    keepInTray: (j['keep_in_tray'] as bool?) ?? true,
     romChoices: {
       for (final e in ((j['rom_choices'] as Map<String, Object?>?) ?? const {}).entries)
         e.key: RomChoice.fromJson(e.value! as Map<String, Object?>),

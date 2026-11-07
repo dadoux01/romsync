@@ -22,6 +22,7 @@ export 'src/state/json_file.dart';
 export 'src/state/save_state.dart';
 export 'src/state/token_store.dart';
 export 'src/state/upload_queue.dart';
+export 'src/sync/background.dart';
 export 'src/sync/backups.dart';
 export 'src/sync/emulator_switch.dart';
 export 'src/sync/engine.dart';

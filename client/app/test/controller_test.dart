@@ -158,4 +158,63 @@ void main() {
     expect(c.rows.single.entry.emulator, 'melonds');
     expect(c.config.gameEmulators, isEmpty);
   });
+
+  test('announces a newer server save once, with the game and the device it comes from', () async {
+    final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
+    File(p.join(roms.path, 'Noire.nds')).writeAsBytesSync(rom('IRBF'));
+    final notices = <(String, String)>[];
+    final remote = MockClient((req) async {
+      if (req.url.path == '/api/v1/pair') {
+        return http.Response(
+          jsonEncode({
+            'token': 't',
+            'device': {'id': 7, 'name': 'Fedora', 'platform': 'linux'},
+          }),
+          201,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'games': [
+            {
+              'code': 'IRBF',
+              'title': 'Pokémon Noire',
+              'active_version': {
+                'id': 12,
+                'game_code': 'IRBF',
+                'sha256': 'ab' * 32,
+                'size': 512,
+                'saved_at': '2026-11-07T12:00:00.000Z',
+                'uploaded_at': '2026-11-07T12:00:00.000Z',
+                'device_name': 'Asahi',
+                'is_active': true,
+              },
+            },
+          ],
+        }),
+        200,
+      );
+    });
+    final c = AppController(
+      paths: paths,
+      keyring: FakeKeyring(available: true),
+      profiles: profiles,
+      httpClient: remote,
+      scanner: RomScanner(findSevenZip: false),
+      refreshInterval: const Duration(hours: 1),
+      environment: {'HOME': p.join(tmp.path, 'home'), 'PATH': ''},
+    );
+    c.onNotice = (title, body) => notices.add((title, body));
+    await c.init();
+    addTearDown(c.dispose);
+    await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora');
+    await c.addFolder(roms.path);
+    await c.refresh();
+
+    expect(c.rows.single.status.status, SaveStatus.toDownload);
+    expect(notices, hasLength(1));
+    expect(notices.single.$1, contains('Pokémon Noire'));
+    expect(notices.single.$2, contains('Asahi'));
+    expect(c.background!.watched, [c.rows.single.entry.savePath]);
+  });
 }

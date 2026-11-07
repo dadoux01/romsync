@@ -67,6 +67,15 @@ class AppController extends ChangeNotifier {
   final List<SyncEvent> events = [];
   final List<String> warnings = [];
 
+  /// Shows a desktop notification (set by the desktop shell).
+  void Function(String title, String body)? onNotice;
+
+  /// Saves watched while the app sits in the tray (games launched without
+  /// RomSync); null until paired.
+  BackgroundWatcher? background;
+  final _notified = <String>{};
+  String? _runningSave;
+
   bool online = true;
   bool loading = false;
   String? runningGame;
@@ -100,10 +109,18 @@ class AppController extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(background?.stop());
     super.dispose();
   }
 
+  Future<void> setKeepInTray(bool value) async {
+    config.keepInTray = value;
+    await _saveConfig();
+    notifyListeners();
+  }
+
   void _connect(String token) {
+    unawaited(background?.stop());
     api = RomSyncApi(serverUrl: config.serverUrl!, token: token, client: httpClient);
     engine = SyncEngine(
       api: api!,
@@ -112,6 +129,7 @@ class AppController extends ChangeNotifier {
       backups: Backups(keep: config.backupCount),
       onEvent: _onEvent,
     );
+    background = BackgroundWatcher(engine: engine!);
   }
 
   void _onEvent(SyncEvent e) {
@@ -152,6 +170,8 @@ class AppController extends ChangeNotifier {
       ..deviceId = null
       ..deviceName = null;
     await _saveConfig();
+    await background?.stop();
+    background = null;
     api = null;
     engine = null;
     rows = [];
@@ -326,6 +346,12 @@ class AppController extends ChangeNotifier {
     }
     out.sort((x, y) => x.entry.title.toLowerCase().compareTo(y.entry.title.toLowerCase()));
     rows = out;
+    // Games launched without RomSync: watch their saves (uploads only), and
+    // announce newer server saves once.
+    await background?.update(out.map((r) => r.entry), excluded: {?_runningSave});
+    for (final n in downloadNotices([for (final r in out) (r.entry, r.status, r.remote)], _notified)) {
+      onNotice?.call('Nouvelle save : ${n.title}', n.message);
+    }
     notifyListeners();
   }
 
@@ -352,6 +378,9 @@ class AppController extends ChangeNotifier {
 
     final running = await RunningEmulator.start(emulatorOf(entry.emulator).launchPlan(entry.rom));
     runningGame = entry.title;
+    _runningSave = entry.savePath;
+    // The PlaySession follows this save; the background watcher steps aside.
+    await background?.update(rows.map((r) => r.entry), excluded: {entry.savePath});
     notifyListeners();
     final session = PlaySession(engine: e, entry: entry);
     await session.start();
@@ -359,6 +388,7 @@ class AppController extends ChangeNotifier {
       running.exitCode.then((code) async {
         await session.finish();
         runningGame = null;
+        _runningSave = null;
         if (code != 0) {
           _onEvent(
             SyncEvent(
