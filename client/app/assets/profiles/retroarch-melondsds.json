@@ -1,0 +1,15 @@
+{
+  "id": "retroarch-melondsds",
+  "name": "melonDS DS (RetroArch)",
+  "status": "to_verify",
+  "extension": ".srm",
+  "location": "RetroArch savefile_directory (or next to the ROM), plus the ROM folder name and/or \"melonDS DS\" depending on sort_savefiles_by_content_enable and sort_savefiles_enable",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "Raw SRAM buffer exposed by the core through retro_get_memory_data(RETRO_MEMORY_SAVE_RAM) (melonds-ds src/libretro/sram.cpp), written as is by RetroArch. Its size comes from melonDS's ROM list, which has no 32 KiB entry: 32 KiB FRAM games get 64 KiB files, absorbed by the server's size rules. Stays to_verify until a real round trip with RetroArch."
+}

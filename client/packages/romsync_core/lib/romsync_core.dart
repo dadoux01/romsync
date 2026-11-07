@@ -7,6 +7,7 @@ export 'src/emulators/desmume.dart';
 export 'src/emulators/emulator.dart';
 export 'src/emulators/flatpak.dart';
 export 'src/emulators/melonds.dart';
+export 'src/emulators/retroarch.dart';
 export 'src/profiles/profile.dart';
 export 'src/rom/game_id.dart';
 export 'src/rom/nds_header.dart';

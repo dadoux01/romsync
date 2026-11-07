@@ -15,7 +15,7 @@ Future<ProcessResult> runCommand(String executable, List<String> arguments) => P
 
 /// Where an emulator writes its saves.
 class SaveLocation {
-  const SaveLocation({required this.dir, required this.source, this.warning});
+  const SaveLocation({required this.dir, required this.source, this.warning, this.data});
 
   /// Save folder, or null for "next to the ROM".
   final String? dir;
@@ -25,6 +25,10 @@ class SaveLocation {
 
   /// Set when the detection is not reliable and the user should check.
   final String? warning;
+
+  /// Emulator-specific details (RetroArch's configuration, whose save folder
+  /// depends on each ROM).
+  final Object? data;
 }
 
 /// A command line ready to be started.
