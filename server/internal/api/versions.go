@@ -448,7 +448,7 @@ func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	v, _, err := s.versionParam(r)
+	v, gameID, err := s.versionParam(r)
 	if err != nil {
 		return err
 	}
@@ -456,7 +456,17 @@ func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out, err := prof.Encode(raw)
+	var out []byte
+	if fc, ok := prof.(convert.Flashcard); ok {
+		// Pad to max(512 KiB, chip size): the file never cuts the save.
+		var chip sql.NullInt64
+		if err := s.db.QueryRowContext(r.Context(), `SELECT chip_size FROM games WHERE id = ?`, gameID).Scan(&chip); err != nil {
+			return err
+		}
+		out, err = fc.EncodeForChip(raw, chip.Int64)
+	} else {
+		out, err = prof.Encode(raw)
+	}
 	if err != nil {
 		return errInvalid(err.Error())
 	}

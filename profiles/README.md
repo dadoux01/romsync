@@ -15,7 +15,7 @@ a small parser.
 | `extension` | File extension, with its dot |
 | `location` | Where the emulator looks for the file (informational) |
 | `header` / `footer` | Bytes added before / after the raw data, `null` when none |
-| `size.output` | `exact` (raw size) or `pad` (padded with `pad_byte` up to `pad_to` bytes) |
+| `size.output` | `exact` (raw size) or `pad_min` (padded with `pad_byte` up to at least `pad_to` bytes and the game's chip size; never cut) |
 
 The server implements the `raw`, `desmume` and `flashcard` profiles in Go
 (`server/internal/convert`); `TestProfilesMatchCode` fails if these files and

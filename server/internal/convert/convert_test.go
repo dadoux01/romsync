@@ -180,8 +180,14 @@ func TestFlashcardPadsToFixedSize(t *testing.T) {
 	if dec, _ := f.Decode(out); !bytes.Equal(dec, out) {
 		t.Fatal("decode keeps the file; the server cuts the padding")
 	}
-	if _, err := f.Encode(pattern(1 << 20)); err == nil {
-		t.Fatal("a save larger than the flashcard file must be refused")
+	// Never cut: a larger save keeps its real size.
+	big := pattern(1 << 20)
+	if out, err := f.Encode(big); err != nil || !bytes.Equal(out, big) {
+		t.Fatalf("a 1 MiB save must be exported whole: %d bytes, %v", len(out), err)
+	}
+	// The chip size raises the minimum.
+	if out, _ := f.EncodeForChip(pattern(64<<10), 1<<20); len(out) != 1<<20 {
+		t.Fatalf("expected 1 MiB, got %d", len(out))
 	}
 }
 
@@ -217,7 +223,7 @@ func TestProfilesMatchCode(t *testing.T) {
 		}
 		switch id {
 		case "flashcard":
-			if pf.Size.Output != "pad" || pf.Size.PadTo != FlashcardSize || pf.Footer != nil {
+			if pf.Size.Output != "pad_min" || pf.Size.PadTo != FlashcardSize || pf.Footer != nil {
 				t.Errorf("flashcard size differs from the code: %+v", pf.Size)
 			}
 		case "raw":

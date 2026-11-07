@@ -112,6 +112,33 @@ func TestNonPaddingExcessIsASizeMismatch(t *testing.T) {
 	}
 }
 
+func TestFlashcardExportNeverCuts(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	big := gameData(1<<20, 9) // 1 MiB flash save
+	v := admin.uploadOK(upload{code: "x:big", data: big, savedAt: e.clock.Now()}, 201).Version
+	r := admin.get(fmt.Sprintf("/api/v1/versions/%d/export?profile=flashcard", v.ID))
+	expect(t, r, 200)
+	if !bytes.Equal(r.body, big) {
+		t.Fatalf("a 1 MiB save must be exported at its real size, got %d bytes", len(r.body))
+	}
+}
+
+func TestSmallerFirstSaveMustBeAChipSize(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	dev, _ := e.pairDevice(admin, "PC")
+	t0 := e.clock.Now()
+
+	// YKWE is 64 KiB in the database. 40000 bytes is no chip size: refused.
+	expectErr(t, dev.upload(upload{code: "YKWE", data: gameData(40000, 1), savedAt: t0}), 409, "size_mismatch")
+	// 32 KiB (FRAM, missing from melonDS's table) is accepted and traced.
+	v := dev.uploadOK(upload{code: "YKWE", data: gameData(32<<10, 1), savedAt: t0}, 201).Version
+	if v.Size != 32<<10 || v.SizeEvent == nil || *v.SizeEvent != (sizeEventJSON{Type: "shrunk", From: k64}) || dev.chipSize("YKWE") != 32<<10 {
+		t.Fatalf("unexpected %+v", v)
+	}
+}
+
 func TestSizeDatabaseSetsChipSize(t *testing.T) {
 	e := newTestEnv(t)
 	admin := e.setupAdmin()

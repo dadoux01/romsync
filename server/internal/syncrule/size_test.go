@@ -29,6 +29,19 @@ func noActive() ([]byte, error) { return nil, nil }
 
 func activeIs(b []byte) func() ([]byte, error) { return func() ([]byte, error) { return b, nil } }
 
+func TestIsValidChipSize(t *testing.T) {
+	for _, n := range []int64{512, 8192, 32768, 65536, 524288, 1 << 20, 8 << 20, 64 << 20} {
+		if !IsValidChipSize(n) {
+			t.Errorf("%d must be valid", n)
+		}
+	}
+	for _, n := range []int64{0, 511, 40000, 100000, 3 << 20} {
+		if IsValidChipSize(n) {
+			t.Errorf("%d must be invalid", n)
+		}
+	}
+}
+
 func TestIsPadding(t *testing.T) {
 	for _, c := range []struct {
 		b    []byte
@@ -99,10 +112,14 @@ func TestSmallerUpload(t *testing.T) {
 	if _, err := ResolveSize(game(k64), k512, activeIs(game(k512)), false); !errors.Is(err, ErrSizeMismatch) {
 		t.Fatalf("got %v", err)
 	}
-	// No active version yet (size from the database): accepted.
+	// No active version yet (size from the database): accepted when the
+	// new size is a real chip size, and traced.
 	r, err = ResolveSize(game(32<<10), k64, noActive, false)
-	if err != nil || r.ChipSize != 32<<10 || r.Event.Type != SizeShrunk {
+	if err != nil || r.ChipSize != 32<<10 || *r.Event != (SizeEvent{Type: SizeShrunk, From: k64}) {
 		t.Fatalf("got %+v %v", r, err)
+	}
+	if _, err := ResolveSize(game(40000), k64, noActive, false); !errors.Is(err, ErrSizeMismatch) {
+		t.Fatalf("40000 bytes is not a chip size: %v", err)
 	}
 }
 

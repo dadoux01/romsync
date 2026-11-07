@@ -508,7 +508,8 @@ paths:
         excess is only padding (all 0xFF or all 0x00) is cut to the chip size;
         an upload smaller than the chip size is accepted, and becomes the new
         chip size, when the active version's excess is only padding (or when
-        the game has no active version yet). Any other size difference is a
+        the game has no active version yet and the new size is a valid chip
+        size). Any other size difference is a
         `409 size_mismatch`, unless `X-Force-Size` is sent from the web
         interface. Cuts and chip size changes are recorded in `size_event`.
       security: [{ session: [] }, { device: [] }]
@@ -657,12 +658,12 @@ paths:
           schema: { $ref: "#/components/schemas/ProfileID" }
       responses:
         "200":
-          description: Converted file (`<code>.sav` or `<code>.dsv`); the `flashcard` profile pads the save with 0xFF to 512 KiB.
+          description: Converted file (`<code>.sav` or `<code>.dsv`); the `flashcard` profile pads the save with 0xFF to max(512 KiB, chip size) and never cuts it.
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
         "400":
-          description: "`invalid_request`: unknown profile, or save larger than the profile's fixed size"
+          description: "`invalid_request`: unknown profile"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -844,7 +845,7 @@ components:
       type: string
       enum: [raw, desmume, flashcard]
       default: raw
-      description: "`raw`: the save chip content (melonDS). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to 512 KiB (to verify per flashcard model)."
+      description: "`raw`: the save chip content (melonDS). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to max(512 KiB, chip size), never cut (to verify per flashcard model)."
 
     Game:
       type: object

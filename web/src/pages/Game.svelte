@@ -171,7 +171,7 @@
                 <button onclick={() => editNote(v)}>Note</button>
                 <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
                 <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
-                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title="Complétée à 512 Kio avec 0xFF (format à vérifier selon la flashcard)">flashcard</a>
+                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title="Complétée avec 0xFF jusqu’à 512 Kio au moins, jamais coupée (format à vérifier selon la flashcard)">flashcard</a>
               </div>
             </td>
           </tr>

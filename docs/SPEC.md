@@ -118,7 +118,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 
 **Taille réelle**
 
-- Les puces DS ont des tailles fixes : 512 o, 8 Kio, 64 Kio, 128 Kio, 256 Kio, 512 Kio, 1 Mio, 8 Mio et plus pour la flash NAND de certains jeux.
+- Les puces DS ont des tailles fixes. Tailles de puce valides pour le serveur (union des tables de DeSmuME et de melonDS) : 512 o, 8 Kio, 32 Kio, 64 Kio, 128 Kio, 256 Kio, 512 Kio, 1 Mio, 2 Mio, 4 Mio, 8 Mio, 16 Mio, 32 Mio et 64 Mio (flash NAND de certains jeux).
 - Une save n'est jamais coupée sur la seule base de son remplissage : une save de 512 Kio dont la seconde moitié est encore vierge est une save valide. Une coupe ne se fait que vers une taille de puce déjà connue.
 - En entrée, le client retire seulement l'en-tête ou le pied ajouté par l'émulateur ; les règles de taille sont appliquées par le serveur.
 - Taille de puce d'un jeu (`games.chip_size`) :
@@ -126,10 +126,10 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
   - Sinon, la première save du jeu fixe `chip_size`.
 - À l'envoi d'une save de taille différente de `chip_size` :
   - plus grande, et l'excédent n'est que du remplissage (tout 0xFF ou tout 0x00) : elle est coupée à `chip_size` ;
-  - plus petite, et l'excédent de la version active n'est que du remplissage : `chip_size` prend la nouvelle taille et l'envoi est accepté. Si le jeu n'a pas encore de version active (taille issue de la base), l'envoi est accepté de la même façon, puisque rien ne peut être perdu ;
+  - plus petite, et l'excédent de la version active n'est que du remplissage : `chip_size` prend la nouvelle taille et l'envoi est accepté. Si le jeu n'a pas encore de version active (taille issue de la base), l'envoi est accepté de la même façon, puisque rien ne peut être perdu, mais seulement si la nouvelle taille est une taille de puce valide (sinon `409 size_mismatch`) ; la réduction est tracée comme les autres ;
   - dans tous les autres cas : `409 size_mismatch` ; `X-Force-Size` reste possible depuis le site et fixe `chip_size` à la nouvelle taille.
 - Chaque coupe ou changement de `chip_size` est tracé sur la version (`size_event` : `trimmed`, `shrunk` ou `forced` ; `size_event_from` : taille reçue pour une coupe, ancienne `chip_size` sinon) et affiché dans l'historique du site.
-- En sortie : on complète avec 0xFF quand le profil cible impose une taille fixe (profil `flashcard` : 512 Kio).
+- En sortie : on complète avec 0xFF quand le profil cible impose une taille minimale, sans jamais couper. Profil `flashcard` : taille exportée = max(512 Kio, `chip_size`) ; une save plus grande sort à sa taille réelle.
 - Exemple : une DSTT envoie une save de 64 Kio complétée à 512 Kio, `chip_size` vaut 512 Kio ; melonDS envoie ensuite la save de 64 Kio, l'excédent de la version active n'est que du remplissage, `chip_size` passe à 64 Kio ; les envois suivants de la DSTT sont coupés à 64 Kio.
 
 **Profils de conversion**
@@ -141,7 +141,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | melonDS DS (RetroArch) | `<rom>.srm` dans le dossier saves de RetroArch | Aucune a priori | À vérifier |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
-| Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF à 512 Kio (profil `flashcard`) | À vérifier par modèle |
+| Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF jusqu'à max(512 Kio, `chip_size`), jamais coupé (profil `flashcard`) | À vérifier par modèle |
 
 Chaque profil est un petit fichier déclaratif en JSON (`profiles/<id>.json` : chemin, extension, en-tête/pied, règle de taille ; le JSON reste simple à lire en C sur 3DS), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
 
@@ -332,7 +332,7 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 **Import/export sur le site (DS + flashcard, dépannage)**
 
 - Import : glisser un `.sav` ou `.dsv` ; le site détecte le format (cookie DeSmuME en fin de fichier) et l'envoie avec `?profile=desmume` le cas échéant. Le nom d'un fichier de save ne donne pas le code du jeu : l'utilisateur choisit un jeu existant ou saisit un code. En option, il peut désigner le `.nds` correspondant : le navigateur lit localement les 512 premiers octets pour en tirer le code et le titre, et la ROM n'est jamais envoyée.
-- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME, ou flashcard : brut complété à 512 Kio, format à vérifier par modèle).
+- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME, ou flashcard : brut complété à max(512 Kio, taille de puce), format à vérifier par modèle).
 
 ## Dépôt, roadmap et questions ouvertes
 

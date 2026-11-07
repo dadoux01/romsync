@@ -31,6 +31,23 @@ type SizeResult struct {
 	Event    *SizeEvent // nil when nothing was cut or changed
 }
 
+// ValidChipSizes are the save sizes of DS cartridges: the sizes known to
+// DeSmuME and melonDS (EEPROM, FRAM, flash and NAND).
+var ValidChipSizes = []int64{
+	512, 8 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10, 512 << 10,
+	1 << 20, 2 << 20, 4 << 20, 8 << 20, 16 << 20, 32 << 20, 64 << 20,
+}
+
+// IsValidChipSize reports whether n is the size of a DS save chip.
+func IsValidChipSize(n int64) bool {
+	for _, s := range ValidChipSizes {
+		if s == n {
+			return true
+		}
+	}
+	return false
+}
+
 // IsPadding reports whether b is non-empty and made of a single 0xFF or 0x00
 // byte value.
 func IsPadding(b []byte) bool {
@@ -71,8 +88,9 @@ func ResolveSize(data []byte, chip int64, active func() ([]byte, error), force b
 			return SizeResult{}, err
 		}
 		// Without an active version (chip size from the database, first
-		// save), nothing can be lost by accepting the smaller size.
-		if act == nil || (int64(len(act)) > n && IsPadding(act[n:])) {
+		// save), nothing can be lost by accepting the smaller size, provided
+		// it is a real chip size.
+		if (act == nil && IsValidChipSize(n)) || (act != nil && int64(len(act)) > n && IsPadding(act[n:])) {
 			return SizeResult{Data: data, ChipSize: n, Event: &SizeEvent{Type: SizeShrunk, From: chip}}, nil
 		}
 	}

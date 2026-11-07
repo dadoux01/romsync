@@ -7,9 +7,9 @@
   "header": null,
   "footer": null,
   "size": {
-    "output": "pad",
+    "output": "pad_min",
     "pad_to": 524288,
     "pad_byte": 255
   },
-  "notes": "Raw data padded with 0xFF to 512 KiB, the size commonly used by DSTT and R4-style flashcards. On import the padding is kept; the server cuts it down to the game's chip size. To verify model by model."
+  "notes": "Raw data padded with 0xFF to max(512 KiB, the game's chip size): a save is never cut, a larger one keeps its real size. 512 KiB is the size commonly used by DSTT and R4-style flashcards. On import the padding is kept; the server cuts it down to the game's chip size. To verify model by model."
 }

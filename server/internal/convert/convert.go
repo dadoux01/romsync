@@ -119,27 +119,35 @@ func (DeSmuME) Encode(raw []byte) ([]byte, error) {
 	return append(out, DeSmuMECookie...), nil
 }
 
-// FlashcardSize is the save file size of the flashcard profile. Flashcards
-// such as the DSTT or the R4 commonly use 512 KiB files whatever the game;
-// the profile is marked "to_verify" until checked model by model.
+// FlashcardSize is the minimum save file size of the flashcard profile.
+// Flashcards such as the DSTT or the R4 commonly use 512 KiB files; the
+// profile is marked "to_verify" until checked model by model.
 const FlashcardSize = 512 << 10
 
-// Flashcard handles flashcard .sav files: raw data padded with 0xFF to a
-// fixed size. On import the file is kept as is; the server's size rules cut
-// the padding down to the game's chip size.
+// Flashcard handles flashcard .sav files: raw data padded with 0xFF to at
+// least Size bytes. It never cuts: a larger save keeps its real size. On
+// import the file is kept as is; the server's size rules cut the padding down
+// to the game's chip size.
 type Flashcard struct{ Size int }
 
 func (Flashcard) ID() string        { return "flashcard" }
 func (Flashcard) Extension() string { return ".sav" }
 
-// Encode pads raw with 0xFF up to the fixed size.
+// Encode pads raw with 0xFF up to max(Size, len(raw)).
 func (f Flashcard) Encode(raw []byte) ([]byte, error) {
-	if len(raw) > f.Size {
-		return nil, fmt.Errorf("convert: a %d-byte save does not fit in a %d-byte flashcard file", len(raw), f.Size)
+	return f.EncodeForChip(raw, 0)
+}
+
+// EncodeForChip pads raw with 0xFF up to max(Size, chipSize, len(raw)), so
+// that the file has the size the flashcard expects and nothing is cut.
+func (f Flashcard) EncodeForChip(raw []byte, chipSize int64) ([]byte, error) {
+	size := max(f.Size, len(raw))
+	if chipSize > int64(size) {
+		size = int(chipSize)
 	}
-	out := make([]byte, f.Size)
+	out := make([]byte, size)
 	copy(out, raw)
-	for i := len(raw); i < f.Size; i++ {
+	for i := len(raw); i < size; i++ {
 		out[i] = 0xFF
 	}
 	return out, nil
