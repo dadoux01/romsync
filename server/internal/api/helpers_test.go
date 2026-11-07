@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dadoux01/romsync/server/internal/auth"
+	"github.com/dadoux01/romsync/server/internal/blobs"
 	"github.com/dadoux01/romsync/server/internal/config"
 	"github.com/dadoux01/romsync/server/internal/db"
 )
@@ -53,11 +54,15 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	t.Cleanup(func() { conn.Close() })
 
+	store, err := blobs.New(filepath.Join(dir, "blobs"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Defaults()
 	cfg.DataDir = dir
 	cfg.MaxUpload = 1 << 20
 	clock := &testClock{t: time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)}
-	srv := New(Options{DB: conn, Config: cfg, Now: clock.Now,
+	srv := New(Options{DB: conn, Blobs: store, Config: cfg, Now: clock.Now,
 		PasswordParams: auth.Argon2Params{Memory: 1024, Time: 1, Threads: 1, KeyLen: 32, SaltLen: 16}})
 	hs := httptest.NewServer(srv.Handler(nil))
 	t.Cleanup(hs.Close)

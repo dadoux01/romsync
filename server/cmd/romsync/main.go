@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dadoux01/romsync/server/internal/api"
+	"github.com/dadoux01/romsync/server/internal/blobs"
 	"github.com/dadoux01/romsync/server/internal/config"
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/webui"
@@ -45,7 +46,12 @@ func run() error {
 	}
 	defer conn.Close()
 
-	srv := api.New(api.Options{DB: conn, Config: cfg})
+	store, err := blobs.New(filepath.Join(cfg.DataDir, "blobs"))
+	if err != nil {
+		return fmt.Errorf("blob store: %w", err)
+	}
+
+	srv := api.New(api.Options{DB: conn, Blobs: store, Config: cfg})
 	httpSrv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           srv.Handler(webui.Handler()),

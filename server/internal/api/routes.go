@@ -16,6 +16,11 @@ func (s *Server) routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(s.require(authAny))
 		r.Get("/me", s.handle(s.getMe))
+		r.Get("/games", s.handle(s.listGames))
+		r.Get("/games/{code}/active", s.handle(s.getActive))
+		r.Get("/games/{code}/versions", s.handle(s.listVersions))
+		r.Post("/games/{code}/versions", s.handle(s.postVersion))
+		r.Get("/versions/{id}/content", s.handle(s.getContent))
 	})
 
 	// Web session only.
@@ -26,6 +31,9 @@ func (s *Server) routes(r chi.Router) {
 		r.Post("/pair-codes", s.handle(s.postPairCode))
 		r.Get("/devices", s.handle(s.listDevices))
 		r.Delete("/devices/{id}", s.handle(s.deleteDevice))
+		r.Patch("/games/{code}", s.handle(s.patchGame))
+		r.Post("/versions/{id}/activate", s.handle(s.activateVersion))
+		r.Patch("/versions/{id}", s.handle(s.patchVersion))
 	})
 
 	// Administrator only.

@@ -12,12 +12,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/dadoux01/romsync/server/internal/auth"
+	"github.com/dadoux01/romsync/server/internal/blobs"
 	"github.com/dadoux01/romsync/server/internal/config"
 )
 
 // Server holds the dependencies of the API handlers.
 type Server struct {
 	db      *sql.DB
+	blobs   *blobs.Store
 	cfg     config.Config
 	now     func() time.Time
 	limiter *rateLimiter
@@ -30,6 +32,7 @@ type Server struct {
 // Options configures a Server.
 type Options struct {
 	DB     *sql.DB
+	Blobs  *blobs.Store
 	Config config.Config
 	// Now overrides the clock (tests); time.Now when nil.
 	Now func() time.Time
@@ -49,6 +52,7 @@ func New(o Options) *Server {
 	}
 	return &Server{
 		db:       o.DB,
+		blobs:    o.Blobs,
 		cfg:      o.Config,
 		now:      now,
 		limiter:  newRateLimiter(5, time.Minute),
