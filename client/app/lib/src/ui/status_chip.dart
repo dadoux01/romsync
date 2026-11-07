@@ -8,6 +8,7 @@ import 'package:romsync_core/romsync_core.dart';
   SaveStatus.toDownload => (label: 'À télécharger', icon: Icons.download, color: Colors.orange),
   SaveStatus.offline => (label: 'Hors ligne', icon: Icons.cloud_off, color: scheme.outline),
   SaveStatus.needsChoice => (label: 'Choix requis', icon: Icons.call_split, color: scheme.error),
+  SaveStatus.unavailable => (label: 'Indisponible', icon: Icons.block, color: scheme.outline),
   SaveStatus.noSave => (label: 'Pas de save', icon: Icons.remove_circle_outline, color: scheme.outline),
 };
 

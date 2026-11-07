@@ -258,9 +258,8 @@ void main() {
     List<LibraryEntry> build(Map<String, RomChoice> choices) => buildLibrary(
       roms: [rom('Platine', 'CPUF'), rom('Platine-patch', 'CPUF'), rom('Noire', 'IRBF')],
       config: ClientConfig(romChoices: choices),
-      profile: rawProfile,
-      emulator: 'melonds',
-      savePathFor: (r) => r.file.path.replaceAll('.nds', '.sav'),
+      targetFor: (r, id) =>
+          SaveTarget(emulator: 'melonds', profile: rawProfile, savePath: r.file.path.replaceAll('.nds', '.sav')),
     );
 
     test('are not synced until the user decides, ROM by ROM', () async {

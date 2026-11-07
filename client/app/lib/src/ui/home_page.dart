@@ -156,6 +156,8 @@ class _GameTile extends StatelessWidget {
                                 : 'Save séparée'),
                       style: TextStyle(color: e.needsChoice ? scheme.error : null, fontSize: 12),
                     ),
+                  if (e.unavailable != null)
+                    Text(e.unavailable!, style: TextStyle(color: scheme.outline, fontSize: 12)),
                   if (row.error != null) Text(row.error!, style: TextStyle(color: scheme.error, fontSize: 12)),
                   const SizedBox(height: 6),
                   StatusChip(row.status),
@@ -181,7 +183,7 @@ class _GameTile extends StatelessWidget {
             FilledButton.icon(
               icon: const Icon(Icons.play_arrow),
               label: const Text('Jouer'),
-              onPressed: e.needsChoice || controller.runningGame != null ? null : () => onLaunch(context, e),
+              onPressed: !e.syncable || controller.runningGame != null ? null : () => onLaunch(context, e),
             ),
           ],
         ),

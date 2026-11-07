@@ -18,6 +18,10 @@ enum SaveStatus {
   /// Several local ROMs share the identifier: waiting for the user.
   needsChoice,
 
+  /// The ROM cannot be synced with its emulator (archive not supported,
+  /// save folder unknown…).
+  unavailable,
+
   /// No save on this device nor on the server.
   noSave,
 }
@@ -39,6 +43,7 @@ class SaveStatusInfo {
 /// game; [online] tells whether the server answered.
 SaveStatusInfo computeStatus({
   required bool needsChoice,
+  bool unavailable = false,
   required String? localHash,
   required SaveState? state,
   required RemoteGame? remote,
@@ -46,6 +51,7 @@ SaveStatusInfo computeStatus({
   required bool online,
 }) {
   if (needsChoice) return const SaveStatusInfo(SaveStatus.needsChoice);
+  if (unavailable) return const SaveStatusInfo(SaveStatus.unavailable);
   final conflict = remote?.conflict ?? false;
   final localChanged = localHash != null && localHash != state?.lastSyncedHash;
   if (!online) {

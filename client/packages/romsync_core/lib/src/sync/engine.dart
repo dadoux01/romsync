@@ -207,6 +207,7 @@ class SyncEngine {
 
   /// Sync before launching [entry]'s game (steps 1 to 4).
   Future<PrepareResult> prepare(LibraryEntry entry, {required int? chipSize}) async {
+    if (entry.unavailable != null) throw SyncException(entry.unavailable!);
     if (entry.needsChoice) {
       throw SyncException(
         'Plusieurs ROMs partagent l’identifiant ${entry.gameId} : choisis d’abord de partager ou séparer leur save.',

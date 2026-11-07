@@ -12,6 +12,7 @@ class LibraryEntry {
     required this.emulator,
     required this.sharedWith,
     required this.choice,
+    this.unavailable,
   });
 
   final ScannedRom rom;
@@ -20,7 +21,8 @@ class LibraryEntry {
   /// identifier chosen by the user.
   final String gameId;
 
-  /// Local save file of this ROM for the configured emulator.
+  /// Local save file of this ROM for its emulator (empty when
+  /// [unavailable] is set).
   final String savePath;
   final ConversionProfile profile;
 
@@ -33,6 +35,10 @@ class LibraryEntry {
   /// The user's decision when [sharedWith] is not empty.
   final RomChoice? choice;
 
+  /// Why this ROM cannot be synced with its emulator (archive not supported,
+  /// save folder unknown…), or null.
+  final String? unavailable;
+
   String get key => rom.file.key;
   String get title => rom.title;
 
@@ -40,17 +46,30 @@ class LibraryEntry {
   /// whether they share their save: the ROM is not synced, so that a variant
   /// never overwrites another one's save without the user knowing.
   bool get needsChoice => sharedWith.isNotEmpty && choice == null;
+
+  /// Whether the save can be synced and the game launched.
+  bool get syncable => !needsChoice && unavailable == null;
+}
+
+/// The emulator side of a library entry.
+class SaveTarget {
+  const SaveTarget({required this.emulator, required this.profile, this.savePath, this.unavailable});
+
+  /// Emulator id (`X-Emulator`).
+  final String emulator;
+  final ConversionProfile profile;
+  final String? savePath;
+  final String? unavailable;
 }
 
 /// Builds the library entries from scanned ROMs and the user's choices.
 ///
-/// [savePathFor] gives the save file of a ROM for the emulator profile.
+/// [targetFor] gives the emulator, conversion profile and save file of a
+/// ROM once its game identifier is known.
 List<LibraryEntry> buildLibrary({
   required List<ScannedRom> roms,
   required ClientConfig config,
-  required ConversionProfile profile,
-  required String emulator,
-  required String Function(ScannedRom rom) savePathFor,
+  required SaveTarget Function(ScannedRom rom, String gameId) targetFor,
 }) {
   final byId = <String, List<ScannedRom>>{};
   for (final r in roms) {
@@ -64,14 +83,17 @@ List<LibraryEntry> buildLibrary({
             if (o.file.key != r.file.key) o.file.key,
         ];
         final choice = others.isEmpty ? null : config.romChoices[r.file.key];
+        final gameId = choice?.customId ?? r.detectedId;
+        final target = targetFor(r, gameId);
         return LibraryEntry(
           rom: r,
-          gameId: choice?.customId ?? r.detectedId,
-          savePath: savePathFor(r),
-          profile: profile,
-          emulator: emulator,
+          gameId: gameId,
+          savePath: target.savePath ?? '',
+          profile: target.profile,
+          emulator: target.emulator,
           sharedWith: others,
           choice: choice,
+          unavailable: target.savePath == null ? (target.unavailable ?? 'Save introuvable.') : null,
         );
       }(),
   ];

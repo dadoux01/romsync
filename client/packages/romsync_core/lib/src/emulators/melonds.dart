@@ -6,7 +6,6 @@ import 'package:toml/toml.dart';
 import '../rom/scanner.dart';
 import '../state/config.dart';
 import 'emulator.dart';
-import 'flatpak.dart';
 
 /// melonDS standalone (raw saves), installed as a binary or as the
 /// `net.kuribo64.melonDS` Flatpak.
@@ -15,29 +14,8 @@ import 'flatpak.dart';
 /// `SaveFilePath` folder of its configuration when set, else next to the
 /// ROM (next to the archive for a ROM inside a .zip/.7z), named after the
 /// ROM without its extension, plus `.sav`.
-class MelonDS implements EmulatorProfile {
-  /// [environment] defaults to the process environment; when only [home] is
-  /// given (tests), the environment is just `HOME`, so that variables such
-  /// as `XDG_CONFIG_HOME` of the machine running the tests do not leak in.
-  MelonDS({
-    required EmulatorSettings settings,
-    String? home,
-    Map<String, String>? environment,
-    CommandRunner? run,
-    String? searchPath,
-  }) : this._(settings, environment ?? (home != null ? {'HOME': home} : Platform.environment), home, run, searchPath);
-
-  MelonDS._(this.settings, Map<String, String> env, String? home, CommandRunner? run, String? searchPath)
-    : _env = env,
-      home = home ?? env['HOME'] ?? '/',
-      _run = run ?? runCommand,
-      _searchPath = searchPath ?? env['PATH'] ?? '';
-
-  final EmulatorSettings settings;
-  final String home;
-  final Map<String, String> _env;
-  final CommandRunner _run;
-  final String _searchPath;
+class MelonDS extends EmulatorBase {
+  MelonDS({required super.settings, super.platform, super.home, super.environment, super.run, super.searchPath});
 
   @override
   String get id => 'melonds';
@@ -46,11 +24,14 @@ class MelonDS implements EmulatorProfile {
   @override
   String get conversionProfileId => 'raw';
 
+  @override
+  bool get supportsArchives => true;
+
   /// Configuration files melonDS reads, newest format first.
   List<String> get configCandidates {
     final base = settings.mode == LaunchMode.flatpak
         ? p.join(home, '.var', 'app', settings.flatpakId, 'config', 'melonDS')
-        : p.join(_env['XDG_CONFIG_HOME'] ?? p.join(home, '.config'), 'melonDS');
+        : p.join(xdgConfigHome, 'melonDS');
     return [p.join(base, 'melonDS.toml'), p.join(base, 'melonDS.ini')];
   }
 
@@ -108,87 +89,19 @@ class MelonDS implements EmulatorProfile {
   }
 
   @override
-  LaunchPlan launchPlan(ScannedRom rom) {
-    final romArgs = [
-      rom.file.path,
-      if (rom.file.innerName != null) ...['-a', rom.file.innerName!],
-    ];
-    return settings.mode == LaunchMode.flatpak
-        ? LaunchPlan('flatpak', ['run', settings.flatpakId, ...settings.extraArgs, ...romArgs])
-        : LaunchPlan(_resolveExecutable() ?? settings.executable, [...settings.extraArgs, ...romArgs]);
-  }
-
-  String? _resolveExecutable() {
-    final exe = settings.executable;
-    if (exe.contains('/')) return File(exe).existsSync() ? exe : null;
-    for (final dir in _searchPath.split(':').where((d) => d.isNotEmpty)) {
-      final f = File(p.join(dir, exe));
-      if (f.existsSync()) return f.path;
-    }
-    return null;
-  }
-
-  /// Command that grants the Flatpak access to [folder].
-  String overrideCommand(String folder) => 'flatpak override --user --filesystem=$folder ${settings.flatpakId}';
+  LaunchPlan launchPlan(ScannedRom rom) => launchWith([
+    rom.file.path,
+    if (rom.file.innerName != null) ...['-a', rom.file.innerName!],
+  ]);
 
   @override
   Future<List<EmulatorIssue>> check({required List<String> romFolders, required SaveLocation location}) async {
-    final issues = <EmulatorIssue>[];
-    if (location.warning != null) issues.add(EmulatorIssue(location.warning!));
-    if (settings.mode == LaunchMode.native) {
-      if (_resolveExecutable() == null) {
-        issues.add(
-          EmulatorIssue(
-            'Exécutable melonDS introuvable : « ${settings.executable} ». '
-            'Indique son chemin dans les réglages, ou choisis le mode Flatpak.',
-          ),
-        );
-      }
-      return issues;
-    }
-
-    final ProcessResult info;
-    try {
-      info = await _run('flatpak', ['info', '--show-permissions', settings.flatpakId]);
-    } on ProcessException {
-      return [...issues, const EmulatorIssue('Flatpak n’est pas installé sur ce système.')];
-    }
-    if (info.exitCode != 0) {
-      return [
-        ...issues,
-        EmulatorIssue(
-          'Le Flatpak ${settings.flatpakId} n’est pas installé.',
-          fixCommand: 'flatpak install flathub ${settings.flatpakId}',
-        ),
-      ];
-    }
-    final perms = FlatpakPermissions(
-      FlatpakPermissions.parseFilesystems(info.stdout as String),
-      home: home,
-      xdgDirs: FlatpakPermissions.readXdgUserDirs(home),
-    );
     // melonDS reads the ROMs and writes the saves (next to the ROMs unless
     // a save folder is set).
-    for (final folder in romFolders) {
-      final write = location.dir == null;
-      if (!perms.canAccess(folder, write: write)) {
-        issues.add(
-          EmulatorIssue(
-            'Le Flatpak melonDS n’a pas accès ${write ? 'en écriture ' : ''}au dossier de ROMs $folder.',
-            fixCommand: overrideCommand(folder),
-          ),
-        );
-      }
-    }
     final saveDir = location.dir;
-    if (saveDir != null && !perms.canAccess(saveDir, write: true)) {
-      issues.add(
-        EmulatorIssue(
-          'Le Flatpak melonDS n’a pas accès en écriture au dossier des saves $saveDir.',
-          fixCommand: overrideCommand(saveDir),
-        ),
-      );
-    }
-    return issues;
+    return [
+      if (location.warning != null) EmulatorIssue(location.warning!),
+      ...await installationIssues(readFolders: romFolders, writeFolders: saveDir == null ? romFolders : [saveDir]),
+    ];
   }
 }

@@ -3,6 +3,7 @@ library;
 
 export 'src/api/api_client.dart';
 export 'src/api/models.dart';
+export 'src/emulators/desmume.dart';
 export 'src/emulators/emulator.dart';
 export 'src/emulators/flatpak.dart';
 export 'src/emulators/melonds.dart';

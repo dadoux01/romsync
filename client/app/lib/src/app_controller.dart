@@ -201,12 +201,19 @@ class AppController extends ChangeNotifier {
   List<LibraryEntry> get library {
     final emu = emulator;
     final profile = profiles[emu.conversionProfileId]!;
+    final loc = saveLocation!;
     return buildLibrary(
       roms: _roms,
       config: config,
-      profile: profile,
-      emulator: emu.id,
-      savePathFor: (r) => emu.savePathFor(r, saveLocation!),
+      targetFor: (r, gameId) {
+        final reason = emu.cannotSync(r, loc);
+        return SaveTarget(
+          emulator: emu.id,
+          profile: profile,
+          savePath: reason == null ? emu.savePathFor(r, loc) : null,
+          unavailable: reason,
+        );
+      },
     );
   }
 
@@ -238,7 +245,7 @@ class AppController extends ChangeNotifier {
       String? hash;
       String? error;
       try {
-        hash = (await SyncEngine.readLocal(entry.savePath, entry.profile))?.hash;
+        if (entry.unavailable == null) hash = (await SyncEngine.readLocal(entry.savePath, entry.profile))?.hash;
       } on SyncException catch (err) {
         error = err.message;
       }
@@ -251,6 +258,7 @@ class AppController extends ChangeNotifier {
           error: error,
           status: computeStatus(
             needsChoice: entry.needsChoice,
+            unavailable: entry.unavailable != null,
             localHash: hash,
             state: e?.stateOf(entry) ?? states[entry.savePath],
             remote: remote[entry.gameId],
