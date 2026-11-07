@@ -1,0 +1,8 @@
+# Pub workspace of the RomSync client: run `flutter pub get` here.
+name: _romsync_client
+publish_to: none
+environment:
+  sdk: ^3.13.0
+workspace:
+  - app
+  - packages/romsync_core
