@@ -1,0 +1,5 @@
+tags:
+  # End-to-end tests build and start the real Go server: they need Go.
+  # Run them alone with `dart test -t e2e`, skip them with `-x e2e`.
+  e2e:
+    timeout: 3m
