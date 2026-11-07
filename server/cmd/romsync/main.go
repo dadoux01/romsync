@@ -22,6 +22,9 @@ import (
 	"github.com/dadoux01/romsync/server/internal/webui"
 )
 
+// version is set at build time (-ldflags "-X main.version=…").
+var version = "dev"
+
 func main() {
 	// Single exit point: every fatal error ends with a non-zero exit code.
 	os.Exit(realMain(os.Args[1:]))
@@ -32,6 +35,10 @@ func realMain(args []string) int {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	// `romsync healthcheck` is used by the container health check: the
 	// distroless image has no shell nor curl.
+	if len(args) > 0 && args[0] == "version" {
+		fmt.Println(version)
+		return 0
+	}
 	if len(args) > 0 && args[0] == "healthcheck" {
 		if err := healthcheck(); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
@@ -80,7 +87,7 @@ func run() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("listening", "port", cfg.Port, "data_dir", cfg.DataDir)
+		slog.Info("listening", "version", version, "port", cfg.Port, "data_dir", cfg.DataDir)
 		errc <- httpSrv.ListenAndServe()
 	}()
 

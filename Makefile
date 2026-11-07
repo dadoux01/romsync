@@ -3,6 +3,7 @@
 
 WEBUI_DIST := server/internal/webui/dist
 GO ?= go
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: all build web embed server test test-go test-web check lint dev-server dev-web clean \
 	client-profiles client-test client-e2e client-build
@@ -20,7 +21,7 @@ embed: web
 	cp -r web/dist/. $(WEBUI_DIST)/
 
 server:
-	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o bin/romsync ./cmd/romsync
+	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o bin/romsync ./cmd/romsync
 
 test: test-go test-web client-test
 
