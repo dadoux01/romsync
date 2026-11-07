@@ -55,6 +55,22 @@ first-start screen only appears while no account exists. Then:
 The image is built locally from `deploy/Dockerfile` (multi-stage build, final
 image based on distroless, about 16 MB, running as a non-root user).
 
+### Permissions of `/data`
+
+The server runs as the non-root user **65532:65532** inside the container.
+The named volume of the example `docker-compose.yml` gets the right owner
+automatically. If you mount a host directory on `/data` instead (a bind
+mount, e.g. `./data:/data`), it must belong to that user:
+
+```sh
+sudo mkdir -p ./data
+sudo chown -R 65532:65532 ./data
+```
+
+Otherwise the server stops at startup with an explicit message naming the
+directory, the process uid:gid and the `chown` command to run. On SELinux
+systems (Fedora…), also add `:Z` to the bind mount (`./data:/data:Z`).
+
 ### Configuration
 
 All settings are environment variables:

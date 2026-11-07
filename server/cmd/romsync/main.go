@@ -23,20 +23,27 @@ import (
 )
 
 func main() {
+	// Single exit point: every fatal error ends with a non-zero exit code.
+	os.Exit(realMain(os.Args[1:]))
+}
+
+// realMain runs the program and returns its exit code.
+func realMain(args []string) int {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	// `romsync healthcheck` is used by the container health check: the
 	// distroless image has no shell nor curl.
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+	if len(args) > 0 && args[0] == "healthcheck" {
 		if err := healthcheck(); err != nil {
 			fmt.Fprintln(os.Stderr, "unhealthy:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "err", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func run() error {
@@ -47,8 +54,8 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
-		return fmt.Errorf("data dir: %w", err)
+	if err := checkDataDir(cfg.DataDir); err != nil {
+		return err
 	}
 	conn, err := db.Open(ctx, filepath.Join(cfg.DataDir, "romsync.db"))
 	if err != nil {
@@ -106,6 +113,38 @@ func healthcheck() error {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("status %d", res.StatusCode)
+	}
+	return nil
+}
+
+// checkDataDir makes sure the data directory exists and is writable, and
+// explains how to fix it otherwise: the usual cause is a volume owned by
+// another user than the container's (65532:65532).
+func checkDataDir(dir string) error {
+	uid, gid := os.Getuid(), os.Getgid()
+	hint := func(problem string, err error) error {
+		return fmt.Errorf("data directory %s %s (%v). The server runs as uid:gid %d:%d; "+
+			"give it the directory, for example on the host: sudo chown -R %d:%d <directory mounted on %s>",
+			dir, problem, err, uid, gid, uid, gid, dir)
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return hint("cannot be created", err)
+	}
+	st, err := os.Stat(dir)
+	if err != nil {
+		return hint("cannot be read", err)
+	}
+	if !st.IsDir() {
+		return fmt.Errorf("data directory %s is not a directory", dir)
+	}
+	f, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		return hint("is not writable", err)
+	}
+	name := f.Name()
+	f.Close()
+	if err := os.Remove(name); err != nil {
+		return hint("is not writable", err)
 	}
 	return nil
 }
