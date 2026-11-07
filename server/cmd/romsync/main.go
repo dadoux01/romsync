@@ -18,6 +18,7 @@ import (
 	"github.com/dadoux01/romsync/server/internal/blobs"
 	"github.com/dadoux01/romsync/server/internal/config"
 	"github.com/dadoux01/romsync/server/internal/db"
+	"github.com/dadoux01/romsync/server/internal/retention"
 	"github.com/dadoux01/romsync/server/internal/webui"
 )
 
@@ -50,6 +51,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("blob store: %w", err)
 	}
+
+	job := &retention.Job{DB: conn, Blobs: store, BlobDir: filepath.Join(cfg.DataDir, "blobs"), Now: time.Now}
+	go job.Run(ctx, cfg.RetentionInterval)
 
 	srv := api.New(api.Options{DB: conn, Blobs: store, Config: cfg})
 	httpSrv := &http.Server{
