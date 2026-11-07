@@ -4,7 +4,6 @@ import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 
 import '../rom/scanner.dart';
-import '../state/config.dart';
 import 'emulator.dart';
 
 /// melonDS standalone (raw saves), installed as a binary or as the
@@ -27,13 +26,38 @@ class MelonDS extends EmulatorBase {
   @override
   bool get supportsArchives => true;
 
-  /// Configuration files melonDS reads, newest format first.
-  List<String> get configCandidates {
-    final base = settings.mode == LaunchMode.flatpak
-        ? p.join(home, '.var', 'app', settings.flatpakId, 'config', 'melonDS')
-        : p.join(xdgConfigHome, 'melonDS');
-    return [p.join(base, 'melonDS.toml'), p.join(base, 'melonDS.ini')];
+  /// Folders where melonDS may keep its configuration, in its order
+  /// (`pathInit` in src/frontend/qt_sdl/main.cpp): a `portable` folder next
+  /// to the executable (next to the .app on macOS), the executable's folder
+  /// for Windows portable builds, then the system configuration folder.
+  List<String> get configDirs {
+    if (isFlatpak) return [paths.join(home, '.var', 'app', settings.flatpakId, 'config', 'melonDS')];
+    final exe = resolveExecutable();
+    final exeDir = exe == null ? null : paths.dirname(exe);
+    final bundleParent = platform == HostPlatform.macos && settings.executable.endsWith('.app')
+        ? paths.dirname(settings.executable)
+        : null;
+    return [
+      if (bundleParent != null)
+        paths.join(bundleParent, 'portable')
+      else if (exeDir != null)
+        paths.join(exeDir, 'portable'),
+      if (platform == HostPlatform.windows && exeDir != null) exeDir,
+      switch (platform) {
+        HostPlatform.linux => paths.join(xdgConfigHome, 'melonDS'),
+        HostPlatform.macos => paths.join(home, 'Library', 'Preferences', 'melonDS'),
+        HostPlatform.windows => paths.join(
+          env['LOCALAPPDATA'] ?? paths.join(env['USERPROFILE'] ?? home, 'AppData', 'Local'),
+          'melonDS',
+        ),
+      },
+    ];
   }
+
+  /// Configuration files melonDS reads, newest format first.
+  List<String> get configCandidates => [
+    for (final dir in configDirs) ...[paths.join(dir, 'melonDS.toml'), paths.join(dir, 'melonDS.ini')],
+  ];
 
   @override
   Future<SaveLocation> saveLocation() async {

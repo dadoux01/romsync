@@ -16,11 +16,20 @@ class SevenZip {
 
   /// Finds a 7-Zip program in [searchPath] (defaults to `$PATH`), or null.
   static SevenZip? find({String? searchPath}) {
-    final dirs = (searchPath ?? Platform.environment['PATH'] ?? '').split(':').where((d) => d.isNotEmpty);
+    final windows = Platform.isWindows;
+    final dirs = [
+      ...(searchPath ?? Platform.environment['PATH'] ?? '').split(windows ? ';' : ':').where((d) => d.isNotEmpty),
+      if (windows && searchPath == null) ...[
+        p.join(Platform.environment['ProgramFiles'] ?? r'C:\Program Files', '7-Zip'),
+        p.join(Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)', '7-Zip'),
+      ],
+    ];
     for (final name in candidates) {
       for (final dir in dirs) {
-        final f = File(p.join(dir, name));
-        if (f.existsSync()) return SevenZip(f.path);
+        for (final file in [name, if (windows) '$name.exe']) {
+          final f = File(p.join(dir, file));
+          if (f.existsSync()) return SevenZip(f.path);
+        }
       }
     }
     return null;

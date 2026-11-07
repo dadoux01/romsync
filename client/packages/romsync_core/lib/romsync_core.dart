@@ -17,6 +17,7 @@ export 'src/rom/scanner.dart';
 export 'src/rom/seven_zip.dart';
 export 'src/rom/zip_reader.dart';
 export 'src/state/config.dart';
+export 'src/state/file_access.dart';
 export 'src/state/json_file.dart';
 export 'src/state/save_state.dart';
 export 'src/state/token_store.dart';

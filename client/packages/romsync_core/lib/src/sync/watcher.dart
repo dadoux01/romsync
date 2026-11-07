@@ -10,9 +10,10 @@ abstract class SaveWatcher {
   Future<void> stop();
 }
 
-/// inotify-based watcher (Linux), watching the save's folder so that a save
-/// created during the game is seen too.
-class InotifySaveWatcher implements SaveWatcher {
+/// Watcher based on the system notifications (inotify on Linux, FSEvents on
+/// macOS, ReadDirectoryChangesW on Windows), watching the save's folder so
+/// that a save created during the game is seen too.
+class NativeSaveWatcher implements SaveWatcher {
   StreamSubscription<FileSystemEvent>? _sub;
   Timer? _timer;
 
@@ -75,4 +76,11 @@ class PollingSaveWatcher implements SaveWatcher {
     _poll?.cancel();
     _quiet?.cancel();
   }
+}
+
+/// A path comparable with the paths of file events: normalized, and
+/// case-insensitive on Windows and macOS (default file systems).
+String canonicalPath(String path) {
+  final n = p.normalize(path);
+  return Platform.isWindows || Platform.isMacOS ? n.toLowerCase() : n;
 }

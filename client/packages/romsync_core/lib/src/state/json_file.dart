@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'file_access.dart';
+
 /// A JSON document on disk, written atomically (temporary file, fsync,
 /// rename), so that a crash never leaves a half-written file.
 class JsonFile {
@@ -38,7 +40,7 @@ class JsonFile {
     } finally {
       await raf.close();
     }
-    await tmp.rename(path);
+    await retryTransient(() => tmp.rename(path));
   }
 }
 
@@ -53,5 +55,5 @@ Future<void> writeBytesAtomic(String path, List<int> bytes) async {
   } finally {
     await raf.close();
   }
-  await tmp.rename(path);
+  await retryTransient(() => tmp.rename(path));
 }

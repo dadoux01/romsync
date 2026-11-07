@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../profiles/profile.dart';
+import '../state/file_access.dart';
 import '../state/json_file.dart';
 import '../state/save_state.dart';
 import '../state/upload_queue.dart';
@@ -107,8 +108,13 @@ class SyncEngine {
   /// Reads and decodes the local save of [entry]; null when there is none.
   static Future<LocalSave?> readLocal(String savePath, ConversionProfile profile) async {
     final f = File(savePath);
-    if (!await f.exists()) return null;
-    final file = await f.readAsBytes();
+    final Uint8List? file;
+    try {
+      file = await readStable(savePath);
+    } on UnstableFileException catch (e) {
+      throw SyncException('${p.basename(savePath)} : ${e.reason}');
+    }
+    if (file == null) return null;
     final Uint8List raw;
     try {
       raw = profile.decode(file);

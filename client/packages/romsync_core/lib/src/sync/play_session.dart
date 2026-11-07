@@ -14,7 +14,7 @@ class PlaySession {
     required this.entry,
     SaveWatcher? watcher,
     this.quietPeriod = const Duration(seconds: 5),
-  }) : watcher = watcher ?? InotifySaveWatcher();
+  }) : watcher = watcher ?? NativeSaveWatcher();
 
   final SyncEngine engine;
   final LibraryEntry entry;

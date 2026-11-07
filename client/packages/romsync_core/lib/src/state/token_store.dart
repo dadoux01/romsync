@@ -41,10 +41,12 @@ class FileTokenStore implements TokenStore {
     final f = File(path);
     // Create the file empty and restrict it before writing the secret.
     await f.writeAsString('');
-    final chmod = await Process.run('chmod', ['600', path]);
-    if (chmod.exitCode != 0) {
-      await f.delete();
-      throw FileSystemException('cannot restrict permissions: ${chmod.stderr}', path);
+    if (!Platform.isWindows) {
+      final chmod = await Process.run('chmod', ['600', path]);
+      if (chmod.exitCode != 0) {
+        await f.delete();
+        throw FileSystemException('cannot restrict permissions: ${chmod.stderr}', path);
+      }
     }
     await f.writeAsString(token, flush: true);
   }
@@ -60,8 +62,20 @@ class FileTokenStore implements TokenStore {
 class ClientPaths {
   ClientPaths({required this.configDir, required this.dataDir});
 
-  factory ClientPaths.fromEnvironment([Map<String, String>? env]) {
+  /// Linux: XDG base directories. macOS: ~/Library/Application Support/RomSync.
+  /// Windows: %APPDATA%\\RomSync (settings) and %LOCALAPPDATA%\\RomSync (data).
+  factory ClientPaths.fromEnvironment([Map<String, String>? env, String? os]) {
     final e = env ?? Platform.environment;
+    switch (os ?? Platform.operatingSystem) {
+      case 'windows':
+        final w = p.Context(style: p.Style.windows);
+        final appData = e['APPDATA'] ?? w.join(e['USERPROFILE'] ?? r'C:\', 'AppData', 'Roaming');
+        final local = e['LOCALAPPDATA'] ?? w.join(e['USERPROFILE'] ?? r'C:\', 'AppData', 'Local');
+        return ClientPaths(configDir: w.join(appData, 'RomSync'), dataDir: w.join(local, 'RomSync'));
+      case 'macos':
+        final base = p.posix.join(e['HOME'] ?? '/', 'Library', 'Application Support', 'RomSync');
+        return ClientPaths(configDir: base, dataDir: p.posix.join(base, 'data'));
+    }
     final home = e['HOME'] ?? '/';
     return ClientPaths(
       configDir: p.join(e['XDG_CONFIG_HOME'] ?? p.join(home, '.config'), 'romsync'),
