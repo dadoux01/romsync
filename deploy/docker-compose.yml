@@ -1,12 +1,17 @@
 # RomSync — example deployment.
-#   cd deploy && docker compose up -d
+#   docker compose up -d
 # then open http://<server>:8080 to create the administrator account.
+# Update with: docker compose pull && docker compose up -d
 services:
   romsync:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    image: romsync:latest
+    # Published image (linux/amd64, linux/arm64). Pin a minor version (0.3)
+    # to only receive fixes, or an exact one (0.3.0).
+    image: ghcr.io/dadoux01/romsync:latest
+    # To build the image from a clone of the repository instead, replace
+    # "image" above with:
+    # build:
+    #   context: ..
+    #   dockerfile: deploy/Dockerfile
     container_name: romsync
     restart: unless-stopped
     ports:
@@ -26,5 +31,6 @@ services:
 
 volumes:
   # Holds the SQLite database (romsync.db) and the save files (blobs/).
-  # Back it up by copying it, after `sqlite3 romsync.db "VACUUM INTO 'backup.db'"`.
+  # It belongs to the container user (65532:65532). Back it up by copying
+  # it, after `sqlite3 romsync.db "VACUUM INTO 'backup.db'"`.
   romsync-data:

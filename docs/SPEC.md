@@ -139,8 +139,8 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | Cible | Fichier | Conversion | Statut |
 | --- | --- | --- | --- |
 | melonDS (standalone) | `<rom>.sav` à côté de la ROM ou dans le dossier configuré | Aucune (brut) | Confirmé |
-| DeSmuME | `<rom>.dsv` dans son dossier Battery | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
-| melonDS DS (RetroArch) | `<rom>.srm` dans le dossier saves de RetroArch | Aucune a priori | À vérifier |
+| DeSmuME | `<rom>.dsv` dans son dossier Battery (détail ci-dessous) | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
+| melonDS DS (RetroArch) | `<rom>.srm` dans le dossier des saves de RetroArch (détail ci-dessous) | Aucune : tampon SRAM brut (`retro_get_memory_data`, `src/libretro/sram.cpp` de melonds-ds) | À vérifier par un aller-retour réel |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF jusqu'à max(512 Kio, `chip_size`), jamais coupé (profil `flashcard`) | À vérifier par modèle |
@@ -148,6 +148,22 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 Chaque profil est un petit fichier déclaratif en JSON (`profiles/<id>.json` : chemin, extension, en-tête/pied, règle de taille ; le JSON reste simple à lire en C sur 3DS), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
 
 Côté serveur, les conversions nécessaires à l'import/export du site (brut, DeSmuME et flashcard en phase 1) sont codées en Go : `go:embed` ne peut pas lire `profiles/`, qui est hors du module. Un test vérifie que le code Go et les fichiers de `profiles/` restent cohérents.
+
+**Dossier Battery de DeSmuME** (vérifié sur `desmume/src/path.cpp` et le frontend Cocoa)
+
+- Linux (frontend GTK) : toujours `g_get_user_config_dir()/desmume`, soit `~/.config/desmume/` (ou `$XDG_CONFIG_HOME/desmume/`), et `~/.var/app/org.desmume.DeSmuME/config/desmume/` pour le Flatpak ; le réglage n'est pas modifiable sous Linux.
+- Windows : clé `[PathSettings] Battery` du `desmume.ini` placé à côté de l'exécutable (UTF-16 avec BOM) ; par défaut `.\Battery` ; un chemin non absolu est résolu depuis le dossier de l'exécutable.
+- macOS : `~/Library/Application Support/DeSmuME/<version de l'appli>/Battery`. La version dépend de l'appli installée : le client prend ce dossier s'il n'en existe qu'un, sinon il demande à l'utilisateur de le choisir.
+- Nom : nom du fichier ROM sans son extension, où `" < > |`, les caractères de contrôle (et `/` sous Windows) sont remplacés par `*`, suivi de `.dsv`.
+- Le Flatpak `org.desmume.DeSmuME` n'a aucun accès aux fichiers par défaut : le client propose `flatpak override --user --filesystem=<dossier>:ro org.desmume.DeSmuME` pour chaque dossier de ROMs.
+
+**Dossier des saves de RetroArch (melonDS DS)** (vérifié sur `runloop.c` et `configuration.c` de RetroArch)
+
+- `retroarch.cfg` est cherché comme le fait RetroArch : `$XDG_CONFIG_HOME/retroarch/retroarch.cfg` puis `~/.retroarch.cfg` sous Linux (`~/.var/app/org.libretro.RetroArch/config/retroarch/` pour le Flatpak) ; à côté de `retroarch.exe` puis dans `%APPDATA%` sous Windows ; `~/Library/Application Support/RetroArch/config/` sous macOS. Les surcharges `config/melonDS DS/` (cœur, dossier du jeu, jeu) s'appliquent dans cet ordre.
+- Dossier : `savefile_directory` (`~` = dossier personnel, `:` = dossier de l'exécutable, `default` = dossier par défaut de RetroArch : `saves` à côté de l'exécutable sous Windows, `~/Library/Application Support/RetroArch/saves` sous macOS, le dossier de la ROM sous Linux). Vide, ou si `savefiles_in_content_dir` est actif : le dossier de la ROM. Puis le nom du dossier de la ROM si `sort_savefiles_by_content_enable`, puis `melonDS DS` (nom de bibliothèque du cœur) si `sort_savefiles_enable`.
+- Nom : nom de la ROM sans son extension, suivi de `.srm`.
+- La taille du `.srm` vient de la base de ROMs de melonDS (pas de 32 Kio : 64 Kio pour les jeux à FRAM 32 Kio) ; les règles de taille du serveur l'absorbent.
+- Lancement : `retroarch -L <cœur> <rom>` (cœur `melondsds_libretro.so`, `.dll` ou `.dylib` dans `libretro_directory`, sinon le dossier `cores` de RetroArch).
 
 **Pied de fichier DeSmuME** (vérifié sur `desmume/src/mc.cpp` et sur des fichiers `.dsv` réels)
 
@@ -243,7 +259,7 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 **Sécurité**
 
 - Jetons révocables depuis la liste des appareils ; `last_seen_at` aide à repérer un appareil oublié.
-- Sur PC, le jeton est rangé dans le trousseau du système (API Secret Service via libsecret : GNOME Keyring, KWallet, KeePassXC…). Si aucun trousseau ne répond (session Hyprland sans Secret Service, par exemple), l'appairage est refusé par défaut avec un message clair ; l'utilisateur peut choisir explicitement de stocker le jeton dans un fichier (permissions 0600, avertissement affiché dans l'appli). Le jeton n'est jamais stocké en clair sans ce choix.
+- Sur Windows, le jeton est rangé dans le Gestionnaire d'identifiants (identifiant générique « RomSync », écrit par `CredWriteW`). Sur macOS, dans le trousseau « login » (l'appli n'est pas signée : macOS redemande l'accès au trousseau après chaque mise à jour, et l'appli est distribuée sans App Sandbox pour pouvoir lancer les émulateurs et lire les dossiers de ROMs). Sous Linux, le jeton est rangé dans le trousseau du système (API Secret Service via libsecret : GNOME Keyring, KWallet, KeePassXC…). Si aucun trousseau ne répond (session Hyprland sans Secret Service, par exemple), l'appairage est refusé par défaut avec un message clair ; l'utilisateur peut choisir explicitement de stocker le jeton dans un fichier (permissions 0600, avertissement affiché dans l'appli). Le jeton n'est jamais stocké en clair sans ce choix.
 - Limitation de débit sur la connexion, l'appairage, le premier démarrage et l'acceptation d'invitation (5 essais par minute et par IP).
 - Adresse IP du client : par défaut, l'adresse de la connexion TCP. `X-Forwarded-For` n'est lu que si la connexion vient d'une adresse listée dans `ROMSYNC_TRUSTED_PROXIES` (vide par défaut ; ex. `127.0.0.1` derrière `tailscale serve`).
 - Sur 3DS, le jeton est stocké en clair sur la carte SD : c'est documenté, et un jeton volé se révoque sans changer de mot de passe.
@@ -327,10 +343,13 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 - Le client ne coupe jamais une save : il retire seulement l'en-tête ou le pied du profil de conversion, puis envoie le brut ; la normalisation de taille est faite par le serveur.
 - Architecture : toute la logique hors interface (client API, en-têtes NDS, profils de conversion, état local, file d'attente, moteur de synchro, profils d'émulateurs) est dans un package Dart pur, `client/packages/romsync_core`, testable sans Flutter ; l'appli Flutter n'est qu'une interface. Les profils de conversion sont les fichiers `profiles/*.json`, copiés dans les ressources de l'appli au build (un test vérifie que les copies sont identiques).
 - melonDS (phase 2) : installé en binaire ou en Flatpak (`net.kuribo64.melonDS`, lancé par `flatpak run`). Le dossier des saves est lu dans sa configuration (`SaveFilePath` de `melonDS.toml`, ou de l'ancien `melonDS.ini`, y compris sous `~/.var/app/net.kuribo64.melonDS/config/melonDS/` pour le Flatpak) : vide, la save est à côté de la ROM (à côté de l'archive pour une ROM dans un `.zip`/`.7z`), nommée comme la ROM avec l'extension `.sav`. L'utilisateur peut imposer un autre dossier. Pour le Flatpak, l'appli lit ses droits (`flatpak info --show-permissions`) et, si un dossier de ROMs ou de saves est hors d'atteinte, affiche la commande `flatpak override --user --filesystem=<dossier> net.kuribo64.melonDS`.
-- Profils d'émulateurs : l'utilisateur choisit un émulateur par défaut et peut le changer par jeu ; chaque profil indique le chemin de l'exécutable, les arguments de lancement et le profil de conversion.
-- Lancement sur PC : processus enfant suivi jusqu'à sa fin. Sur Android : lancement par intent, puis détection du retour dans l'appli et scrutation du fichier.
+- Profils d'émulateurs : l'utilisateur choisit un émulateur par défaut et peut le changer par jeu (par identifiant de jeu : toutes les ROMs d'un même jeu suivent ce choix) ; chaque profil indique le chemin de l'exécutable (ou de l'appli `.app` sur macOS), le mode Flatpak sous Linux, les arguments de lancement, le dossier des saves et le profil de conversion. Émulateurs de la phase 3 : melonDS, DeSmuME et RetroArch avec le cœur melonDS DS.
+- Changement d'émulateur pour un jeu : la save du nouvel émulateur n'a pas encore d'état local et suit donc la règle normale (envoyée si elle existe, sinon la version active est téléchargée). Si un fichier de save du nouvel émulateur existe sans avoir jamais été synchronisé par RomSync pour ce jeu (ancienne partie), l'appli prévient et propose de le mettre de côté dans `.backup` plutôt que de l'envoyer.
+- ROMs en archive (`.zip`, `.7z`) : seul melonDS les lance dans cette phase ; avec DeSmuME ou RetroArch, la ROM est marquée « indisponible » avec la raison.
+- Lancement sur PC : processus enfant suivi jusqu'à sa fin. Sur macOS, une `.app` est lancée par son exécutable interne (`Contents/MacOS`), sauf DeSmuME (appli Cocoa qui ignore les arguments) lancé par `open -W -n -a`. Sur Android : lancement par intent, puis détection du retour dans l'appli et scrutation du fichier.
+- Lecture des saves : un fichier n'est lu que complet et stable (taille et date identiques avant, après et peu après la lecture) ; les erreurs de partage des émulateurs qui gardent la save ouverte (Windows) sont retentées. Un fichier lu à moitié n'est jamais envoyé. Surveillance par inotify (Linux), FSEvents (macOS) et ReadDirectoryChangesW (Windows).
 - Android : accès aux dossiers des émulateurs via le sélecteur de dossiers du système (Storage Access Framework) ; les dossiers privés d'une appli ne sont pas accessibles et doivent être déplacés par l'utilisateur dans l'émulateur.
-- Icône de barre système sur PC pour la surveillance des saves quand le jeu est lancé sans passer par l'appli.
+- Icône de barre système sur PC pour la surveillance des saves quand le jeu est lancé sans passer par l'appli : fermer la fenêtre garde l'appli dans la barre (réglable). En arrière-plan, l'appli ne fait qu'envoyer : chaque save modifiée est envoyée après 5 s sans écriture. Elle ne télécharge jamais, car l'émulateur peut avoir la save ouverte ; une notification signale une save plus récente sur le serveur, avec le nom du jeu et l'appareil d'où elle vient (une fois par version), et elle sera téléchargée au prochain lancement depuis l'appli. Sous Linux, l'icône utilise StatusNotifierItem : KDE l'affiche, GNOME demande l'extension AppIndicator, Hyprland une barre compatible (waybar).
 
 **Homebrew 3DS (C, devkitPro)**
 
@@ -369,7 +388,7 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
 
 1. Serveur + site : comptes, invitations, versions, rétention, import/export manuel. Utilisable seul avec la DSTT.
 2. Appli Flutter sur Linux : bibliothèque, lanceur melonDS, synchro complète. Premier usage réel sur Fedora.
-3. Profils DeSmuME et melonDS DS ; builds macOS (Asahi : Linux ARM64) et Windows.
+3. Profils DeSmuME et melonDS DS ; builds macOS (Asahi : Linux ARM64) et Windows ; icône de barre système ; publication des versions (GitHub Releases, image `ghcr.io`).
 4. Android : DraStic, melonDS Android, accès aux dossiers via le sélecteur système.
 5. Homebrew 3DS : synchro au démarrage, puis lancement via nds-bootstrap.
 

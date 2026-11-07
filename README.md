@@ -8,10 +8,10 @@ so you can start a game on a PC emulator, continue it on an Android phone or a
 3DS, and come back to the PC without copying files around. Every previous save
 stays in the history and can be restored, within a retention policy you choose.
 
-> **Status:** phase 2 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
-> the server, the web interface and the **Linux desktop client** (melonDS,
-> x86-64 and ARM64) are usable. DeSmuME, macOS, Windows, Android and the 3DS
-> homebrew come in the next phases.
+> **Status:** phase 3 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
+> the server, the web interface and the **desktop client** for Linux (x86-64
+> and ARM64), macOS and Windows, with melonDS, DeSmuME and RetroArch
+> (melonDS DS), are usable. Android and the 3DS homebrew come next.
 
 ## Features
 
@@ -24,7 +24,8 @@ stays in the history and can be restored, within a retention policy you choose.
   (`all`, last N, last N days, or *smart*: everything for 7 days, one per day
   for 30 days, then one per week), per account and per game.
 - **Canonical format**: the server stores the raw content of the save chip;
-  saves are converted to and from emulator formats (DeSmuME `.dsv` today).
+  saves are converted to and from emulator formats (melonDS `.sav`, DeSmuME
+  `.dsv`, RetroArch `.srm`), so one save moves between emulators.
 - **Multi-user**: one administrator, other accounts by single-use invitation.
   Devices never see a password: they are paired with a 10-minute code and get
   a revocable token.
@@ -34,15 +35,39 @@ stays in the history and can be restored, within a retention policy you choose.
 Not in scope: hosting or distributing ROMs (they stay on your devices), save
 states, other consoles.
 
-## Installation with Docker
+## Server installation with Docker
 
-Requirements: Docker with Compose, on a machine of your home network.
+Requirements: Docker with Compose, on a machine of your home network. The
+server image is published on GitHub's container registry for `linux/amd64`
+and `linux/arm64`:
+
+| Tag | Follows |
+| --- | --- |
+| `ghcr.io/dadoux01/romsync:0.3.0` | exactly this release |
+| `ghcr.io/dadoux01/romsync:0.3` | the latest 0.3.x (fixes only) |
+| `ghcr.io/dadoux01/romsync:latest` | the latest release |
+
+Get the example compose file and start it:
 
 ```sh
-git clone https://github.com/dadoux01/romsync.git
-cd romsync/deploy
+mkdir romsync && cd romsync
+curl -LO https://raw.githubusercontent.com/dadoux01/romsync/main/deploy/docker-compose.yml
 docker compose up -d
 ```
+
+To update: `docker compose pull && docker compose up -d`. To build the image
+yourself instead, clone the repository and run
+`docker build -f deploy/Dockerfile -t romsync .` from its root (or
+`docker compose build` in `deploy/` after switching to the `build:` section
+of the compose file).
+
+> **Package visibility.** A package pushed to ghcr.io is **private** by
+> default, even for a public repository: `docker pull` then asks for
+> credentials. The owner makes it public once, from GitHub → the profile's
+> *Packages* tab → `romsync` → *Package settings* → *Danger Zone* →
+> *Change visibility* → *Public*. Alternatively, log in on the server with
+> `docker login ghcr.io` and a personal access token with the
+> `read:packages` scope.
 
 Open `http://<server-address>:8080` and create the administrator account: the
 first-start screen only appears while no account exists. Then:
@@ -52,8 +77,46 @@ first-start screen only appears while no account exists. Then:
    address, the 8-character code and a name on the device.
 3. **Import** existing saves (`.sav` or `.dsv`) from *Importer*.
 
-The image is built locally from `deploy/Dockerfile` (multi-stage build, final
-image based on distroless, about 16 MB, running as a non-root user).
+The image is based on distroless (about 16 MB) and runs as a non-root user;
+`docker run --rm ghcr.io/dadoux01/romsync:latest version` prints its version.
+
+## Client installation
+
+Download the archive of your system from the
+[Releases](https://github.com/dadoux01/romsync/releases) page (`SHA256SUMS`
+lists their checksums), then pair the device with the code shown on the
+website (*Appareils → Ajouter un appareil*). See
+[`client/README.md`](client/README.md) for the emulators and their settings.
+
+- **Linux** (`romsync-<version>-linux-x64.tar.gz` or `-linux-arm64` for
+  Fedora Asahi and other ARM64 systems): extract it anywhere and run
+  `romsync` inside. It needs GTK 3 and libsecret, present on usual desktops.
+  The device token goes to the keyring (GNOME Keyring, KWallet, KeePassXC);
+  without one, the app asks before storing it in a 0600 file.
+- **macOS** (`romsync-<version>-macos.zip`, Apple Silicon and Intel): unzip
+  and move *RomSync.app* to *Applications*. The app is **not signed or
+  notarised** yet, so Gatekeeper blocks it the first time:
+  - right-click *RomSync.app* → *Open* → *Open*, or open it once, then
+    *System Settings* → *Privacy & Security* → *Open Anyway*;
+  - or remove the quarantine attribute set by the browser:
+    `xattr -dr com.apple.quarantine /Applications/RomSync.app`.
+
+  The device token is stored in the login keychain. As long as the app is
+  unsigned, **macOS asks again for access to the keychain after each
+  update** (each new build has a new ad-hoc signature): choose *Always
+  Allow*.
+- **Windows** (`romsync-<version>-windows-x64.zip`): extract the folder and
+  run `romsync.exe`. SmartScreen may warn about an unknown publisher: *More
+  info* → *Run anyway*. The device token is stored in the Credential Manager
+  (*Windows Credentials*, generic credential named `RomSync`).
+
+**System tray.** Closing the window keeps RomSync in the system tray (this
+can be turned off in the settings): saves of games launched without RomSync
+are then uploaded automatically, and a notification tells when a newer save
+from another device is waiting. On Linux the icon uses StatusNotifierItem:
+KDE Plasma shows it, GNOME needs the *AppIndicator and KStatusNotifierItem
+Support* extension, Hyprland and other window managers need a bar with a tray
+(e.g. waybar's `tray` module).
 
 ### Permissions of `/data`
 
@@ -171,7 +234,7 @@ your local network (`http://<lan-address>:8080`), so keep the port published.
 ```
 server/    Go server: API, storage, retention, single binary
 web/       web interface (Svelte 5 + Vite), compiled then embedded in server/
-client/    Flutter client — Linux with melonDS today (see client/README.md)
+client/    Flutter desktop client: Linux, macOS, Windows (see client/README.md)
 3ds/       3DS homebrew in C (devkitPro) — coming soon
 profiles/  declarative save conversion profiles, shared by the clients
 api/       OpenAPI specification of the REST API
