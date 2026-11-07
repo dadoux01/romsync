@@ -3,6 +3,9 @@ library;
 
 export 'src/api/api_client.dart';
 export 'src/api/models.dart';
+export 'src/emulators/emulator.dart';
+export 'src/emulators/flatpak.dart';
+export 'src/emulators/melonds.dart';
 export 'src/profiles/profile.dart';
 export 'src/rom/game_id.dart';
 export 'src/rom/nds_header.dart';
