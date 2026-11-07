@@ -1,6 +1,7 @@
 /// Platform-independent logic of the RomSync client.
 library;
 
+export 'src/profiles/profile.dart';
 export 'src/rom/game_id.dart';
 export 'src/rom/nds_header.dart';
 export 'src/rom/rom_file.dart';
