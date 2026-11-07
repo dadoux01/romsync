@@ -10,6 +10,7 @@ func (s *Server) routes(r chi.Router) {
 	r.Post("/setup", s.handle(s.postSetup))
 	r.Post("/auth/login", s.handle(s.postLogin))
 	r.Post("/invites/{token}/accept", s.handle(s.acceptInvite))
+	r.Post("/pair", s.handle(s.postPair))
 
 	// Web session or device token.
 	r.Group(func(r chi.Router) {
@@ -22,6 +23,9 @@ func (s *Server) routes(r chi.Router) {
 		r.Use(s.require(authSession))
 		r.Post("/auth/logout", s.handle(s.postLogout))
 		r.Patch("/me", s.handle(s.patchMe))
+		r.Post("/pair-codes", s.handle(s.postPairCode))
+		r.Get("/devices", s.handle(s.listDevices))
+		r.Delete("/devices/{id}", s.handle(s.deleteDevice))
 	})
 
 	// Administrator only.
