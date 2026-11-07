@@ -52,8 +52,13 @@ class AppController extends ChangeNotifier {
 
   List<GameRow> rows = [];
   List<ScanIssue> scanIssues = [];
-  List<EmulatorIssue> emulatorIssues = [];
-  SaveLocation? saveLocation;
+
+  /// Problems of the emulators in use (the default one and those chosen
+  /// for a game), by emulator id.
+  Map<String, List<EmulatorIssue>> emulatorIssues = {};
+  Map<String, SaveLocation> saveLocations = {};
+  Map<String, EmulatorProfile> emulators = {};
+  final HostPlatform platform = HostPlatform.current;
   final List<SyncEvent> events = [];
   final List<String> warnings = [];
 
@@ -66,7 +71,10 @@ class AppController extends ChangeNotifier {
 
   bool get isPaired => config.isPaired && api != null;
   TokenStore get tokenStore => config.tokenStorage == TokenStorage.file ? fileStore : keyring;
-  MelonDS get emulator => MelonDS(settings: config.emulator);
+  EmulatorProfile emulatorOf(String id) => emulators[id] ?? createEmulator(emulatorSettings(config, id, platform));
+
+  /// Emulators the library uses: the default one and the per-game choices.
+  Set<String> get emulatorsInUse => {config.defaultEmulator, ...config.gameEmulators.values};
 
   Future<void> init() async {
     config = await ClientConfig.load(paths.configFile);
@@ -158,9 +166,48 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> updateEmulator(EmulatorSettings settings) async {
-    config.emulator = settings;
+    config.emulators[settings.id] = settings;
     await _saveConfig();
     await rescan();
+  }
+
+  Future<void> setDefaultEmulator(String id) async {
+    config.defaultEmulator = id;
+    await _saveConfig();
+    await rescan();
+  }
+
+  /// Save files the game would use with [emulatorId] that RomSync never
+  /// synced: shown to the user before switching (see [setGameEmulator]).
+  Future<List<String>> staleSavesFor(String gameId, String emulatorId) async {
+    final previous = config.gameEmulators[gameId];
+    config.gameEmulators[gameId] = emulatorId;
+    await _rebuild();
+    final entries = library.where((e) => e.gameId == gameId);
+    final stale = staleSavesAfterSwitch(entries, states);
+    if (previous == null) {
+      config.gameEmulators.remove(gameId);
+    } else {
+      config.gameEmulators[gameId] = previous;
+    }
+    await _rebuild();
+    return stale;
+  }
+
+  /// Uses [emulatorId] for [gameId] (null: the default emulator), after
+  /// moving [setAsideFirst] into their .backup folders.
+  Future<void> setGameEmulator(String gameId, String? emulatorId, {List<String> setAsideFirst = const []}) async {
+    for (final path in setAsideFirst) {
+      await setAside(path, Backups(keep: config.backupCount));
+    }
+    if (emulatorId == null || emulatorId == config.defaultEmulator) {
+      config.gameEmulators.remove(gameId);
+    } else {
+      config.gameEmulators[gameId] = emulatorId;
+    }
+    await _saveConfig();
+    await _rebuild();
+    await refresh();
   }
 
   Future<void> setBackupCount(int n) async {
@@ -193,29 +240,29 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _rebuild() async {
-    final emu = emulator;
-    saveLocation = await emu.saveLocation();
-    emulatorIssues = await emu.check(romFolders: config.romFolders, location: saveLocation!);
+    emulators = {for (final id in emulatorIds) id: createEmulator(emulatorSettings(config, id, platform))};
+    saveLocations = {for (final e in emulators.entries) e.key: await e.value.saveLocation()};
+    emulatorIssues = {
+      for (final id in emulatorsInUse)
+        id: await emulators[id]!.check(romFolders: config.romFolders, location: saveLocations[id]!),
+    };
   }
 
-  List<LibraryEntry> get library {
-    final emu = emulator;
-    final profile = profiles[emu.conversionProfileId]!;
-    final loc = saveLocation!;
-    return buildLibrary(
-      roms: _roms,
-      config: config,
-      targetFor: (r, gameId) {
-        final reason = emu.cannotSync(r, loc);
-        return SaveTarget(
-          emulator: emu.id,
-          profile: profile,
-          savePath: reason == null ? emu.savePathFor(r, loc) : null,
-          unavailable: reason,
-        );
-      },
-    );
-  }
+  List<LibraryEntry> get library => buildLibrary(
+    roms: _roms,
+    config: config,
+    targetFor: (r, gameId) {
+      final emu = emulatorOf(config.emulatorFor(gameId));
+      final loc = saveLocations[emu.id];
+      final reason = loc == null ? 'Émulateur non configuré.' : emu.cannotSync(r, loc);
+      return SaveTarget(
+        emulator: emu.id,
+        profile: profiles[emu.conversionProfileId]!,
+        savePath: reason == null ? emu.savePathFor(r, loc!) : null,
+        unavailable: reason,
+      );
+    },
+  );
 
   /// Sends the queued uploads, fetches the server state and recomputes the
   /// status of every game.
@@ -241,7 +288,7 @@ class AppController extends ChangeNotifier {
       }
     }
     final out = <GameRow>[];
-    for (final entry in saveLocation == null ? const <LibraryEntry>[] : library) {
+    for (final entry in saveLocations.isEmpty ? const <LibraryEntry>[] : library) {
       String? hash;
       String? error;
       try {
@@ -279,9 +326,7 @@ class AppController extends ChangeNotifier {
     final e = engine;
     if (e == null) throw SyncException('Appareil non appairé.');
     if (runningGame != null) throw SyncException('Une partie est déjà en cours : $runningGame.');
-    final blocking = emulatorIssues.where(
-      (i) => i.message.contains('introuvable') || i.message.contains('pas installé'),
-    );
+    final blocking = (emulatorIssues[entry.emulator] ?? const <EmulatorIssue>[]).where((i) => i.blocking);
     if (blocking.isNotEmpty) throw SyncException(blocking.map((i) => i.toString()).join('\n'));
 
     final messages = <String>[];
@@ -296,7 +341,7 @@ class AppController extends ChangeNotifier {
       );
     }
 
-    final running = await RunningEmulator.start(emulator.launchPlan(entry.rom));
+    final running = await RunningEmulator.start(emulatorOf(entry.emulator).launchPlan(entry.rom));
     runningGame = entry.title;
     notifyListeners();
     final session = PlaySession(engine: e, entry: entry);
@@ -309,7 +354,7 @@ class AppController extends ChangeNotifier {
           _onEvent(
             SyncEvent(
               SyncEventKind.failed,
-              'melonDS s’est arrêté avec le code $code\n${running.stderrTail.join('\n')}',
+              '${emulatorName(entry.emulator)} s’est arrêté avec le code $code\n${running.stderrTail.join('\n')}',
               gameId: entry.gameId,
             ),
           );

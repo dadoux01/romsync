@@ -89,7 +89,7 @@ class HomePage extends StatelessWidget {
                   leading: const Icon(Icons.sports_esports),
                   actions: const [SizedBox.shrink()],
                 ),
-              for (final issue in c.emulatorIssues) IssueTile(issue),
+              for (final issue in c.emulatorIssues.values.expand((i) => i)) IssueTile(issue),
               for (final w in c.warnings) ListTile(leading: const Icon(Icons.info_outline), title: Text(w)),
               if (c.config.romFolders.isEmpty)
                 ListTile(

@@ -12,7 +12,8 @@ enum TokenStorage {
 /// How the emulator is installed.
 enum LaunchMode { native, flatpak }
 
-/// Settings of an emulator profile (only melonDS in phase 2).
+/// Settings of an emulator profile (defaults per platform in
+/// emulators/registry.dart).
 class EmulatorSettings {
   EmulatorSettings({
     this.id = 'melonds',
@@ -99,19 +100,34 @@ class ClientConfig {
     this.deviceName,
     this.deviceId,
     List<String>? romFolders,
-    EmulatorSettings? emulator,
+    Map<String, EmulatorSettings>? emulators,
+    this.defaultEmulator = 'melonds',
+    Map<String, String>? gameEmulators,
     this.backupCount = 10,
     this.tokenStorage = TokenStorage.keyring,
     Map<String, RomChoice>? romChoices,
   }) : romFolders = romFolders ?? [],
-       emulator = emulator ?? EmulatorSettings(),
+       emulators = emulators ?? {},
+       gameEmulators = gameEmulators ?? {},
        romChoices = romChoices ?? {};
 
   String? serverUrl;
   String? deviceName;
   int? deviceId;
   final List<String> romFolders;
-  EmulatorSettings emulator;
+
+  /// Settings changed by the user, by emulator id; missing ones use the
+  /// platform defaults.
+  final Map<String, EmulatorSettings> emulators;
+
+  /// Emulator used for games without their own choice.
+  String defaultEmulator;
+
+  /// Emulator chosen for a game, by game identifier.
+  final Map<String, String> gameEmulators;
+
+  /// Emulator of [gameId].
+  String emulatorFor(String gameId) => gameEmulators[gameId] ?? defaultEmulator;
 
   /// Number of `.backup` copies kept per save file.
   int backupCount;
@@ -127,7 +143,9 @@ class ClientConfig {
     'device_name': deviceName,
     'device_id': deviceId,
     'rom_folders': romFolders,
-    'emulator': emulator.toJson(),
+    'emulators': {for (final e in emulators.entries) e.key: e.value.toJson()},
+    'default_emulator': defaultEmulator,
+    'game_emulators': gameEmulators,
     'backup_count': backupCount,
     'token_storage': tokenStorage.name,
     'rom_choices': {for (final e in romChoices.entries) e.key: e.value.toJson()},
@@ -138,7 +156,17 @@ class ClientConfig {
     deviceName: j['device_name'] as String?,
     deviceId: j['device_id'] as int?,
     romFolders: [for (final f in (j['rom_folders'] as List<Object?>?) ?? const []) f! as String],
-    emulator: j['emulator'] == null ? null : EmulatorSettings.fromJson(j['emulator']! as Map<String, Object?>),
+    emulators: {
+      for (final e in ((j['emulators'] as Map<String, Object?>?) ?? const {}).entries)
+        e.key: EmulatorSettings.fromJson(e.value! as Map<String, Object?>),
+      // Phase 2 format: a single melonDS profile.
+      if (j['emulators'] == null && j['emulator'] != null)
+        'melonds': EmulatorSettings.fromJson(j['emulator']! as Map<String, Object?>),
+    },
+    defaultEmulator: (j['default_emulator'] as String?) ?? 'melonds',
+    gameEmulators: {
+      for (final e in ((j['game_emulators'] as Map<String, Object?>?) ?? const {}).entries) e.key: e.value! as String,
+    },
     backupCount: (j['backup_count'] as int?) ?? 10,
     tokenStorage: TokenStorage.values.byName((j['token_storage'] as String?) ?? 'keyring'),
     romChoices: {

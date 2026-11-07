@@ -36,7 +36,11 @@ void main() {
       deviceName: 'Fedora',
       deviceId: 3,
       romFolders: ['/roms'],
-      emulator: EmulatorSettings(mode: LaunchMode.flatpak, extraArgs: ['-f'], saveDirOverride: '/saves'),
+      emulators: {
+        'melonds': EmulatorSettings(mode: LaunchMode.flatpak, extraArgs: ['-f'], saveDirOverride: '/saves'),
+      },
+      defaultEmulator: 'desmume',
+      gameEmulators: {'IRBF': 'melonds'},
       backupCount: 4,
       tokenStorage: TokenStorage.file,
       romChoices: {'/roms/a.nds': const RomChoice.share(), '/roms/b.nds': const RomChoice.separate('x:multi')},
@@ -47,6 +51,16 @@ void main() {
     expect(r.isPaired, isTrue);
     expect(r.romChoices['/roms/b.nds']!.customId, 'x:multi');
     expect((await ClientConfig.load(p.join(dir.path, 'none.json'))).backupCount, 10);
+    expect(r.emulatorFor('IRBF'), 'melonds');
+    expect(r.emulatorFor('CPUF'), 'desmume');
+  });
+
+  test('ClientConfig migrates the phase 2 single melonDS profile', () async {
+    final path = p.join(dir.path, 'old.json');
+    File(path).writeAsStringSync('{"server_url": "http://nas", "emulator": {"id": "melonds", "mode": "flatpak"}}');
+    final c = await ClientConfig.load(path);
+    expect(c.emulators['melonds']!.mode, LaunchMode.flatpak);
+    expect(c.defaultEmulator, 'melonds');
   });
 
   test('StateStore keeps one state per save file', () async {

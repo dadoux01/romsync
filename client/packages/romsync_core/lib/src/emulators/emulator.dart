@@ -43,9 +43,12 @@ class LaunchPlan {
 /// A problem preventing the emulator from working with RomSync, with the
 /// command that fixes it when there is one.
 class EmulatorIssue {
-  const EmulatorIssue(this.message, {this.fixCommand});
+  const EmulatorIssue(this.message, {this.fixCommand, this.blocking = false});
   final String message;
   final String? fixCommand;
+
+  /// The emulator cannot be launched at all (not installed, core missing).
+  final bool blocking;
   @override
   String toString() => fixCommand == null ? message : '$message\n  $fixCommand';
 }
@@ -238,7 +241,9 @@ abstract class EmulatorBase implements EmulatorProfile {
     required List<String> writeFolders,
   }) async {
     if (settings.mode == LaunchMode.flatpak && platform != HostPlatform.linux) {
-      return [EmulatorIssue('Le mode Flatpak n’existe que sous Linux : indique l’exécutable de $name.')];
+      return [
+        EmulatorIssue('Le mode Flatpak n’existe que sous Linux : indique l’exécutable de $name.', blocking: true),
+      ];
     }
     if (!isFlatpak) {
       return resolveExecutable() == null
@@ -246,6 +251,7 @@ abstract class EmulatorBase implements EmulatorProfile {
               EmulatorIssue(
                 'Exécutable $name introuvable : « ${settings.executable} ». '
                 'Indique son chemin dans les réglages${platform == HostPlatform.linux ? ', ou choisis le mode Flatpak' : ''}.',
+                blocking: true,
               ),
             ]
           : [];
@@ -254,13 +260,14 @@ abstract class EmulatorBase implements EmulatorProfile {
     try {
       info = await run('flatpak', ['info', '--show-permissions', settings.flatpakId]);
     } on ProcessException {
-      return [const EmulatorIssue('Flatpak n’est pas installé sur ce système.')];
+      return [const EmulatorIssue('Flatpak n’est pas installé sur ce système.', blocking: true)];
     }
     if (info.exitCode != 0) {
       return [
         EmulatorIssue(
           'Le Flatpak ${settings.flatpakId} n’est pas installé.',
           fixCommand: 'flatpak install flathub ${settings.flatpakId}',
+          blocking: true,
         ),
       ];
     }

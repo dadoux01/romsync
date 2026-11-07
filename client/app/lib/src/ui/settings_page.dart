@@ -16,12 +16,14 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   AppController get c => widget.controller;
-  late final _exe = TextEditingController(text: c.config.emulator.executable);
-  late final _args = TextEditingController(text: c.config.emulator.extraArgs.join(' '));
-  late final _saveDir = TextEditingController(text: c.config.emulator.saveDirOverride ?? '');
+  late final _exe = TextEditingController(text: emulatorSettings(c.config, 'melonds', c.platform).executable);
+  late final _args = TextEditingController(text: emulatorSettings(c.config, 'melonds', c.platform).extraArgs.join(' '));
+  late final _saveDir = TextEditingController(
+    text: emulatorSettings(c.config, 'melonds', c.platform).saveDirOverride ?? '',
+  );
 
   Future<void> _saveEmulator({LaunchMode? mode}) => c.updateEmulator(
-    c.config.emulator.copyWith(
+    emulatorSettings(c.config, 'melonds', c.platform).copyWith(
       mode: mode,
       executable: _exe.text.trim().isEmpty ? 'melonDS' : _exe.text.trim(),
       extraArgs: _args.text.trim().isEmpty ? const [] : _args.text.trim().split(RegExp(r'\s+')),
@@ -34,8 +36,8 @@ class _SettingsPageState extends State<SettingsPage> {
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) {
-        final emu = c.config.emulator;
-        final loc = c.saveLocation;
+        final emu = emulatorSettings(c.config, 'melonds', c.platform);
+        final loc = c.saveLocations['melonds'];
         final text = Theme.of(context).textTheme;
         return Scaffold(
           appBar: AppBar(title: const Text('Réglages')),
@@ -123,7 +125,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 alignment: Alignment.centerLeft,
                 child: FilledButton.tonal(onPressed: _saveEmulator, child: const Text('Enregistrer')),
               ),
-              for (final issue in c.emulatorIssues) IssueTile(issue),
+              for (final issue in c.emulatorIssues['melonds'] ?? const <EmulatorIssue>[]) IssueTile(issue),
               const Divider(),
               Text('Copies de sécurité', style: text.titleMedium),
               ListTile(
