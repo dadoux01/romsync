@@ -8,10 +8,10 @@ so you can start a game on a PC emulator, continue it on an Android phone or a
 3DS, and come back to the PC without copying files around. Every previous save
 stays in the history and can be restored, within a retention policy you choose.
 
-> **Status:** phase 1 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
-> the server and the web interface are usable on their own (for example with a
-> DS and a flashcard, through manual import/export). The Flutter client and the
-> 3DS homebrew are not written yet.
+> **Status:** phase 2 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
+> the server, the web interface and the **Linux desktop client** (melonDS,
+> x86-64 and ARM64) are usable. DeSmuME, macOS, Windows, Android and the 3DS
+> homebrew come in the next phases.
 
 ## Features
 
@@ -171,7 +171,7 @@ your local network (`http://<lan-address>:8080`), so keep the port published.
 ```
 server/    Go server: API, storage, retention, single binary
 web/       web interface (Svelte 5 + Vite), compiled then embedded in server/
-client/    Flutter app (Linux, macOS, Windows, Android) — coming soon
+client/    Flutter client — Linux with melonDS today (see client/README.md)
 3ds/       3DS homebrew in C (devkitPro) — coming soon
 profiles/  declarative save conversion profiles, shared by the clients
 api/       OpenAPI specification of the REST API
@@ -185,10 +185,11 @@ every route.
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short, with Go 1.27+ and Node.js 24:
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short, with Go 1.27+, Node.js 24
+and Flutter 3.47+:
 
 ```sh
-make test         # Go tests, svelte-check and web tests
+make test         # Go tests, svelte-check, web tests and client tests
 make build        # server/bin/romsync with the web interface embedded
 make dev-server   # API on :8080 (data in ./data)
 make dev-web      # web interface with hot reload on :5173

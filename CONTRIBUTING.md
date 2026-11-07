@@ -16,6 +16,7 @@ You need:
 
 - Go 1.27 or later
 - Node.js 24 and npm
+- Flutter 3.47 or later for the client (see [`client/README.md`](client/README.md))
 - optionally golangci-lint v2 and Docker or Podman
 
 ```sh
@@ -49,6 +50,8 @@ docker build -f deploy/Dockerfile -t romsync .
 | `server/internal/blobs` | Content-addressed file storage |
 | `server/internal/db` | SQLite and migrations (`migrations/NNNN_name.sql`) |
 | `web/src` | Svelte interface (`pages/`, `components/`, `lib/`) |
+| `client/packages/romsync_core` | Client logic in pure Dart (sync engine, API client, profiles…) |
+| `client/app` | Flutter interface of the client |
 | `profiles/` | Declarative conversion profiles |
 | `api/openapi.yaml` | API specification |
 
@@ -74,7 +77,8 @@ docker build -f deploy/Dockerfile -t romsync .
 A profile describes how an emulator stores a DS save compared to the raw
 content of the save chip (see [`profiles/README.md`](profiles/README.md)):
 
-1. Add `profiles/<id>.json` with `"status": "to_verify"`.
+1. Add `profiles/<id>.json` with `"status": "to_verify"`, then run
+   `client/tool/sync_profiles.sh` so that the client bundles it.
 2. If the server must offer it for import/export, implement it in
    `server/internal/convert` and register it; `TestProfilesMatchCode` checks
    that the JSON and the code agree.

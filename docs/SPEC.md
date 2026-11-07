@@ -99,6 +99,8 @@ Le 4e caractère du code donne la région (`F` France, `E` USA, `P` Europe, `J` 
 
 - ROM patchée ou traduite : elle garde en général le code d'origine et partage la save, ce qui est le comportement attendu.
 - Hack qui change la structure de la save (rom hack Pokémon par exemple) : le client permet de forcer un identifiant personnalisé pour ce fichier ROM.
+- Plusieurs ROMs locales avec le même identifiant (variantes patchées, traductions, hacks) : le client le signale dans la liste et demande, une fois par ROM, « partager la save » (même identifiant) ou « séparer » (identifiant forcé `x:` que l'utilisateur nomme). Tant qu'une ROM n'a pas de réponse, elle n'est pas synchronisée, pour qu'une variante n'écrase jamais la save d'une autre sans que l'utilisateur le sache. Les choix sont enregistrés par ROM (chemin du fichier, plus le nom intérieur pour une archive).
+- Une ROM dans une archive est identifiée par l'en-tête du `.nds` décompressé ; l'identifiant `h:` est le SHA-1 du `.nds` décompressé, pas de l'archive.
 - Homebrew ou ROM sans code valide (`####`, zéros) : repli sur un identifiant dérivé du hash SHA-1 de la ROM, préfixé `h:`.
 - Le titre affiché peut être renommé dans l'interface web ; c'est purement cosmétique.
 
@@ -167,17 +169,21 @@ Côté serveur, les conversions nécessaires à l'import/export du site (brut, D
 
 Le client tire la save active avant de lancer le jeu, envoie chaque nouvelle save pendant la partie, puis fait un dernier envoi à la fermeture ; en cas de divergence, la save faite le plus récemment devient active et l'autre reste dans l'historique.
 
-**État local par jeu** (stocké par le client)
+**État local par fichier de save** (stocké par le client)
+
+L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent partager un identifiant de jeu, chacune avec son propre fichier de save. Chaque état est rattaché à l'identifiant de jeu avec lequel il a été synchronisé ; un état enregistré sous un autre identifiant (ROM séparée ou repartagée) est ignoré.
 
 - `last_synced_version_id` : la version serveur sur laquelle la save locale est basée.
-- `last_synced_hash` : le hash de la save locale au moment de cette synchro.
-- File d'attente des envois en attente, persistée sur disque.
+- `last_synced_hash` : le hash (SHA-256) du contenu brut local au moment de cette synchro. C'est le hash local qui est gardé, même si le serveur a coupé du remplissage et stocke un contenu de hash différent.
+- File d'attente des envois en attente, persistée sur disque, avec une copie de chaque contenu en attente (la save peut encore changer avant l'envoi). Tout envoi passe par cette file : l'`upload_id` (UUID) est généré une fois, à la mise en file, et conservé jusqu'à l'acceptation, même après un redémarrage.
+- À l'envoi d'un élément de la file, `X-Base-Version` est le `last_synced_version_id` courant de ce fichier de save : des envois mis en file hors ligne s'enchaînent donc sans créer de fausse divergence.
+- Un envoi refusé définitivement par le serveur (ex. `409 size_mismatch`) est retiré de la file, et son contenu est conservé dans un dossier `failed` du client.
 
 **Avant le lancement**
 
 1. Le client vide d'abord sa file d'attente si le serveur est joignable.
 2. Il demande la version active du jeu (`GET /games/{code}/active`).
-3. Si la save locale n'a pas changé depuis la dernière synchro et que le serveur a une version plus récente : il la télécharge, la convertit et l'écrit (l'ancienne copie locale est gardée dans un dossier `.backup`).
+3. Si la save locale n'a pas changé depuis la dernière synchro et que le serveur a une version plus récente : il la télécharge, la convertit et l'écrit (l'ancienne copie locale est gardée dans un dossier `.backup` à côté de la save ; les N dernières copies sont gardées par save, 10 par défaut, nombre réglable).
 4. Si la save locale a changé hors synchro (partie hors ligne) : il l'envoie d'abord, et la règle « la plus récente gagne » s'applique côté serveur avant le téléchargement.
 5. Il lance l'émulateur.
 
@@ -237,6 +243,7 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 **Sécurité**
 
 - Jetons révocables depuis la liste des appareils ; `last_seen_at` aide à repérer un appareil oublié.
+- Sur PC, le jeton est rangé dans le trousseau du système (API Secret Service via libsecret : GNOME Keyring, KWallet, KeePassXC…). Si aucun trousseau ne répond (session Hyprland sans Secret Service, par exemple), l'appairage est refusé par défaut avec un message clair ; l'utilisateur peut choisir explicitement de stocker le jeton dans un fichier (permissions 0600, avertissement affiché dans l'appli). Le jeton n'est jamais stocké en clair sans ce choix.
 - Limitation de débit sur la connexion, l'appairage, le premier démarrage et l'acceptation d'invitation (5 essais par minute et par IP).
 - Adresse IP du client : par défaut, l'adresse de la connexion TCP. `X-Forwarded-For` n'est lu que si la connexion vient d'une adresse listée dans `ROMSYNC_TRUSTED_PROXIES` (vide par défaut ; ex. `127.0.0.1` derrière `tailscale serve`).
 - Sur 3DS, le jeton est stocké en clair sur la carte SD : c'est documenté, et un jeton volé se révoque sans changer de mot de passe.
@@ -316,7 +323,10 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 
 **Appli Flutter (Linux, macOS, Windows, Android)**
 
-- Bibliothèque : l'utilisateur ajoute un ou plusieurs dossiers de ROMs ; l'appli lit l'en-tête de chaque `.nds` (y compris dans un `.zip` ou `.7z`) et affiche les jeux avec l'état de leur save : à jour, à envoyer, à télécharger, hors ligne.
+- Bibliothèque : l'utilisateur ajoute un ou plusieurs dossiers de ROMs ; l'appli lit l'en-tête de chaque `.nds` (y compris dans un `.zip`, lu directement, ou un `.7z`, lu avec le programme 7-Zip `7z`, `7zz` ou `7za` ; sans lui, l'appli affiche « installer 7zip ») et affiche les jeux avec l'état de leur save : à jour, à envoyer, à télécharger, hors ligne, choix requis (ROMs partageant un identifiant), plus la mention « conflit résolu automatiquement ».
+- Le client ne coupe jamais une save : il retire seulement l'en-tête ou le pied du profil de conversion, puis envoie le brut ; la normalisation de taille est faite par le serveur.
+- Architecture : toute la logique hors interface (client API, en-têtes NDS, profils de conversion, état local, file d'attente, moteur de synchro, profils d'émulateurs) est dans un package Dart pur, `client/packages/romsync_core`, testable sans Flutter ; l'appli Flutter n'est qu'une interface. Les profils de conversion sont les fichiers `profiles/*.json`, copiés dans les ressources de l'appli au build (un test vérifie que les copies sont identiques).
+- melonDS (phase 2) : installé en binaire ou en Flatpak (`net.kuribo64.melonDS`, lancé par `flatpak run`). Le dossier des saves est lu dans sa configuration (`SaveFilePath` de `melonDS.toml`, ou de l'ancien `melonDS.ini`, y compris sous `~/.var/app/net.kuribo64.melonDS/config/melonDS/` pour le Flatpak) : vide, la save est à côté de la ROM (à côté de l'archive pour une ROM dans un `.zip`/`.7z`), nommée comme la ROM avec l'extension `.sav`. L'utilisateur peut imposer un autre dossier. Pour le Flatpak, l'appli lit ses droits (`flatpak info --show-permissions`) et, si un dossier de ROMs ou de saves est hors d'atteinte, affiche la commande `flatpak override --user --filesystem=<dossier> net.kuribo64.melonDS`.
 - Profils d'émulateurs : l'utilisateur choisit un émulateur par défaut et peut le changer par jeu ; chaque profil indique le chemin de l'exécutable, les arguments de lancement et le profil de conversion.
 - Lancement sur PC : processus enfant suivi jusqu'à sa fin. Sur Android : lancement par intent, puis détection du retour dans l'appli et scrutation du fichier.
 - Android : accès aux dossiers des émulateurs via le sélecteur de dossiers du système (Storage Access Framework) ; les dossiers privés d'une appli ne sont pas accessibles et doivent être déplacés par l'utilisateur dans l'émulateur.
