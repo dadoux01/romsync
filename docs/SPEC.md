@@ -134,7 +134,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, souvent complété à une taille fixe | À vérifier par modèle |
 
-Chaque profil est un petit fichier déclaratif (chemin, extension, en-tête/pied, règle de taille), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
+Chaque profil est un petit fichier déclaratif en JSON (`profiles/<id>.json` : chemin, extension, en-tête/pied, règle de taille ; le JSON reste simple à lire en C sur 3DS), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
 
 Côté serveur, les conversions nécessaires à l'import/export du site (brut et DeSmuME en phase 1) sont codées en Go : `go:embed` ne peut pas lire `profiles/`, qui est hors du module. Un test vérifie que le code Go et les fichiers de `profiles/` restent cohérents.
 
@@ -211,7 +211,8 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 
 **Comptes**
 
-- Premier démarrage : le site affiche un écran de création du compte admin ; il disparaît ensuite.
+- Premier démarrage : le site affiche un écran de création du compte admin ; il disparaît ensuite. La création ouvre directement une session.
+- Identifiant : 1 à 32 caractères parmi lettres, chiffres, `_`, `.` et `-` (insensible à la casse) ; mot de passe : 8 à 256 caractères.
 - L'admin génère des liens d'invitation à usage unique (7 jours) ; la personne invitée choisit son identifiant et son mot de passe.
 - Mots de passe hachés avec Argon2id ; session web par cookie `HttpOnly`, `SameSite=Strict`, valable 30 jours et prolongée à chaque utilisation.
 - Accepter une invitation ouvre directement une session pour le nouveau compte.
@@ -220,7 +221,7 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 **Appairage d'un appareil**
 
 1. Sur le site, l'utilisateur clique « Ajouter un appareil » : un code de 8 caractères s'affiche, valable 10 minutes (alphabet sans caractères ambigus, ex. `K7QM-4XPA`).
-2. Sur l'appareil, il saisit l'adresse du serveur et ce code, plus un nom (« Fedora bureau », « 3DS »).
+2. Sur l'appareil, il saisit l'adresse du serveur et ce code, plus un nom (« Fedora bureau », « 3DS »). La plateforme envoyée est l'une de `linux`, `macos`, `windows`, `android`, `3ds`, `other`.
 3. L'appareil appelle `POST /pair` et reçoit un jeton aléatoire de 256 bits, qu'il conserve localement ; le serveur n'en garde que le hash.
 4. Toutes les requêtes de l'appareil portent ensuite `Authorization: Bearer <jeton>`.
 
@@ -265,7 +266,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 **Envoi d'une save** — `POST /games/{code}/versions`
 
 - Corps : contenu brut canonique.
-- En-têtes : `X-Upload-Id`, `X-Saved-At` (ISO 8601), `X-Base-Version` (vide si première save), `X-Emulator`, `X-Content-SHA256`, `X-Game-Title` (optionnel, pour un jeu inconnu).
+- En-têtes : `X-Upload-Id`, `X-Saved-At` (ISO 8601), `X-Base-Version` (vide si première save), `X-Emulator`, `X-Content-SHA256`, `X-Game-Title` (optionnel, pour un jeu inconnu ; encodé en pourcentage, car les navigateurs n'envoient que des en-têtes Latin-1).
 - En-tête optionnel `X-Force-Size: true` : accepte une taille différente de la taille de puce mémorisée et remplace celle-ci. Accepté seulement avec une session web (refusé avec `403 forbidden` pour un jeton d'appareil).
 - Paramètre optionnel `?profile=desmume` : le corps est un fichier au format du profil (ex. `.dsv`), converti en brut par le serveur avant tout traitement ; `X-Content-SHA256` porte alors sur le fichier envoyé. Sans paramètre, `profile=raw`.
 - Réponse : `{"version": {...}, "created": bool, "active": bool, "conflict": bool}` ; `201` si une version a été créée, `200` sinon.
