@@ -71,6 +71,8 @@ void main() {
       httpClient: server,
       scanner: RomScanner(findSevenZip: false),
       refreshInterval: const Duration(hours: 1),
+      // Never the real emulator folders.
+      environment: {'HOME': p.join(tmp.path, 'home'), 'PATH': ''},
     );
     await c.init();
     addTearDown(c.dispose);
@@ -126,5 +128,34 @@ void main() {
 
     final reloaded = await ClientConfig.load(paths.configFile);
     expect(reloaded.romChoices[hack.key]!.customId, 'x:platine-hack');
+  });
+
+  test('switching a game to DeSmuME sets aside an old .dsv that RomSync never synced', () async {
+    final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
+    File(p.join(roms.path, 'Noire.nds')).writeAsBytesSync(rom('IRBF'));
+    final c = await controller(FakeKeyring(available: true));
+    await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora');
+    await c.addFolder(roms.path);
+    expect(c.rows.single.entry.emulator, 'melonds');
+
+    final oldDsv = File(p.join(tmp.path, 'home', '.config', 'desmume', 'Noire.dsv'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([1, 2, 3]);
+    final stale = await c.staleSavesFor('IRBF', 'desmume');
+    expect(stale, [oldDsv.path]);
+    expect(c.rows.single.entry.emulator, 'melonds', reason: 'only a preview');
+
+    await c.setGameEmulator('IRBF', 'desmume', setAsideFirst: stale);
+    expect(oldDsv.existsSync(), isFalse);
+    final backups = Directory(p.join(p.dirname(oldDsv.path), '.backup')).listSync();
+    expect(backups, hasLength(1));
+    expect(c.rows.single.entry.emulator, 'desmume');
+    expect(c.rows.single.entry.savePath, oldDsv.path);
+    expect((await ClientConfig.load(paths.configFile)).emulatorFor('IRBF'), 'desmume');
+
+    // Back to the default emulator.
+    await c.setGameEmulator('IRBF', null);
+    expect(c.rows.single.entry.emulator, 'melonds');
+    expect(c.config.gameEmulators, isEmpty);
   });
 }

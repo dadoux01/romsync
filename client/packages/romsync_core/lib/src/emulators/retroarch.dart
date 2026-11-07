@@ -237,7 +237,7 @@ class RetroArchMelonDSDS extends EmulatorBase {
       issues.add(
         EmulatorIssue(
           'Cœur melonDS DS introuvable${_core == null ? '' : ' ($_core)'} : installe-le depuis RetroArch '
-          '(Menu principal → Charger un cœur → Télécharger un cœur → « Nintendo - DS (melonDS DS) »).',
+          '(Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).',
           blocking: true,
         ),
       );

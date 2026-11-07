@@ -33,6 +33,7 @@ class AppController extends ChangeNotifier {
     this.httpClient,
     RomScanner? scanner,
     this.refreshInterval = const Duration(minutes: 1),
+    this.environment,
   }) : fileStore = fileStore ?? FileTokenStore(paths.tokenFile),
        scanner = scanner ?? RomScanner();
 
@@ -59,6 +60,10 @@ class AppController extends ChangeNotifier {
   Map<String, SaveLocation> saveLocations = {};
   Map<String, EmulatorProfile> emulators = {};
   final HostPlatform platform = HostPlatform.current;
+
+  /// Environment given to the emulator profiles (tests use a temporary
+  /// HOME so that they never touch the real emulator folders).
+  final Map<String, String>? environment;
   final List<SyncEvent> events = [];
   final List<String> warnings = [];
 
@@ -71,7 +76,8 @@ class AppController extends ChangeNotifier {
 
   bool get isPaired => config.isPaired && api != null;
   TokenStore get tokenStore => config.tokenStorage == TokenStorage.file ? fileStore : keyring;
-  EmulatorProfile emulatorOf(String id) => emulators[id] ?? createEmulator(emulatorSettings(config, id, platform));
+  EmulatorProfile emulatorOf(String id) =>
+      emulators[id] ?? createEmulator(emulatorSettings(config, id, platform), environment: environment);
 
   /// Emulators the library uses: the default one and the per-game choices.
   Set<String> get emulatorsInUse => {config.defaultEmulator, ...config.gameEmulators.values};
@@ -240,7 +246,10 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _rebuild() async {
-    emulators = {for (final id in emulatorIds) id: createEmulator(emulatorSettings(config, id, platform))};
+    emulators = {
+      for (final id in emulatorIds)
+        id: createEmulator(emulatorSettings(config, id, platform), environment: environment),
+    };
     saveLocations = {for (final e in emulators.entries) e.key: await e.value.saveLocation()};
     emulatorIssues = {
       for (final id in emulatorsInUse)

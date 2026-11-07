@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
-import 'issue_tile.dart';
+import 'emulator_card.dart';
 
-/// Server, ROM folders, melonDS profile and backups.
+/// Server, ROM folders, emulators and backups.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.controller});
   final AppController controller;
@@ -16,28 +16,12 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   AppController get c => widget.controller;
-  late final _exe = TextEditingController(text: emulatorSettings(c.config, 'melonds', c.platform).executable);
-  late final _args = TextEditingController(text: emulatorSettings(c.config, 'melonds', c.platform).extraArgs.join(' '));
-  late final _saveDir = TextEditingController(
-    text: emulatorSettings(c.config, 'melonds', c.platform).saveDirOverride ?? '',
-  );
-
-  Future<void> _saveEmulator({LaunchMode? mode}) => c.updateEmulator(
-    emulatorSettings(c.config, 'melonds', c.platform).copyWith(
-      mode: mode,
-      executable: _exe.text.trim().isEmpty ? 'melonDS' : _exe.text.trim(),
-      extraArgs: _args.text.trim().isEmpty ? const [] : _args.text.trim().split(RegExp(r'\s+')),
-      saveDirOverride: () => _saveDir.text.trim().isEmpty ? null : _saveDir.text.trim(),
-    ),
-  );
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) {
-        final emu = emulatorSettings(c.config, 'melonds', c.platform);
-        final loc = c.saveLocations['melonds'];
         final text = Theme.of(context).textTheme;
         return Scaffold(
           appBar: AppBar(title: const Text('Réglages')),
@@ -83,49 +67,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const Divider(),
-              Text('melonDS', style: text.titleMedium),
-              SegmentedButton<LaunchMode>(
-                segments: const [
-                  ButtonSegment(value: LaunchMode.native, label: Text('Exécutable'), icon: Icon(Icons.terminal)),
-                  ButtonSegment(
-                    value: LaunchMode.flatpak,
-                    label: Text('Flatpak'),
-                    icon: Icon(Icons.inventory_2_outlined),
-                  ),
-                ],
-                selected: {emu.mode},
-                onSelectionChanged: (s) => _saveEmulator(mode: s.first),
-              ),
-              if (emu.mode == LaunchMode.native)
-                TextField(
-                  controller: _exe,
-                  decoration: const InputDecoration(labelText: 'Exécutable (nom dans le PATH ou chemin complet)'),
-                  onSubmitted: (_) => _saveEmulator(),
-                )
-              else
-                ListTile(title: Text('flatpak run ${emu.flatpakId}'), dense: true),
-              TextField(
-                controller: _args,
-                decoration: const InputDecoration(labelText: 'Arguments supplémentaires', hintText: '-f'),
-                onSubmitted: (_) => _saveEmulator(),
-              ),
-              TextField(
-                controller: _saveDir,
-                decoration: InputDecoration(
-                  labelText: 'Dossier des saves (vide : détecté)',
-                  helperText: loc == null
-                      ? null
-                      : 'Détecté : ${loc.dir ?? 'à côté de chaque ROM'} (source : ${loc.source})',
-                  helperMaxLines: 2,
+              Text('Émulateurs', style: text.titleMedium),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Émulateur par défaut'),
+                subtitle: const Text('Chaque jeu peut avoir le sien, depuis la liste des jeux.'),
+                trailing: DropdownButton<String>(
+                  value: c.config.defaultEmulator,
+                  items: [for (final id in emulatorIds) DropdownMenuItem(value: id, child: Text(emulatorName(id)))],
+                  onChanged: (id) => c.setDefaultEmulator(id!),
                 ),
-                onSubmitted: (_) => _saveEmulator(),
               ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.tonal(onPressed: _saveEmulator, child: const Text('Enregistrer')),
-              ),
-              for (final issue in c.emulatorIssues['melonds'] ?? const <EmulatorIssue>[]) IssueTile(issue),
+              for (final id in emulatorIds) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
               const Divider(),
               Text('Copies de sécurité', style: text.titleMedium),
               ListTile(

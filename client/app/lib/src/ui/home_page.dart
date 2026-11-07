@@ -33,6 +33,47 @@ class HomePage extends StatelessWidget {
     }
   }
 
+  /// Changes the emulator of [entry]'s game, after offering to set aside an
+  /// old save of the new emulator that RomSync never synced.
+  Future<void> _chooseEmulator(BuildContext context, LibraryEntry entry, String emulatorId) async {
+    final stale = await controller.staleSavesFor(entry.gameId, emulatorId);
+    var setAside = const <String>[];
+    if (stale.isNotEmpty) {
+      if (!context.mounted) return;
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Une save ${emulatorName(emulatorId)} existe déjà'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final path in stale) SelectableText(path, style: const TextStyle(fontFamily: 'monospace')),
+                const SizedBox(height: 12),
+                const Text(
+                  'RomSync ne l’a jamais synchronisée pour ce jeu : c’est probablement une ancienne partie.\n\n'
+                  'Mise de côté (recommandé), elle est copiée dans le dossier .backup voisin, et la save du serveur '
+                  'sera téléchargée au prochain lancement.\n'
+                  'Gardée, elle sera envoyée au serveur, qui gardera la plus récente des deux.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+            TextButton(onPressed: () => Navigator.pop(context, 'keep'), child: const Text('La garder')),
+            FilledButton(onPressed: () => Navigator.pop(context, 'aside'), child: const Text('La mettre de côté')),
+          ],
+        ),
+      );
+      if (choice == null) return;
+      if (choice == 'aside') setAside = stale;
+    }
+    await controller.setGameEmulator(entry.gameId, emulatorId, setAsideFirst: setAside);
+  }
+
   Future<void> _choose(BuildContext context, LibraryEntry entry) async {
     final choice = await showDialog<RomChoice>(
       context: context,
@@ -98,7 +139,8 @@ class HomePage extends StatelessWidget {
                   onTap: () =>
                       Navigator.push(context, MaterialPageRoute<void>(builder: (_) => SettingsPage(controller: c))),
                 ),
-              for (final row in c.rows) _GameTile(row: row, controller: c, onLaunch: _launch, onChoose: _choose),
+              for (final row in c.rows)
+                _GameTile(row: row, controller: c, onLaunch: _launch, onChoose: _choose, onEmulator: _chooseEmulator),
               if (c.scanIssues.isNotEmpty)
                 ExpansionTile(
                   leading: const Icon(Icons.report_problem_outlined),
@@ -125,11 +167,18 @@ class HomePage extends StatelessWidget {
 }
 
 class _GameTile extends StatelessWidget {
-  const _GameTile({required this.row, required this.controller, required this.onLaunch, required this.onChoose});
+  const _GameTile({
+    required this.row,
+    required this.controller,
+    required this.onLaunch,
+    required this.onChoose,
+    required this.onEmulator,
+  });
   final GameRow row;
   final AppController controller;
   final Future<void> Function(BuildContext, LibraryEntry) onLaunch;
   final Future<void> Function(BuildContext, LibraryEntry) onChoose;
+  final Future<void> Function(BuildContext, LibraryEntry, String) onEmulator;
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +215,29 @@ class _GameTile extends StatelessWidget {
             ),
             if (e.sharedWith.isNotEmpty)
               TextButton(onPressed: () => onChoose(context, e), child: Text(e.needsChoice ? 'Choisir' : 'Modifier')),
+            PopupMenuButton<String>(
+              tooltip: 'Émulateur de ce jeu',
+              enabled: controller.runningGame == null,
+              onSelected: (id) => onEmulator(context, e, id),
+              itemBuilder: (context) => [
+                for (final id in emulatorIds)
+                  CheckedPopupMenuItem(
+                    value: id,
+                    checked: id == e.emulator,
+                    child: Text(
+                      '${emulatorName(id)}${id == controller.config.defaultEmulator ? ' (par défaut)' : ''}'
+                      '${id != 'melonds' && e.rom.file.innerName != null ? ' — pas pour les archives' : ''}',
+                    ),
+                  ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [Text(emulatorName(e.emulator)), const Icon(Icons.arrow_drop_down)],
+                ),
+              ),
+            ),
             IconButton(
               tooltip: 'Historique',
               icon: const Icon(Icons.history),
