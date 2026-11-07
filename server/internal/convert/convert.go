@@ -18,14 +18,15 @@ type Profile interface {
 	// Extension is the file extension, with its dot.
 	Extension() string
 	// Encode turns raw save data into the profile's file format.
-	Encode(raw []byte) []byte
+	Encode(raw []byte) ([]byte, error)
 	// Decode turns a file of the profile's format into raw save data.
 	Decode(file []byte) ([]byte, error)
 }
 
 var profiles = map[string]Profile{
-	"raw":     Raw{},
-	"desmume": DeSmuME{},
+	"raw":       Raw{},
+	"desmume":   DeSmuME{},
+	"flashcard": Flashcard{Size: FlashcardSize},
 }
 
 // Get returns the profile with the given id.
@@ -35,7 +36,7 @@ func Get(id string) (Profile, bool) {
 }
 
 // IDs lists the available profiles.
-func IDs() []string { return []string{"raw", "desmume"} }
+func IDs() []string { return []string{"raw", "desmume", "flashcard"} }
 
 // Raw is the canonical format: the content of the save chip, unchanged.
 // It is what melonDS writes in its .sav files.
@@ -43,7 +44,7 @@ type Raw struct{}
 
 func (Raw) ID() string                         { return "raw" }
 func (Raw) Extension() string                  { return ".sav" }
-func (Raw) Encode(raw []byte) []byte           { return bytes.Clone(raw) }
+func (Raw) Encode(raw []byte) ([]byte, error)  { return bytes.Clone(raw), nil }
 func (Raw) Decode(file []byte) ([]byte, error) { return bytes.Clone(file), nil }
 
 // DeSmuME footer layout, as written by BackupDevice::ensure() in
@@ -100,7 +101,7 @@ func (DeSmuME) Extension() string { return ".dsv" }
 
 // Encode appends the footer that DeSmuME writes for a save of this size.
 // Saves are bounded by the upload limit, far below the 4 GiB a u32 holds.
-func (DeSmuME) Encode(raw []byte) []byte {
+func (DeSmuME) Encode(raw []byte) ([]byte, error) {
 	n := uint32(len(raw)) //nolint:gosec // see above
 	out := make([]byte, 0, len(raw)+DeSmuMEFooterLength)
 	out = append(out, raw...)
@@ -115,8 +116,36 @@ func (DeSmuME) Encode(raw []byte) []byte {
 	} {
 		out = binary.LittleEndian.AppendUint32(out, v)
 	}
-	return append(out, DeSmuMECookie...)
+	return append(out, DeSmuMECookie...), nil
 }
+
+// FlashcardSize is the save file size of the flashcard profile. Flashcards
+// such as the DSTT or the R4 commonly use 512 KiB files whatever the game;
+// the profile is marked "to_verify" until checked model by model.
+const FlashcardSize = 512 << 10
+
+// Flashcard handles flashcard .sav files: raw data padded with 0xFF to a
+// fixed size. On import the file is kept as is; the server's size rules cut
+// the padding down to the game's chip size.
+type Flashcard struct{ Size int }
+
+func (Flashcard) ID() string        { return "flashcard" }
+func (Flashcard) Extension() string { return ".sav" }
+
+// Encode pads raw with 0xFF up to the fixed size.
+func (f Flashcard) Encode(raw []byte) ([]byte, error) {
+	if len(raw) > f.Size {
+		return nil, fmt.Errorf("convert: a %d-byte save does not fit in a %d-byte flashcard file", len(raw), f.Size)
+	}
+	out := make([]byte, f.Size)
+	copy(out, raw)
+	for i := len(raw); i < f.Size; i++ {
+		out[i] = 0xFF
+	}
+	return out, nil
+}
+
+func (Flashcard) Decode(file []byte) ([]byte, error) { return bytes.Clone(file), nil }
 
 // ErrNotDeSmuME is returned when a file does not end with a DeSmuME footer.
 var ErrNotDeSmuME = errors.New("convert: not a DeSmuME save (footer not found)")

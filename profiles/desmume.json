@@ -9,17 +9,43 @@
     "length": 122,
     "prefix": "|<--Snip above here to create a raw sav by excluding this DeSmuME savedata footer:",
     "fields": [
-      { "name": "size", "type": "u32le", "value": "raw_size" },
-      { "name": "pad_size", "type": "u32le", "value": "raw_size" },
-      { "name": "type", "type": "u32le", "value": "desmume_save_type", "ignored_on_read": true },
-      { "name": "addr_size", "type": "u32le", "value": "desmume_addr_size" },
-      { "name": "mem_size", "type": "u32le", "value": "raw_size" },
-      { "name": "version", "type": "u32le", "value": 0 }
+      {
+        "name": "size",
+        "type": "u32le",
+        "value": "raw_size"
+      },
+      {
+        "name": "pad_size",
+        "type": "u32le",
+        "value": "raw_size"
+      },
+      {
+        "name": "type",
+        "type": "u32le",
+        "value": "desmume_save_type",
+        "ignored_on_read": true
+      },
+      {
+        "name": "addr_size",
+        "type": "u32le",
+        "value": "desmume_addr_size"
+      },
+      {
+        "name": "mem_size",
+        "type": "u32le",
+        "value": "raw_size"
+      },
+      {
+        "name": "version",
+        "type": "u32le",
+        "value": 0
+      }
     ],
     "cookie": "|-DESMUME SAVE-|"
   },
   "size": {
     "output": "exact",
+    "pad_to": null,
     "pad_byte": null
   },
   "notes": "Layout verified against desmume/src/mc.cpp (BackupDevice::ensure, GetDSVFileInfo) and real .dsv files. desmume_save_type is the 1-based index of the size in DeSmuME's save_types table (512 B, 8 KiB, 64 KiB, 32 KiB, 256 KiB, 512 KiB, 1, 2, 4, 8, 16, 32 MiB), 0 when absent. desmume_addr_size is 1 up to 512 B, 2 up to 64 KiB, 3 above."

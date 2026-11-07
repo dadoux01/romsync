@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, ApiError, type Game, type Profile, type UploadResult } from '../lib/api';
   import { route } from '../lib/router.svelte';
-  import { formatDate, formatSize } from '../lib/format';
+  import { describeSizeEvent, formatDate, formatSize } from '../lib/format';
   import { isDeSmuME, isValidGameCode, parseRomHeader, rawSize } from '../lib/saves';
   import { randomId } from '../lib/sha256';
 
@@ -114,6 +114,7 @@
     {#if result.created}
       <p class="success">Version importée{result.active ? ' et active' : ''}.</p>
       {#if result.conflict}<p class="muted small">Elle ne partait pas de la version active : elle est marquée divergente.</p>{/if}
+      {#if result.version.size_event}<p class="muted small">{describeSizeEvent(result.version.size_event, result.version.size)}</p>{/if}
     {:else}
       <p>Cette save est identique à la version active : rien n’a été créé.</p>
     {/if}
@@ -168,8 +169,8 @@
       {#if error}<p class="error">{error}</p>{/if}
       {#if sizeMismatch}
         <p class="notice">
-          La taille ne correspond pas à celle des saves déjà connues pour ce jeu
-          ({formatSize(selected?.chip_size)}). Vérifie que c’est le bon jeu avant de forcer.
+          La taille ne correspond pas à celle des saves de ce jeu ({formatSize(selected?.chip_size)}), et la différence
+          contient des données : ce n’est pas du simple remplissage. Vérifie que c’est le bon jeu avant de forcer.
         </p>
         <div><button type="button" class="danger" disabled={busy} onclick={(e) => submit(e as unknown as SubmitEvent, true)}>Forcer la nouvelle taille</button></div>
       {/if}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, type Game, type Version } from '../lib/api';
   import { session } from '../lib/session.svelte';
-  import { formatDate, formatSize, relativeDate, shortHash } from '../lib/format';
+  import { describeSizeEvent, formatDate, formatSize, relativeDate, shortHash } from '../lib/format';
   import { REGIONS } from '../lib/saves';
   import RetentionEditor from '../components/RetentionEditor.svelte';
 
@@ -145,7 +145,16 @@
               {v.device_name ?? 'site web'}
               {#if v.emulator}<div class="muted small">{v.emulator}</div>{/if}
             </td>
-            <td>{formatSize(v.size)}<div class="muted small mono" title={v.sha256}>{shortHash(v.sha256)}</div></td>
+            <td>
+              {formatSize(v.size)}
+              {#if v.size_event}
+                <span class="badge warn" title={describeSizeEvent(v.size_event, v.size)}>
+                  {v.size_event.type === 'trimmed' ? 'coupée' : v.size_event.type === 'shrunk' ? 'taille réduite' : 'taille forcée'}
+                </span>
+                <div class="muted small">{describeSizeEvent(v.size_event, v.size)}</div>
+              {/if}
+              <div class="muted small mono" title={v.sha256}>{shortHash(v.sha256)}</div>
+            </td>
             <td>
               <div class="row">
                 {#if v.is_active}<span class="badge active">active</span>{/if}
@@ -162,6 +171,7 @@
                 <button onclick={() => editNote(v)}>Note</button>
                 <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
                 <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
+                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title="Complétée à 512 Kio avec 0xFF (format à vérifier selon la flashcard)">flashcard</a>
               </div>
             </td>
           </tr>

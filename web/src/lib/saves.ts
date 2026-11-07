@@ -14,7 +14,7 @@ export function isDeSmuME(data: Uint8Array): boolean {
 }
 
 /** Size of the raw save contained in a file of the given profile. */
-export function rawSize(data: Uint8Array, profile: 'raw' | 'desmume'): number {
+export function rawSize(data: Uint8Array, profile: string): number {
   return profile === 'desmume' ? data.length - DESMUME_FOOTER_LENGTH : data.length;
 }
 

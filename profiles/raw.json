@@ -8,6 +8,7 @@
   "footer": null,
   "size": {
     "output": "exact",
+    "pad_to": null,
     "pad_byte": null
   }
 }

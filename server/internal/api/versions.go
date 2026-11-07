@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dadoux01/romsync/server/internal/blobs"
+	"github.com/dadoux01/romsync/server/internal/chipdb"
 	"github.com/dadoux01/romsync/server/internal/convert"
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/syncrule"
@@ -37,16 +38,30 @@ type versionJSON struct {
 	Conflict        bool    `json:"conflict"`
 	Pinned          bool    `json:"pinned"`
 	Note            string  `json:"note"`
+	// SizeEvent records a cut or a chip size change made by this upload.
+	SizeEvent *sizeEventJSON `json:"size_event"`
+}
+
+type sizeEventJSON struct {
+	Type string `json:"type"` // trimmed, shrunk or forced
+	From int64  `json:"from"` // received size (trimmed) or previous chip size
 }
 
 const versionSelect = `SELECT v.id, g.game_code, v.blob_hash, v.size, v.saved_at, v.saved_at_reported, v.uploaded_at,
-	v.device_id, d.name, v.emulator, v.base_version_id, v.is_active, v.conflict, v.pinned, v.note
+	v.device_id, d.name, v.emulator, v.base_version_id, v.is_active, v.conflict, v.pinned, v.note,
+	v.size_event, v.size_event_from
 	FROM save_versions v JOIN games g ON g.id = v.game_id LEFT JOIN devices d ON d.id = v.device_id`
 
 func scanVersion(row interface{ Scan(...any) error }) (versionJSON, error) {
 	var v versionJSON
+	var event *string
+	var from *int64
 	err := row.Scan(&v.ID, &v.GameCode, &v.SHA256, &v.Size, &v.SavedAt, &v.SavedAtReported, &v.UploadedAt,
-		&v.DeviceID, &v.DeviceName, &v.Emulator, &v.BaseVersionID, &v.IsActive, &v.Conflict, &v.Pinned, &v.Note)
+		&v.DeviceID, &v.DeviceName, &v.Emulator, &v.BaseVersionID, &v.IsActive, &v.Conflict, &v.Pinned, &v.Note,
+		&event, &from)
+	if event != nil && from != nil {
+		v.SizeEvent = &sizeEventJSON{Type: *event, From: *from}
+	}
 	return v, err
 }
 
@@ -278,10 +293,6 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 		status = http.StatusCreated
 	)
 	err = s.blobs.Use(func() error {
-		hash, err := s.blobs.Put(data)
-		if err != nil {
-			return err
-		}
 		return s.inTx(ctx, func(tx *sql.Tx) error {
 			// Idempotence: a retried upload returns the original response.
 			var prevID int64
@@ -309,23 +320,45 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 				return err
 			}
 
+			// Size rules: cut padding down to a known chip size, or shrink the
+			// chip size when the active version's excess is only padding.
+			var chip int64
+			if g.ChipSize != nil {
+				chip = *g.ChipSize
+			}
+			activeData := func() ([]byte, error) {
+				if g.ActiveVersion == nil {
+					return nil, nil
+				}
+				return s.blobs.Read(g.ActiveVersion.SHA256)
+			}
+			sized, err := syncrule.ResolveSize(data, chip, activeData, req.forceSize)
+			if errors.Is(err, syncrule.ErrSizeMismatch) {
+				return errSizeMismatch(fmt.Sprintf("this game's saves are %d bytes, got %d", chip, len(data)))
+			}
+			if err != nil {
+				return err
+			}
+
+			hash := blobs.Sum(sized.Data)
 			// Same content as the active version: nothing to do.
 			if g.ActiveVersion != nil && g.ActiveVersion.SHA256 == hash {
 				res = uploadResult{Version: *g.ActiveVersion, Active: true}
 				status = http.StatusOK
 				return nil
 			}
-
-			size := int64(len(data))
-			if g.ChipSize != nil && *g.ChipSize != size {
-				if !req.forceSize {
-					return errSizeMismatch(fmt.Sprintf("this game's saves are %d bytes, got %d", *g.ChipSize, size))
-				}
+			if _, err := s.blobs.Put(sized.Data); err != nil {
+				return err
 			}
-			if g.ChipSize == nil || *g.ChipSize != size {
-				if _, err := tx.ExecContext(ctx, `UPDATE games SET chip_size = ? WHERE id = ?`, size, g.ID); err != nil {
+			size := int64(len(sized.Data))
+			if sized.ChipSize != chip {
+				if _, err := tx.ExecContext(ctx, `UPDATE games SET chip_size = ? WHERE id = ?`, sized.ChipSize, g.ID); err != nil {
 					return err
 				}
+			}
+			var sizeEvent, sizeEventFrom any
+			if sized.Event != nil {
+				sizeEvent, sizeEventFrom = sized.Event.Type, sized.Event.From
 			}
 
 			savedAt, skewed := syncrule.ClampSavedAt(req.savedAt, now)
@@ -360,10 +393,10 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 				deviceID = p.DeviceID
 			}
 			ins, err := tx.ExecContext(ctx, `INSERT INTO save_versions (game_id, blob_hash, size, saved_at, saved_at_reported,
-				uploaded_at, device_id, emulator, base_version_id, upload_id, is_active, conflict)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				uploaded_at, device_id, emulator, base_version_id, upload_id, is_active, conflict, size_event, size_event_from)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				g.ID, hash, size, db.FormatTime(savedAt), reported, db.FormatTime(now), deviceID,
-				req.emulator, req.base, req.uploadID, decision.Activate, decision.Conflict)
+				req.emulator, req.base, req.uploadID, decision.Activate, decision.Conflict, sizeEvent, sizeEventFrom)
 			if err != nil {
 				return err
 			}
@@ -423,7 +456,10 @@ func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out := prof.Encode(raw)
+	out, err := prof.Encode(raw)
+	if err != nil {
+		return errInvalid(err.Error())
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, prof.Extension())))
 	w.Header().Set("Content-Length", strconv.Itoa(len(out)))
@@ -446,8 +482,13 @@ func (s *Server) loadOrCreateGame(ctx context.Context, tx *sql.Tx, userID int64,
 	if title == "" {
 		title = code
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO games (user_id, game_code, title, region, first_seen_at) VALUES (?, ?, ?, ?, ?)`,
-		userID, code, title, gameRegion(code), db.FormatTime(now)); err != nil {
+	// The save size database, when it knows the game, sets the chip size.
+	var chip any
+	if n, ok := chipdb.Size(code); ok {
+		chip = n
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO games (user_id, game_code, title, region, chip_size, first_seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		userID, code, title, gameRegion(code), chip, db.FormatTime(now)); err != nil {
 		return g, err
 	}
 	return s.loadGame(ctx, tx, userID, code)

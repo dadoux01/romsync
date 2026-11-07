@@ -14,7 +14,7 @@ func TestImportDeSmuMEAndExport(t *testing.T) {
 	e := newTestEnv(t)
 	admin := e.setupAdmin()
 	raw := bytes.Repeat([]byte{0xA5}, 8<<10)
-	dsv := convert.DeSmuME{}.Encode(raw)
+	dsv, _ := convert.DeSmuME{}.Encode(raw)
 
 	// Web import of a .dsv: the hash covers the uploaded file, the server
 	// stores the raw content.

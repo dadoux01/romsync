@@ -57,7 +57,7 @@ Sept tables SQLite suffisent ; le contenu des saves vit hors de la base, dans de
 | `invites` | id, token\_hash, created\_by, created\_at, expires\_at, used\_by, used\_at | Lien à usage unique, 7 jours par défaut |
 | `devices` | id, user\_id, name, platform, token\_hash, created\_at, last\_seen\_at, revoked\_at, clock\_skew\_at | Un jeton par appareil, révocable ; `clock_skew_at` = dernier décalage d'horloge détecté |
 | `games` | id, user\_id, game\_code, title, region, chip\_size, first\_seen\_at, retention\_policy | Unique sur (user\_id, game\_code) ; `chip_size` = taille de puce mémorisée ; `retention_policy` NULL = hérite du compte |
-| `save_versions` | id, game\_id, blob\_hash, size, saved\_at, saved\_at\_reported, uploaded\_at, device\_id, emulator, base\_version\_id, upload\_id, is\_active, conflict, pinned, note | Une seule version active par jeu ; `upload_id` unique par compte ; `conflict` = divergence détectée à l'envoi |
+| `save_versions` | id, game\_id, blob\_hash, size, saved\_at, saved\_at\_reported, uploaded\_at, device\_id, emulator, base\_version\_id, upload\_id, is\_active, conflict, pinned, note, size\_event, size\_event\_from | Une seule version active par jeu ; `upload_id` unique par compte ; `conflict` = divergence détectée à l'envoi ; `size_event` = coupe ou changement de taille de puce (voir « Taille réelle ») |
 | `pair_codes` | code\_hash, user\_id, expires\_at, used\_at | Code d'appairage, 10 minutes |
 
 Les identifiants (`id`) sont des entiers ; les dates sont stockées et échangées en UTC, au format RFC 3339.
@@ -119,9 +119,18 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 **Taille réelle**
 
 - Les puces DS ont des tailles fixes : 512 o, 8 Kio, 64 Kio, 128 Kio, 256 Kio, 512 Kio, 1 Mio, 8 Mio et plus pour la flash NAND de certains jeux.
-- En entrée : on retire tout en-tête ou pied ajouté par l'émulateur, puis on ramène le fichier à la taille de puce la plus proche si le surplus n'est que du remplissage (0xFF ou 0x00).
-- En sortie : on complète avec 0xFF si l'émulateur ou la flashcard attend un fichier plus grand.
-- Le serveur mémorise la taille de puce détectée pour chaque jeu et refuse une save d'une autre taille, sauf forçage depuis l'interface.
+- Une save n'est jamais coupée sur la seule base de son remplissage : une save de 512 Kio dont la seconde moitié est encore vierge est une save valide. Une coupe ne se fait que vers une taille de puce déjà connue.
+- En entrée, le client retire seulement l'en-tête ou le pied ajouté par l'émulateur ; les règles de taille sont appliquées par le serveur.
+- Taille de puce d'un jeu (`games.chip_size`) :
+  - Si la base de tailles connaît le code du jeu, elle fait foi à la création du jeu. Cette base (`server/internal/chipdb/chipsizes.txt`, environ 6 700 jeux) est extraite de la liste de ROMs de melonDS (`src/ROMList.cpp`, GPL-3.0-or-later, compatible avec l'AGPL-3.0 par l'article 13 des deux licences). Elle n'a pas d'entrée 32 Kio : les jeux à FRAM 32 Kio y figurent à 64 Kio.
+  - Sinon, la première save du jeu fixe `chip_size`.
+- À l'envoi d'une save de taille différente de `chip_size` :
+  - plus grande, et l'excédent n'est que du remplissage (tout 0xFF ou tout 0x00) : elle est coupée à `chip_size` ;
+  - plus petite, et l'excédent de la version active n'est que du remplissage : `chip_size` prend la nouvelle taille et l'envoi est accepté. Si le jeu n'a pas encore de version active (taille issue de la base), l'envoi est accepté de la même façon, puisque rien ne peut être perdu ;
+  - dans tous les autres cas : `409 size_mismatch` ; `X-Force-Size` reste possible depuis le site et fixe `chip_size` à la nouvelle taille.
+- Chaque coupe ou changement de `chip_size` est tracé sur la version (`size_event` : `trimmed`, `shrunk` ou `forced` ; `size_event_from` : taille reçue pour une coupe, ancienne `chip_size` sinon) et affiché dans l'historique du site.
+- En sortie : on complète avec 0xFF quand le profil cible impose une taille fixe (profil `flashcard` : 512 Kio).
+- Exemple : une DSTT envoie une save de 64 Kio complétée à 512 Kio, `chip_size` vaut 512 Kio ; melonDS envoie ensuite la save de 64 Kio, l'excédent de la version active n'est que du remplissage, `chip_size` passe à 64 Kio ; les envois suivants de la DSTT sont coupés à 64 Kio.
 
 **Profils de conversion**
 
@@ -132,11 +141,11 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | melonDS DS (RetroArch) | `<rom>.srm` dans le dossier saves de RetroArch | Aucune a priori | À vérifier |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
-| Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, souvent complété à une taille fixe | À vérifier par modèle |
+| Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF à 512 Kio (profil `flashcard`) | À vérifier par modèle |
 
 Chaque profil est un petit fichier déclaratif en JSON (`profiles/<id>.json` : chemin, extension, en-tête/pied, règle de taille ; le JSON reste simple à lire en C sur 3DS), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
 
-Côté serveur, les conversions nécessaires à l'import/export du site (brut et DeSmuME en phase 1) sont codées en Go : `go:embed` ne peut pas lire `profiles/`, qui est hors du module. Un test vérifie que le code Go et les fichiers de `profiles/` restent cohérents.
+Côté serveur, les conversions nécessaires à l'import/export du site (brut, DeSmuME et flashcard en phase 1) sont codées en Go : `go:embed` ne peut pas lire `profiles/`, qui est hors du module. Un test vérifie que le code Go et les fichiers de `profiles/` restent cohérents.
 
 **Pied de fichier DeSmuME** (vérifié sur `desmume/src/mc.cpp` et sur des fichiers `.dsv` réels)
 
@@ -267,7 +276,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 
 - Corps : contenu brut canonique.
 - En-têtes : `X-Upload-Id`, `X-Saved-At` (ISO 8601), `X-Base-Version` (vide si première save), `X-Emulator`, `X-Content-SHA256`, `X-Game-Title` (optionnel, pour un jeu inconnu ; encodé en pourcentage, car les navigateurs n'envoient que des en-têtes Latin-1).
-- En-tête optionnel `X-Force-Size: true` : accepte une taille différente de la taille de puce mémorisée et remplace celle-ci. Accepté seulement avec une session web (refusé avec `403 forbidden` pour un jeton d'appareil).
+- En-tête optionnel `X-Force-Size: true` : accepte une taille que les règles de « Taille réelle » refusent, et en fait la nouvelle taille de puce du jeu. Accepté seulement avec une session web (refusé avec `403 forbidden` pour un jeton d'appareil).
 - Paramètre optionnel `?profile=desmume` : le corps est un fichier au format du profil (ex. `.dsv`), converti en brut par le serveur avant tout traitement ; `X-Content-SHA256` porte alors sur le fichier envoyé. Sans paramètre, `profile=raw`.
 - Réponse : `{"version": {...}, "created": bool, "active": bool, "conflict": bool}` ; `201` si une version a été créée, `200` sinon.
 - Le serveur vérifie le hash annoncé et crée le jeu s'il n'existe pas encore.
@@ -323,7 +332,7 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 **Import/export sur le site (DS + flashcard, dépannage)**
 
 - Import : glisser un `.sav` ou `.dsv` ; le site détecte le format (cookie DeSmuME en fin de fichier) et l'envoie avec `?profile=desmume` le cas échéant. Le nom d'un fichier de save ne donne pas le code du jeu : l'utilisateur choisit un jeu existant ou saisit un code. En option, il peut désigner le `.nds` correspondant : le navigateur lit localement les 512 premiers octets pour en tirer le code et le titre, et la ROM n'est jamais envoyée.
-- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME ; flashcard quand son profil aura été vérifié).
+- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME, ou flashcard : brut complété à 512 Kio, format à vérifier par modèle).
 
 ## Dépôt, roadmap et questions ouvertes
 

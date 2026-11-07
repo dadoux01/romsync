@@ -182,3 +182,10 @@ make dev-web      # web interface with hot reload on :5173
 
 RomSync is free software under the [GNU Affero General Public License v3.0](LICENSE).
 If you modify it and offer it as a hosted service, you must publish your changes.
+
+### Third-party data
+
+`server/internal/chipdb/chipsizes.txt`, the save size of about 6,700 DS games,
+is extracted from [melonDS](https://github.com/melonDS-emu/melonDS)'s ROM list
+(`src/ROMList.cpp`, © melonDS team, GPL-3.0-or-later), which section 13 of the
+AGPL-3.0 allows to combine with RomSync.

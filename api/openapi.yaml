@@ -502,6 +502,15 @@ paths:
         Idempotence: a retry with the same `X-Upload-Id` returns the original
         version with `201`. Content identical to the active version creates
         nothing and returns `200` with `created: false`.
+
+        Size rules (the game's chip size comes from the save size database, or
+        else from its first save): an upload larger than the chip size whose
+        excess is only padding (all 0xFF or all 0x00) is cut to the chip size;
+        an upload smaller than the chip size is accepted, and becomes the new
+        chip size, when the active version's excess is only padding (or when
+        the game has no active version yet). Any other size difference is a
+        `409 size_mismatch`, unless `X-Force-Size` is sent from the web
+        interface. Cuts and chip size changes are recorded in `size_event`.
       security: [{ session: [] }, { device: [] }]
       parameters:
         - $ref: "#/components/parameters/GameCode"
@@ -535,7 +544,7 @@ paths:
           schema: { type: string }
         - name: X-Force-Size
           in: header
-          description: Accept a size different from the game's known chip size and replace it. Web session only.
+          description: Accept a size that the size rules refuse, and make it the game's chip size. Web session only.
           schema: { type: string, enum: ["true", "false"] }
       requestBody:
         required: true
@@ -648,11 +657,15 @@ paths:
           schema: { $ref: "#/components/schemas/ProfileID" }
       responses:
         "200":
-          description: Converted file (`<code>.sav` or `<code>.dsv`)
+          description: Converted file (`<code>.sav` or `<code>.dsv`); the `flashcard` profile pads the save with 0xFF to 512 KiB.
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "400":
+          description: "`invalid_request`: unknown profile, or save larger than the profile's fixed size"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -829,8 +842,9 @@ components:
 
     ProfileID:
       type: string
-      enum: [raw, desmume]
+      enum: [raw, desmume, flashcard]
       default: raw
+      description: "`raw`: the save chip content (melonDS). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to 512 KiB (to verify per flashcard model)."
 
     Game:
       type: object
@@ -841,7 +855,7 @@ components:
         region:
           type: [string, "null"]
           description: Fourth character of a cartridge code (F France, E USA, P Europe, J Japan…).
-        chip_size: { type: [integer, "null"], description: Known save size in bytes. }
+        chip_size: { type: [integer, "null"], description: "Save size in bytes: from the save size database, else from the first save; changed by the size rules." }
         first_seen_at: { $ref: "#/components/schemas/Timestamp" }
         retention_policy:
           description: "`null` when the game inherits the account policy."
@@ -858,7 +872,7 @@ components:
     Version:
       type: object
       required: [id, game_code, sha256, size, saved_at, saved_at_reported, uploaded_at, device_id, device_name,
-                 emulator, base_version_id, is_active, conflict, pinned, note]
+                 emulator, base_version_id, is_active, conflict, pinned, note, size_event]
       properties:
         id: { type: integer }
         game_code: { $ref: "#/components/schemas/GameCode" }
@@ -879,6 +893,20 @@ components:
         conflict: { type: boolean }
         pinned: { type: boolean }
         note: { type: string }
+        size_event:
+          description: Cut or chip size change made by this upload.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [type, from]
+              properties:
+                type:
+                  type: string
+                  enum: [trimmed, shrunk, forced]
+                  description: "`trimmed`: padding cut to the chip size. `shrunk`: the chip size was reduced to this version's size. `forced`: size forced from the web interface."
+                from:
+                  type: integer
+                  description: Received size for `trimmed`, previous chip size otherwise.
 
     VersionEnvelope:
       type: object

@@ -53,6 +53,8 @@ export interface Version {
   conflict: boolean;
   pinned: boolean;
   note: string;
+  /** Cut or chip size change made by this upload. */
+  size_event: { type: 'trimmed' | 'shrunk' | 'forced'; from: number } | null;
 }
 
 export interface Game {
@@ -74,7 +76,7 @@ export interface UploadResult {
   conflict: boolean;
 }
 
-export type Profile = 'raw' | 'desmume';
+export type Profile = 'raw' | 'desmume' | 'flashcard';
 
 export class ApiError extends Error {
   constructor(

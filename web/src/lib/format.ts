@@ -25,6 +25,20 @@ export function formatSize(bytes: number | null | undefined): string {
   return `${+(bytes / 1024 / 1024).toFixed(1)} Mio`;
 }
 
+/** Describes the size event of a version, for the history. */
+export function describeSizeEvent(e: { type: string; from: number }, size: number): string {
+  switch (e.type) {
+    case 'trimmed':
+      return `Reçue en ${formatSize(e.from)} : le remplissage a été coupé à ${formatSize(size)}.`;
+    case 'shrunk':
+      return `Taille de save du jeu passée de ${formatSize(e.from)} à ${formatSize(size)} (le reste de la version active n’était que du remplissage).`;
+    case 'forced':
+      return `Taille forcée depuis le site (avant : ${formatSize(e.from)}).`;
+    default:
+      return '';
+  }
+}
+
 export function shortHash(hash: string): string {
   return hash.slice(0, 10);
 }

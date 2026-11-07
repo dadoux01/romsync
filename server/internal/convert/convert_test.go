@@ -10,6 +10,14 @@ import (
 	"testing"
 )
 
+func encodeDSV(raw []byte) []byte {
+	b, err := DeSmuME{}.Encode(raw)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
 // pattern returns n bytes of non-trivial data.
 func pattern(n int) []byte {
 	b := make([]byte, n)
@@ -51,7 +59,7 @@ func TestDeSmuMERoundTripWithRealFooter(t *testing.T) {
 		t.Fatal("decoded data differs from the original")
 	}
 	// Our footer is byte-identical to the one DeSmuME wrote.
-	if enc := (DeSmuME{}).Encode(got); !bytes.Equal(enc, real) {
+	if enc := encodeDSV(got); !bytes.Equal(enc, real) {
 		t.Fatalf("encoded footer differs from DeSmuME's:\n got %x\nwant %x",
 			enc[len(enc)-DeSmuMEFooterLength:], real[len(real)-DeSmuMEFooterLength:])
 	}
@@ -73,7 +81,7 @@ func TestDeSmuMEDecodeIgnoresTypeField(t *testing.T) {
 func TestDeSmuMERoundTripAllChipSizes(t *testing.T) {
 	for _, n := range []int{512, 8 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10, 512 << 10, 1 << 20, 8 << 20} {
 		raw := pattern(n)
-		enc := DeSmuME{}.Encode(raw)
+		enc := encodeDSV(raw)
 		if len(enc) != n+122 {
 			t.Fatalf("%d: encoded length %d", n, len(enc))
 		}
@@ -83,12 +91,12 @@ func TestDeSmuMERoundTripAllChipSizes(t *testing.T) {
 		}
 	}
 	// Fields for a 128 KiB save, which has no entry in DeSmuME's table.
-	enc := DeSmuME{}.Encode(pattern(128 << 10))
+	enc := encodeDSV(pattern(128 << 10))
 	f := enc[len(enc)-122+82:]
 	if typ, addr := binary.LittleEndian.Uint32(f[8:]), binary.LittleEndian.Uint32(f[12:]); typ != 0 || addr != 3 {
 		t.Fatalf("128 KiB: type %d addr_size %d", typ, addr)
 	}
-	enc = DeSmuME{}.Encode(pattern(512))
+	enc = encodeDSV(pattern(512))
 	f = enc[len(enc)-122+82:]
 	if typ, addr := binary.LittleEndian.Uint32(f[8:]), binary.LittleEndian.Uint32(f[12:]); typ != 1 || addr != 1 {
 		t.Fatalf("512 B: type %d addr_size %d", typ, addr)
@@ -96,7 +104,7 @@ func TestDeSmuMERoundTripAllChipSizes(t *testing.T) {
 }
 
 func TestDeSmuMEDecodeErrors(t *testing.T) {
-	valid := DeSmuME{}.Encode(pattern(512))
+	valid := encodeDSV(pattern(512))
 
 	if _, err := (DeSmuME{}).Decode(pattern(512)); !errors.Is(err, ErrNotDeSmuME) {
 		t.Fatalf("raw file: %v", err)
@@ -131,7 +139,7 @@ func TestDeSmuMERealFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	enc := DeSmuME{}.Encode(raw)
+	enc := encodeDSV(raw)
 	if len(enc) != len(file) {
 		t.Fatalf("length %d, want %d", len(enc), len(file))
 	}
@@ -149,7 +157,7 @@ func TestDeSmuMERealFile(t *testing.T) {
 
 func TestRaw(t *testing.T) {
 	raw := pattern(8 << 10)
-	if !bytes.Equal(Raw{}.Encode(raw), raw) {
+	if enc, _ := (Raw{}).Encode(raw); !bytes.Equal(enc, raw) {
 		t.Fatal("raw encode must be the identity")
 	}
 	if dec, _ := (Raw{}).Decode(raw); !bytes.Equal(dec, raw) {
@@ -157,11 +165,35 @@ func TestRaw(t *testing.T) {
 	}
 }
 
+func TestFlashcardPadsToFixedSize(t *testing.T) {
+	f := Flashcard{Size: FlashcardSize}
+	raw := pattern(64 << 10)
+	out, err := f.Encode(raw)
+	if err != nil || len(out) != 512<<10 || !bytes.Equal(out[:len(raw)], raw) {
+		t.Fatalf("encode: %d bytes, %v", len(out), err)
+	}
+	for _, b := range out[len(raw):] {
+		if b != 0xFF {
+			t.Fatal("padding must be 0xFF")
+		}
+	}
+	if dec, _ := f.Decode(out); !bytes.Equal(dec, out) {
+		t.Fatal("decode keeps the file; the server cuts the padding")
+	}
+	if _, err := f.Encode(pattern(1 << 20)); err == nil {
+		t.Fatal("a save larger than the flashcard file must be refused")
+	}
+}
+
 // profileFile is the declarative profile format of profiles/*.json.
 type profileFile struct {
 	ID        string `json:"id"`
 	Extension string `json:"extension"`
-	Footer    *struct {
+	Size      struct {
+		Output string `json:"output"`
+		PadTo  int    `json:"pad_to"`
+	} `json:"size"`
+	Footer *struct {
 		Length int    `json:"length"`
 		Prefix string `json:"prefix"`
 		Cookie string `json:"cookie"`
@@ -184,6 +216,10 @@ func TestProfilesMatchCode(t *testing.T) {
 			t.Errorf("profile %s: id/extension %s %s vs %s %s", id, pf.ID, pf.Extension, p.ID(), p.Extension())
 		}
 		switch id {
+		case "flashcard":
+			if pf.Size.Output != "pad" || pf.Size.PadTo != FlashcardSize || pf.Footer != nil {
+				t.Errorf("flashcard size differs from the code: %+v", pf.Size)
+			}
 		case "raw":
 			if pf.Footer != nil {
 				t.Errorf("raw must not declare a footer")
