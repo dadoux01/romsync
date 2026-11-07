@@ -1,10 +1,18 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:romsync_core/romsync_core.dart';
 
-/// Device token in the system keyring, through the Secret Service API
-/// (libsecret): GNOME Keyring, KWallet, KeePassXC…
+/// Device token in the system keyring: the Secret Service API (libsecret:
+/// GNOME Keyring, KWallet, KeePassXC…) on Linux, the login keychain on
+/// macOS. Windows uses [WindowsCredentialStore] instead.
 class KeyringTokenStore implements TokenStore {
-  KeyringTokenStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
+  KeyringTokenStore({FlutterSecureStorage? storage})
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            // macOS: the classic "login" keychain. The data protection
+            // keychain needs a signed app with a keychain entitlement.
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+          );
 
   final FlutterSecureStorage _storage;
   static const _key = 'romsync_device_token';
