@@ -4,7 +4,8 @@
 WEBUI_DIST := server/internal/webui/dist
 GO ?= go
 
-.PHONY: all build web embed server test test-go test-web check lint dev-server dev-web clean
+.PHONY: all build web embed server test test-go test-web check lint dev-server dev-web clean \
+	client-profiles client-test client-e2e client-build
 
 all: build
 
@@ -21,7 +22,7 @@ embed: web
 server:
 	cd server && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="-s -w" -o bin/romsync ./cmd/romsync
 
-test: test-go test-web
+test: test-go test-web client-test
 
 test-go:
 	cd server && $(GO) test -race ./...
@@ -38,6 +39,22 @@ dev-server:
 
 dev-web:
 	cd web && npm run dev
+
+# Client (Flutter, Linux). Needs Flutter in PATH; the end-to-end tests also
+# need Go.
+client-profiles:
+	client/tool/sync_profiles.sh
+
+client-test:
+	cd client && flutter pub get && flutter analyze
+	cd client/packages/romsync_core && dart test -x e2e
+	cd client/app && flutter test
+
+client-e2e:
+	cd client/packages/romsync_core && dart test -t e2e
+
+client-build: client-profiles
+	cd client/app && flutter build linux --release
 
 clean:
 	rm -rf server/bin web/dist

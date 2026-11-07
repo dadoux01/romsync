@@ -53,6 +53,74 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  client:
+    name: Client (analyze, tests, end-to-end)
+    runs-on: ubuntu-latest
+    env:
+      FLUTTER_VERSION: 3.47.9
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: System packages
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full
+      - run: flutter --version
+      - name: Dependencies
+        working-directory: client
+        run: flutter pub get
+      - name: flutter analyze
+        working-directory: client
+        run: flutter analyze
+      - name: romsync_core tests
+        working-directory: client/packages/romsync_core
+        run: dart test -x e2e
+      - name: End-to-end tests against the real server
+        working-directory: client/packages/romsync_core
+        run: dart test -t e2e
+      - name: App tests
+        working-directory: client/app
+        run: flutter test
+
+  client-build:
+    name: Client Linux build (${{ matrix.arch }})
+    needs: client
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      FLUTTER_VERSION: 3.47.9
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev
+      - name: Build
+        working-directory: client/app
+        run: |
+          flutter config --enable-linux-desktop
+          flutter pub get
+          flutter build linux --release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: romsync-linux-${{ matrix.arch }}
+          path: client/app/build/linux/${{ matrix.arch }}/release/bundle
+
   openapi:
     name: OpenAPI lint
     runs-on: ubuntu-latest
