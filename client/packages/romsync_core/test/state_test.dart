@@ -123,10 +123,14 @@ void main() {
   });
 
   test('ClientPaths follow the XDG base directories', () {
-    final a = ClientPaths.fromEnvironment({'HOME': '/home/me'});
+    final a = ClientPaths.fromEnvironment({'HOME': '/home/me'}, 'linux');
     expect(a.configFile, '/home/me/.config/romsync/config.json');
     expect(a.queueDir, '/home/me/.local/share/romsync/queue');
-    final b = ClientPaths.fromEnvironment({'HOME': '/home/me', 'XDG_CONFIG_HOME': '/cfg', 'XDG_DATA_HOME': '/data'});
+    final b = ClientPaths.fromEnvironment({
+      'HOME': '/home/me',
+      'XDG_CONFIG_HOME': '/cfg',
+      'XDG_DATA_HOME': '/data',
+    }, 'linux');
     expect(b.tokenFile, '/cfg/romsync/token');
     expect(b.stateFile, '/data/romsync/state.json');
   });

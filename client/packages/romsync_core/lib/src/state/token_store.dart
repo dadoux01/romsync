@@ -60,7 +60,9 @@ class FileTokenStore implements TokenStore {
 
 /// Configuration and data folders of the client (XDG base directories).
 class ClientPaths {
-  ClientPaths({required this.configDir, required this.dataDir});
+  /// [context] gives the path syntax of the target system (the host's by
+  /// default), so that paths are built consistently for each OS.
+  ClientPaths({required this.configDir, required this.dataDir, p.Context? context}) : _p = context ?? p.context;
 
   /// Linux: XDG base directories. macOS: ~/Library/Application Support/RomSync.
   /// Windows: %APPDATA%\\RomSync (settings) and %LOCALAPPDATA%\\RomSync (data).
@@ -71,23 +73,25 @@ class ClientPaths {
         final w = p.Context(style: p.Style.windows);
         final appData = e['APPDATA'] ?? w.join(e['USERPROFILE'] ?? r'C:\', 'AppData', 'Roaming');
         final local = e['LOCALAPPDATA'] ?? w.join(e['USERPROFILE'] ?? r'C:\', 'AppData', 'Local');
-        return ClientPaths(configDir: w.join(appData, 'RomSync'), dataDir: w.join(local, 'RomSync'));
+        return ClientPaths(configDir: w.join(appData, 'RomSync'), dataDir: w.join(local, 'RomSync'), context: w);
       case 'macos':
         final base = p.posix.join(e['HOME'] ?? '/', 'Library', 'Application Support', 'RomSync');
-        return ClientPaths(configDir: base, dataDir: p.posix.join(base, 'data'));
+        return ClientPaths(configDir: base, dataDir: p.posix.join(base, 'data'), context: p.posix);
     }
     final home = e['HOME'] ?? '/';
     return ClientPaths(
-      configDir: p.join(e['XDG_CONFIG_HOME'] ?? p.join(home, '.config'), 'romsync'),
-      dataDir: p.join(e['XDG_DATA_HOME'] ?? p.join(home, '.local', 'share'), 'romsync'),
+      configDir: p.posix.join(e['XDG_CONFIG_HOME'] ?? p.posix.join(home, '.config'), 'romsync'),
+      dataDir: p.posix.join(e['XDG_DATA_HOME'] ?? p.posix.join(home, '.local', 'share'), 'romsync'),
+      context: p.posix,
     );
   }
 
+  final p.Context _p;
   final String configDir;
   final String dataDir;
 
-  String get configFile => p.join(configDir, 'config.json');
-  String get tokenFile => p.join(configDir, 'token');
-  String get stateFile => p.join(dataDir, 'state.json');
-  String get queueDir => p.join(dataDir, 'queue');
+  String get configFile => _p.join(configDir, 'config.json');
+  String get tokenFile => _p.join(configDir, 'token');
+  String get stateFile => _p.join(dataDir, 'state.json');
+  String get queueDir => _p.join(dataDir, 'queue');
 }

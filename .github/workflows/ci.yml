@@ -76,7 +76,9 @@ jobs:
       - name: 7-Zip
         run: |
           case "${{ runner.os }}" in
-            Linux) sudo apt-get update && sudo apt-get install -y p7zip-full ;;
+            # GTK 3, X11 and Xi headers: nativeapi (tray) builds its native
+            # code even for flutter test.
+            Linux) sudo apt-get update && sudo apt-get install -y p7zip-full libgtk-3-dev libx11-dev libxi-dev ;;
             macOS) brew install sevenzip ;;
             Windows) 7z i > /dev/null ;;  # preinstalled
           esac

@@ -124,7 +124,7 @@ saves are kept in a `.backup` folder next to each save.
 Flutter 3.47 or later, plus Go to run the end-to-end tests.
 
 - **Linux (Fedora)**:
-  `sudo dnf install clang cmake ninja-build pkgconf-pkg-config gtk3-devel libsecret-devel p7zip`.
+  `sudo dnf install clang cmake ninja-build pkgconf-pkg-config gtk3-devel libsecret-devel libX11-devel libXi-devel p7zip`.
   On x86-64 download Flutter's Linux archive; on ARM64 (Fedora Asahi) Flutter
   only publishes x64 archives, so install it with git — the tool then
   downloads the ARM64 engine itself:
