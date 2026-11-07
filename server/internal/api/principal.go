@@ -103,13 +103,13 @@ func (s *Server) authenticate(r *http.Request) (*principal, error) {
 		return &p, nil
 	}
 
-	c, err := r.Cookie(sessionCookie)
-	if err != nil || c.Value == "" {
+	c, _ := r.Cookie(sessionCookie) // the only possible error is http.ErrNoCookie
+	if c == nil || c.Value == "" {
 		return nil, nil
 	}
 	p := principal{SessionHash: auth.HashToken(c.Value)}
 	var expires string
-	err = s.db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT u.id, u.username, u.role, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND u.disabled_at IS NULL`, p.SessionHash).
 		Scan(&p.UserID, &p.Username, &p.Role, &expires)
@@ -149,7 +149,9 @@ func (s *Server) startSession(ctx context.Context, q execer, w http.ResponseWrit
 		hash, userID, db.FormatTime(now), db.FormatTime(exp)); err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{
+	// Secure is only set over HTTPS: plain HTTP on the local network is a
+	// supported setup, and browsers drop Secure cookies there.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // see above
 		Name:     sessionCookie,
 		Value:    token,
 		Path:     "/",
@@ -162,7 +164,7 @@ func (s *Server) startSession(ctx context.Context, q execer, w http.ResponseWrit
 }
 
 func clearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // an expired, empty cookie
 		Name:     sessionCookie,
 		Value:    "",
 		Path:     "/",

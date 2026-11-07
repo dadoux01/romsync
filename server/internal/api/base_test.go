@@ -14,6 +14,19 @@ func TestHealthz(t *testing.T) {
 	expect(t, r, http.StatusOK)
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	e := newTestEnv(t)
+	r := e.client().get("/api/v1/setup")
+	for _, h := range []string{"X-Content-Type-Options", "Content-Security-Policy", "X-Frame-Options", "Referrer-Policy"} {
+		if r.header.Get(h) == "" {
+			t.Errorf("missing %s", h)
+		}
+	}
+	if r.header.Get("Cache-Control") != "no-store" {
+		t.Error("API responses must not be cached")
+	}
+}
+
 func TestUnknownRouteUsesErrorFormat(t *testing.T) {
 	e := newTestEnv(t)
 	r := e.client().get("/api/v1/does-not-exist")

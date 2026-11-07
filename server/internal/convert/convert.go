@@ -57,7 +57,7 @@ const (
 // deSmuMESaveTypes lists the sizes of DeSmuME's save_types table, starting
 // at index 1 (index 0 is "autodetect"). Only the first 12 entries can be
 // matched by searchFileSaveType(), whose loop stops before MAX_SAVE_TYPES (13).
-var deSmuMESaveTypes = []int{
+var deSmuMESaveTypes = []uint32{
 	512,       // 1: EEPROM 4kbit
 	8 << 10,   // 2: EEPROM 64kbit
 	64 << 10,  // 3: EEPROM 512kbit
@@ -72,16 +72,16 @@ var deSmuMESaveTypes = []int{
 	32 << 20,  // 12: FLASH 256Mbit
 }
 
-func deSmuMEType(size int) uint32 {
+func deSmuMEType(size uint32) uint32 {
 	for i, s := range deSmuMESaveTypes {
 		if s == size {
-			return uint32(i + 1)
+			return uint32(i + 1) //nolint:gosec // i < 12
 		}
 	}
 	return 0
 }
 
-func deSmuMEAddrSize(size int) uint32 {
+func deSmuMEAddrSize(size uint32) uint32 {
 	switch {
 	case size <= 512:
 		return 1
@@ -99,17 +99,18 @@ func (DeSmuME) ID() string        { return "desmume" }
 func (DeSmuME) Extension() string { return ".dsv" }
 
 // Encode appends the footer that DeSmuME writes for a save of this size.
+// Saves are bounded by the upload limit, far below the 4 GiB a u32 holds.
 func (DeSmuME) Encode(raw []byte) []byte {
-	n := len(raw)
-	out := make([]byte, 0, n+DeSmuMEFooterLength)
+	n := uint32(len(raw)) //nolint:gosec // see above
+	out := make([]byte, 0, len(raw)+DeSmuMEFooterLength)
 	out = append(out, raw...)
 	out = append(out, DeSmuMEFooterText...)
 	for _, v := range []uint32{
-		uint32(n),          // size: data actually written
-		uint32(n),          // padSize: data stored in the file
+		n,                  // size: data actually written
+		n,                  // padSize: data stored in the file
 		deSmuMEType(n),     // type: index in save_types, 0 when unknown
 		deSmuMEAddrSize(n), // addr_size
-		uint32(n),          // mem_size
+		n,                  // mem_size
 		0,                  // version
 	} {
 		out = binary.LittleEndian.AppendUint32(out, v)

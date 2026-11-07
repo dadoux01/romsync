@@ -59,29 +59,8 @@ func (j *Job) RunOnce(ctx context.Context) (Stats, error) {
 	var st Stats
 	now := j.Now()
 
-	rows, err := j.DB.QueryContext(ctx, `SELECT g.id, COALESCE(g.retention_policy, u.retention_policy)
-		FROM games g JOIN users u ON u.id = g.user_id`)
+	games, err := j.gamePolicies(ctx)
 	if err != nil {
-		return st, err
-	}
-	var games []gamePolicy
-	for rows.Next() {
-		var g gamePolicy
-		var raw string
-		if err := rows.Scan(&g.id, &raw); err != nil {
-			rows.Close()
-			return st, err
-		}
-		p, err := Parse(raw)
-		if err != nil {
-			slog.Warn("skipping game with an invalid retention policy", "game_id", g.id, "err", err)
-			continue
-		}
-		g.policy = p
-		games = append(games, g)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return st, err
 	}
 
@@ -108,6 +87,54 @@ func (j *Job) RunOnce(ctx context.Context) (Stats, error) {
 	return st, nil
 }
 
+// gamePolicies returns the effective policy of every game.
+func (j *Job) gamePolicies(ctx context.Context) ([]gamePolicy, error) {
+	rows, err := j.DB.QueryContext(ctx, `SELECT g.id, COALESCE(g.retention_policy, u.retention_policy)
+		FROM games g JOIN users u ON u.id = g.user_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var games []gamePolicy
+	for rows.Next() {
+		var g gamePolicy
+		var raw string
+		if err := rows.Scan(&g.id, &raw); err != nil {
+			return nil, err
+		}
+		p, err := Parse(raw)
+		if err != nil {
+			slog.Warn("skipping game with an invalid retention policy", "game_id", g.id, "err", err)
+			continue
+		}
+		g.policy = p
+		games = append(games, g)
+	}
+	return games, rows.Err()
+}
+
+// gameVersions returns the versions of a game.
+func gameVersions(ctx context.Context, tx *sql.Tx, gameID int64) ([]Version, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, saved_at, is_active, pinned FROM save_versions WHERE game_id = ?`, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var versions []Version
+	for rows.Next() {
+		var v Version
+		var savedAt string
+		if err := rows.Scan(&v.ID, &savedAt, &v.Active, &v.Pinned); err != nil {
+			return nil, err
+		}
+		if v.SavedAt, err = db.ParseTime(savedAt); err != nil {
+			return nil, err
+		}
+		versions = append(versions, v)
+	}
+	return versions, rows.Err()
+}
+
 func (j *Job) applyGame(ctx context.Context, g gamePolicy, now time.Time) (int, error) {
 	if g.policy.Mode == ModeAll {
 		return 0, nil
@@ -118,26 +145,8 @@ func (j *Job) applyGame(ctx context.Context, g gamePolicy, now time.Time) (int, 
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.QueryContext(ctx, `SELECT id, saved_at, is_active, pinned FROM save_versions WHERE game_id = ?`, g.id)
+	versions, err := gameVersions(ctx, tx, g.id)
 	if err != nil {
-		return 0, err
-	}
-	var versions []Version
-	for rows.Next() {
-		var v Version
-		var savedAt string
-		if err := rows.Scan(&v.ID, &savedAt, &v.Active, &v.Pinned); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		if v.SavedAt, err = db.ParseTime(savedAt); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		versions = append(versions, v)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return 0, err
 	}
 
@@ -151,27 +160,32 @@ func (j *Job) applyGame(ctx context.Context, g gamePolicy, now time.Time) (int, 
 	return len(remove), tx.Commit()
 }
 
+// referencedBlobs returns the set of hashes referenced by a version.
+func (j *Job) referencedBlobs(ctx context.Context) (map[string]bool, error) {
+	rows, err := j.DB.QueryContext(ctx, `SELECT DISTINCT blob_hash FROM save_versions`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	referenced := map[string]bool{}
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		referenced[h] = true
+	}
+	return referenced, rows.Err()
+}
+
 // collectBlobs deletes every blob file that no version references. It holds
 // the store's exclusive lock, so no upload can be between writing a blob and
 // committing the version that references it.
 func (j *Job) collectBlobs(ctx context.Context) (int, error) {
 	removed := 0
 	err := j.Blobs.Exclusive(func() error {
-		rows, err := j.DB.QueryContext(ctx, `SELECT DISTINCT blob_hash FROM save_versions`)
+		referenced, err := j.referencedBlobs(ctx)
 		if err != nil {
-			return err
-		}
-		referenced := map[string]bool{}
-		for rows.Next() {
-			var h string
-			if err := rows.Scan(&h); err != nil {
-				rows.Close()
-				return err
-			}
-			referenced[h] = true
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
 			return err
 		}
 

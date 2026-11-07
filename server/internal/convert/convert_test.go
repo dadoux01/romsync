@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -97,10 +98,10 @@ func TestDeSmuMERoundTripAllChipSizes(t *testing.T) {
 func TestDeSmuMEDecodeErrors(t *testing.T) {
 	valid := DeSmuME{}.Encode(pattern(512))
 
-	if _, err := (DeSmuME{}).Decode(pattern(512)); err != ErrNotDeSmuME {
+	if _, err := (DeSmuME{}).Decode(pattern(512)); !errors.Is(err, ErrNotDeSmuME) {
 		t.Fatalf("raw file: %v", err)
 	}
-	if _, err := (DeSmuME{}).Decode(valid[len(valid)-100:]); err != ErrNotDeSmuME {
+	if _, err := (DeSmuME{}).Decode(valid[len(valid)-100:]); !errors.Is(err, ErrNotDeSmuME) {
 		t.Fatalf("truncated file: %v", err)
 	}
 	badVersion := bytes.Clone(valid)

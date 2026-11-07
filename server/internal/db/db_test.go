@@ -43,7 +43,7 @@ func TestOpenMigratesAndIsIdempotent(t *testing.T) {
 func TestTimeFormatIsSortable(t *testing.T) {
 	a := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	b := a.Add(10 * time.Millisecond)
-	if !(FormatTime(a) < FormatTime(b)) {
+	if FormatTime(a) >= FormatTime(b) {
 		t.Fatal("formatted times must sort chronologically")
 	}
 	got, err := ParseTime(FormatTime(b))

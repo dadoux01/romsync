@@ -66,6 +66,7 @@ func (s *Server) Handler(webUI http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLogger)
+	r.Use(securityHeaders)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.db.PingContext(r.Context()); err != nil {
@@ -90,6 +91,22 @@ func (s *Server) Handler(webUI http.Handler) http.Handler {
 		r.NotFound(webUI.ServeHTTP)
 	}
 	return r
+}
+
+// contentSecurityPolicy allows the embedded web UI only: its own scripts
+// and styles (inline style attributes included), no framing.
+const contentSecurityPolicy = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+	"object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func noStore(next http.Handler) http.Handler {

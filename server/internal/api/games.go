@@ -109,25 +109,31 @@ func (s *Server) loadGame(ctx context.Context, q execer, userID int64, code stri
 	return g, err
 }
 
-// GET /games
-func (s *Server) listGames(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	p := principalFrom(ctx)
-	rows, err := s.db.QueryContext(ctx, gameSelect+` WHERE g.user_id = ? ORDER BY g.title COLLATE NOCASE, g.game_code`, p.UserID)
+// queryGames lists the user's games. The rows are closed before returning:
+// the single database connection is needed for the next queries.
+func (s *Server) queryGames(ctx context.Context, userID int64) ([]gameRow, error) {
+	rows, err := s.db.QueryContext(ctx, gameSelect+` WHERE g.user_id = ? ORDER BY g.title COLLATE NOCASE, g.game_code`, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	defer rows.Close()
 	var games []gameRow
 	for rows.Next() {
 		g, err := scanGame(rows)
 		if err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		games = append(games, g)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	return games, rows.Err()
+}
+
+// GET /games
+func (s *Server) listGames(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	games, err := s.queryGames(ctx, p.UserID)
+	if err != nil {
 		return err
 	}
 	out := make([]gameJSON, 0, len(games))

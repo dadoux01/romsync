@@ -409,9 +409,10 @@ type inviteJSON struct {
 	Status     string  `json:"status"` // pending, used, expired
 }
 
-func (s *Server) loadInvites(ctx context.Context, where string, args ...any) ([]inviteJSON, error) {
+// loadInvites returns every invitation, or only the one with id when id > 0.
+func (s *Server) loadInvites(ctx context.Context, id int64) ([]inviteJSON, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT i.id, i.created_by, i.created_at, i.expires_at, i.used_by, u.username, i.used_at
-		FROM invites i LEFT JOIN users u ON u.id = i.used_by `+where+` ORDER BY i.id DESC`, args...)
+		FROM invites i LEFT JOIN users u ON u.id = i.used_by WHERE ? = 0 OR i.id = ? ORDER BY i.id DESC`, id, id)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +439,7 @@ func (s *Server) loadInvites(ctx context.Context, where string, args ...any) ([]
 
 // GET /invites
 func (s *Server) listInvites(w http.ResponseWriter, r *http.Request) error {
-	invites, err := s.loadInvites(r.Context(), "")
+	invites, err := s.loadInvites(r.Context(), 0)
 	if err != nil {
 		return err
 	}
@@ -475,7 +476,7 @@ func (s *Server) postInvite(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	id, _ := res.LastInsertId()
-	invites, err := s.loadInvites(r.Context(), "WHERE i.id = ?", id)
+	invites, err := s.loadInvites(r.Context(), id)
 	if err != nil {
 		return err
 	}

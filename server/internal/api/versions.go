@@ -429,7 +429,8 @@ func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Content-Length", strconv.Itoa(len(out)))
 	w.Header().Set("X-Content-SHA256", blobs.Sum(out))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(out)
+	// A binary attachment served with nosniff, not HTML.
+	_, _ = w.Write(out) //nolint:gosec // G705 false positive
 	return nil
 }
 
