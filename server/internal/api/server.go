@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/dadoux01/romsync/server/internal/auth"
 	"github.com/dadoux01/romsync/server/internal/config"
 )
 
@@ -19,6 +21,10 @@ type Server struct {
 	cfg     config.Config
 	now     func() time.Time
 	limiter *rateLimiter
+
+	pwParams  auth.Argon2Params
+	dummyOnce sync.Once
+	dummy     string
 }
 
 // Options configures a Server.
@@ -27,6 +33,8 @@ type Options struct {
 	Config config.Config
 	// Now overrides the clock (tests); time.Now when nil.
 	Now func() time.Time
+	// PasswordParams overrides the Argon2id cost (tests); auth.DefaultParams when zero.
+	PasswordParams auth.Argon2Params
 }
 
 // New builds the API server.
@@ -35,11 +43,16 @@ func New(o Options) *Server {
 	if now == nil {
 		now = time.Now
 	}
+	pw := o.PasswordParams
+	if pw == (auth.Argon2Params{}) {
+		pw = auth.DefaultParams
+	}
 	return &Server{
-		db:      o.DB,
-		cfg:     o.Config,
-		now:     now,
-		limiter: newRateLimiter(5, time.Minute),
+		db:       o.DB,
+		cfg:      o.Config,
+		now:      now,
+		limiter:  newRateLimiter(5, time.Minute),
+		pwParams: pw,
 	}
 }
 
