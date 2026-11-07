@@ -1,0 +1,13 @@
+{
+  "id": "raw",
+  "name": "Raw (melonDS standalone)",
+  "status": "confirmed",
+  "extension": ".sav",
+  "location": "Next to the ROM, or in the save folder configured in melonDS",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_byte": null
+  }
+}

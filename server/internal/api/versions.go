@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dadoux01/romsync/server/internal/blobs"
+	"github.com/dadoux01/romsync/server/internal/convert"
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/syncrule"
 )
@@ -382,14 +383,54 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// profileParam returns the conversion profile of ?profile= (raw by default).
+func profileParam(r *http.Request) (convert.Profile, error) {
+	id := r.URL.Query().Get("profile")
+	if id == "" {
+		id = "raw"
+	}
+	p, ok := convert.Get(id)
+	if !ok {
+		return nil, errInvalid("unknown profile (expected one of " + strings.Join(convert.IDs(), ", ") + ")")
+	}
+	return p, nil
+}
+
 // decodeUpload converts the uploaded file to the canonical raw format.
 func (s *Server) decodeUpload(r *http.Request, body []byte) ([]byte, error) {
-	switch r.URL.Query().Get("profile") {
-	case "", "raw":
-		return body, nil
-	default:
-		return nil, errInvalid("unknown profile")
+	p, err := profileParam(r)
+	if err != nil {
+		return nil, err
 	}
+	data, err := p.Decode(body)
+	if err != nil {
+		return nil, errInvalid(err.Error())
+	}
+	return data, nil
+}
+
+// GET /versions/{id}/export?profile=desmume
+func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
+	prof, err := profileParam(r)
+	if err != nil {
+		return err
+	}
+	v, _, err := s.versionParam(r)
+	if err != nil {
+		return err
+	}
+	raw, err := s.blobs.Read(v.SHA256)
+	if err != nil {
+		return err
+	}
+	out := prof.Encode(raw)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, prof.Extension())))
+	w.Header().Set("Content-Length", strconv.Itoa(len(out)))
+	w.Header().Set("X-Content-SHA256", blobs.Sum(out))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(out)
+	return nil
 }
 
 func (s *Server) loadOrCreateGame(ctx context.Context, tx *sql.Tx, userID int64, code, title string, now time.Time) (gameRow, error) {

@@ -34,6 +34,7 @@ func (s *Server) routes(r chi.Router) {
 		r.Patch("/games/{code}", s.handle(s.patchGame))
 		r.Post("/versions/{id}/activate", s.handle(s.activateVersion))
 		r.Patch("/versions/{id}", s.handle(s.patchVersion))
+		r.Get("/versions/{id}/export", s.handle(s.exportVersion))
 	})
 
 	// Administrator only.
