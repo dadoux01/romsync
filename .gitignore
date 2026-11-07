@@ -1,0 +1,23 @@
+# Go
+/server/romsync
+/server/bin/
+*.test
+coverage.out
+
+# Web
+node_modules/
+/web/dist/
+# The compiled web UI is copied here at build time; only the placeholder is tracked.
+/server/internal/webui/dist/*
+!/server/internal/webui/dist/.gitkeep
+
+# Local data
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
