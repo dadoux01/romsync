@@ -67,6 +67,15 @@ void main() {
       expect(flatpak.savePathFor(rom('/roms/Game.nds'), loc), '/saves/flatpak/Game.sav');
     });
 
+    test('honours XDG_CONFIG_HOME for the native configuration', () async {
+      writeConfig('xdg/melonDS', tomlSample.replaceFirst('%s', '/saves/xdg'));
+      final m = MelonDS(
+        settings: EmulatorSettings(),
+        environment: {'HOME': home.path, 'XDG_CONFIG_HOME': p.join(home.path, 'xdg')},
+      );
+      expect((await m.saveLocation()).dir, '/saves/xdg');
+    });
+
     test('reads the old melonDS.ini format', () async {
       writeConfig('.config/melonDS', 'Threaded3D=1\nSaveFilePath=/old/saves\n', name: 'melonDS.ini');
       expect((await MelonDS(settings: EmulatorSettings(), home: home.path).saveLocation()).dir, '/old/saves');

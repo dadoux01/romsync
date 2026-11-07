@@ -16,13 +16,26 @@ import 'flatpak.dart';
 /// ROM (next to the archive for a ROM inside a .zip/.7z), named after the
 /// ROM without its extension, plus `.sav`.
 class MelonDS implements EmulatorProfile {
-  MelonDS({required this.settings, String? home, CommandRunner? run, String? searchPath})
-    : home = home ?? Platform.environment['HOME'] ?? '/',
+  /// [environment] defaults to the process environment; when only [home] is
+  /// given (tests), the environment is just `HOME`, so that variables such
+  /// as `XDG_CONFIG_HOME` of the machine running the tests do not leak in.
+  MelonDS({
+    required EmulatorSettings settings,
+    String? home,
+    Map<String, String>? environment,
+    CommandRunner? run,
+    String? searchPath,
+  }) : this._(settings, environment ?? (home != null ? {'HOME': home} : Platform.environment), home, run, searchPath);
+
+  MelonDS._(this.settings, Map<String, String> env, String? home, CommandRunner? run, String? searchPath)
+    : _env = env,
+      home = home ?? env['HOME'] ?? '/',
       _run = run ?? runCommand,
-      _searchPath = searchPath ?? Platform.environment['PATH'] ?? '';
+      _searchPath = searchPath ?? env['PATH'] ?? '';
 
   final EmulatorSettings settings;
   final String home;
+  final Map<String, String> _env;
   final CommandRunner _run;
   final String _searchPath;
 
@@ -37,7 +50,7 @@ class MelonDS implements EmulatorProfile {
   List<String> get configCandidates {
     final base = settings.mode == LaunchMode.flatpak
         ? p.join(home, '.var', 'app', settings.flatpakId, 'config', 'melonDS')
-        : p.join(Platform.environment['XDG_CONFIG_HOME'] ?? p.join(home, '.config'), 'melonDS');
+        : p.join(_env['XDG_CONFIG_HOME'] ?? p.join(home, '.config'), 'melonDS');
     return [p.join(base, 'melonDS.toml'), p.join(base, 'melonDS.ini')];
   }
 
