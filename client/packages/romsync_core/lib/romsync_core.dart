@@ -14,6 +14,12 @@ export 'src/state/config.dart';
 export 'src/state/json_file.dart';
 export 'src/state/save_state.dart';
 export 'src/state/upload_queue.dart';
+export 'src/sync/backups.dart';
+export 'src/sync/engine.dart';
+export 'src/sync/library.dart';
+export 'src/sync/play_session.dart';
+export 'src/sync/status.dart';
+export 'src/sync/watcher.dart';
 
 /// Version of the client, shown in the interface.
 const romsyncClientVersion = '0.1.0';
