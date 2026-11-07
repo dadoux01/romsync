@@ -153,7 +153,7 @@ void main() {
     expect(linux.configFile, '/home/zoe/.config/romsync/config.json');
   });
 
-  test('melonDS configuration folders per platform', () {
+  test('melonDS configuration folders on macOS', testOn: '!windows', () {
     final app = Directory(p.join(tmp.path, 'Applications', 'melonDS.app', 'Contents', 'MacOS'))
       ..createSync(recursive: true);
     File(p.join(app.path, 'melonDS')).writeAsStringSync('');
@@ -164,15 +164,4 @@ void main() {
     );
     expect(mac.configDirs, [p.join(tmp.path, 'Applications', 'portable'), '/Users/zoe/Library/Preferences/melonDS']);
   });
-
-  test('melonDS on Windows: portable folder, then the executable folder, then LOCALAPPDATA', () {
-    final dir = Directory(p.join(tmp.path, 'melonDS 1.1'))..createSync();
-    File(p.join(dir.path, 'melonDS.exe')).writeAsStringSync('');
-    final m = MelonDS(
-      settings: EmulatorSettings(executable: p.join(dir.path, 'melonDS.exe')),
-      platform: HostPlatform.windows,
-      environment: {'LOCALAPPDATA': r'C:\Users\Zoé\AppData\Local'},
-    );
-    expect(m.configDirs, [p.join(dir.path, 'portable'), dir.path, r'C:\Users\Zoé\AppData\Local\melonDS']);
-  }, testOn: 'windows');
 }

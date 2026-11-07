@@ -1,3 +1,7 @@
+// Simulates Linux with POSIX paths; Windows behaviour is in windows_emulators_test.dart.
+@TestOn('!windows')
+library;
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -44,7 +48,7 @@ void main() {
 
   group('save location', () {
     test('next to the ROM by default and when SaveFilePath is empty', () async {
-      final m = MelonDS(settings: EmulatorSettings(), home: home.path);
+      final m = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
       expect((await m.saveLocation()).dir, isNull);
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', ''));
       final loc = await m.saveLocation();
@@ -56,8 +60,9 @@ void main() {
     test('reads SaveFilePath of the native and Flatpak configurations', () async {
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', '/saves/native'));
       writeConfig('.var/app/net.kuribo64.melonDS/config/melonDS', tomlSample.replaceFirst('%s', '/saves/flatpak'));
-      final native = MelonDS(settings: EmulatorSettings(), home: home.path);
+      final native = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
       final flatpak = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(mode: LaunchMode.flatpak),
         home: home.path,
       );
@@ -70,6 +75,7 @@ void main() {
     test('honours XDG_CONFIG_HOME for the native configuration', () async {
       writeConfig('xdg/melonDS', tomlSample.replaceFirst('%s', '/saves/xdg'));
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(),
         environment: {'HOME': home.path, 'XDG_CONFIG_HOME': p.join(home.path, 'xdg')},
       );
@@ -78,12 +84,15 @@ void main() {
 
     test('reads the old melonDS.ini format', () async {
       writeConfig('.config/melonDS', 'Threaded3D=1\nSaveFilePath=/old/saves\n', name: 'melonDS.ini');
-      expect((await MelonDS(settings: EmulatorSettings(), home: home.path).saveLocation()).dir, '/old/saves');
+      expect(
+        (await MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path).saveLocation()).dir,
+        '/old/saves',
+      );
     });
 
     test('a relative path or an unreadable file gives a warning', () async {
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', 'saves'));
-      final m = MelonDS(settings: EmulatorSettings(), home: home.path);
+      final m = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
       expect((await m.saveLocation()).warning, contains('relatif'));
       writeConfig('.config/melonDS', 'not = [valid');
       expect((await m.saveLocation()).warning, contains('illisible'));
@@ -92,6 +101,7 @@ void main() {
     test('the RomSync setting wins', () async {
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', '/saves/native'));
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(saveDirOverride: '/mine'),
         home: home.path,
       );
@@ -99,7 +109,7 @@ void main() {
     });
 
     test('a ROM inside an archive saves next to the archive, named after the inner ROM', () {
-      final m = MelonDS(settings: EmulatorSettings(), home: home.path);
+      final m = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
       const loc = SaveLocation(dir: null, source: 'x');
       expect(m.savePathFor(rom('/roms/packs/games.zip', inner: 'sub/Kirby.nds'), loc), '/roms/packs/Kirby.sav');
     });
@@ -110,6 +120,7 @@ void main() {
       final bin = Directory(p.join(home.path, 'bin'))..createSync();
       File(p.join(bin.path, 'melonDS')).writeAsStringSync('');
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(extraArgs: ['-f']),
         home: home.path,
         searchPath: bin.path,
@@ -122,6 +133,7 @@ void main() {
 
     test('flatpak: flatpak run with the application id', () {
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(mode: LaunchMode.flatpak),
         home: home.path,
       );
@@ -134,6 +146,7 @@ void main() {
   group('checks', () {
     test('native: reports a missing executable', () async {
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(executable: 'melonDS'),
         home: home.path,
         searchPath: '/nowhere',
@@ -151,6 +164,7 @@ void main() {
         ..writeAsStringSync('XDG_DOWNLOAD_DIR="\$HOME/Téléchargements"\n');
       final perms = '[Context]\nshared=network;ipc;\nfilesystems=home;/mnt/ro:ro;xdg-download;!~/secret;\n';
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(mode: LaunchMode.flatpak),
         home: home.path,
         run: (exe, args) async {
@@ -186,6 +200,7 @@ void main() {
 
     test('flatpak: reports a missing application', () async {
       final m = MelonDS(
+        platform: HostPlatform.linux,
         settings: EmulatorSettings(mode: LaunchMode.flatpak),
         home: home.path,
         run: (exe, args) async => ProcessResult(0, 1, '', 'not installed'),

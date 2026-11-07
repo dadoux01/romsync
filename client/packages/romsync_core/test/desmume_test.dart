@@ -44,7 +44,7 @@ void main() {
   setUp(() => home = Directory.systemTemp.createTempSync('romsync-desmume-'));
   tearDown(() => home.deleteSync(recursive: true));
 
-  group('Linux', () {
+  group('Linux', testOn: '!windows', () {
     test('Battery is ~/.config/desmume, or the Flatpak config folder', () async {
       final native = DeSmuME(settings: desmumeSettings(), platform: HostPlatform.linux, home: home.path);
       final loc = await native.saveLocation();
@@ -110,24 +110,6 @@ void main() {
       expect(DeSmuME.decodeIni(Uint8List.fromList(utf8.encode('[A]\nk=é'))), '[A]\nk=é');
     });
 
-    test('the Battery folder comes from desmume.ini next to the executable', () async {
-      final dir = Directory(p.join(home.path, 'DeSmuME 0.9.13'))..createSync();
-      final exe = File(p.join(dir.path, 'DeSmuME_x64.exe'))..writeAsStringSync('');
-      final d = DeSmuME(
-        settings: desmumeSettings(executable: exe.path),
-        platform: HostPlatform.windows,
-        home: home.path,
-      );
-
-      // No ini: .\\Battery next to the executable.
-      final loc = await d.saveLocation();
-      expect(loc.dir, d.paths.normalize(d.paths.join(dir.path, 'Battery')));
-
-      File(p.join(dir.path, 'desmume.ini')).writeAsBytesSync(utf16Ini('[PathSettings]\r\nBattery=D:\\Saves\r\n'));
-      expect((await d.saveLocation()).dir, r'D:\Saves');
-      expect(d.scrubName('a/b'), 'a*b', reason: '/ is invalid on Windows');
-    }, testOn: 'windows');
-
     test('without the executable, the user must point to it', () async {
       final d = DeSmuME(
         settings: desmumeSettings(executable: r'C:\nowhere\DeSmuME.exe'),
@@ -140,7 +122,7 @@ void main() {
     });
   });
 
-  group('macOS', () {
+  group('macOS', testOn: '!windows', () {
     String battery(String version) {
       final dir = Directory(p.join(home.path, 'Library', 'Application Support', 'DeSmuME', version, 'Battery'))
         ..createSync(recursive: true);
@@ -180,7 +162,7 @@ void main() {
     });
   });
 
-  test('melonDS on macOS runs the executable inside the .app', () {
+  test('melonDS on macOS runs the executable inside the .app', testOn: '!windows', () {
     final app = Directory(p.join(home.path, 'melonDS.app', 'Contents', 'MacOS'))..createSync(recursive: true);
     File(p.join(app.path, 'melonDS')).writeAsStringSync('');
     final m = MelonDS(

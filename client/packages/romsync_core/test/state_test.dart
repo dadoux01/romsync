@@ -114,8 +114,10 @@ void main() {
     expect(await store.read(), isNull);
     await store.write('secret-token');
     expect(await store.read(), 'secret-token');
-    final mode = (await File(store.path).stat()).mode & 0x1FF;
-    expect(mode.toRadixString(8), '600');
+    if (!Platform.isWindows) {
+      final mode = (await File(store.path).stat()).mode & 0x1FF;
+      expect(mode.toRadixString(8), '600');
+    }
     await store.delete();
     expect(await store.read(), isNull);
   });

@@ -1,3 +1,7 @@
+// Uses the Linux emulator folders with POSIX paths.
+@TestOn('!windows')
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 

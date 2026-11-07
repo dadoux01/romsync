@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 import 'package:test/test.dart';
 
+import '../support/eventually.dart';
 import 'server_harness.dart';
 
 const gameId = 'x:e2e-game';
@@ -120,8 +121,7 @@ void _scenario() {
     final session = PlaySession(engine: b.engine, entry: b.entry, quietPeriod: const Duration(milliseconds: 300));
     await session.start();
     b.write(save(2), base.add(const Duration(minutes: 10)));
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    expect((await b.api.active(gameId))!.deviceName, 'Asahi');
+    await eventually(() async => (await b.api.active(gameId))!.deviceName == 'Asahi', reason: 'in-game save uploaded');
     b.write(save(3), base.add(const Duration(minutes: 20)));
     await session.finish();
     final active = await b.api.active(gameId);
@@ -140,7 +140,7 @@ void _scenario() {
     final session = PlaySession(engine: a.engine, entry: a.entry, quietPeriod: const Duration(milliseconds: 200));
     await session.start();
     a.write(save(4), base.add(const Duration(minutes: 30)));
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    await eventually(() => a.engine.queue.length == 1, reason: 'first in-game save queued');
     a.write(save(5), base.add(const Duration(minutes: 40)));
     await session.finish();
     expect(a.engine.queue.length, 2, reason: 'both in-game saves wait in the queue');

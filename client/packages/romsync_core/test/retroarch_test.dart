@@ -1,3 +1,7 @@
+// Simulates Linux and macOS with POSIX paths; Windows behaviour is in windows_emulators_test.dart.
+@TestOn('!windows')
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -120,20 +124,6 @@ void main() {
       expect(r.cannotSync(archived, await r.saveLocation()), contains('melonDS'));
     });
   });
-
-  test('Windows: config next to the executable, ":" and "default" relative to it', () async {
-    final dir = Directory(p.join(home.path, 'RetroArch-Win64'))..createSync();
-    File(p.join(dir.path, 'retroarch.exe')).writeAsStringSync('');
-    File(p.join(dir.path, 'retroarch.cfg')).writeAsStringSync('savefile_directory = ":\\saves"\n');
-    final r = RetroArchMelonDSDS(
-      settings: raSettings(executable: p.join(dir.path, 'retroarch.exe')),
-      platform: HostPlatform.windows,
-      environment: {'APPDATA': r'C:\Users\me\AppData\Roaming'},
-    );
-    expect(r.configCandidates.first, r.paths.join(dir.path, 'retroarch.cfg'));
-    expect(r.expand(r':\saves'), r.paths.join(dir.path, 'saves'));
-    expect(await r.corePath(), r.paths.join(dir.path, 'cores', 'melondsds_libretro.dll'));
-  }, testOn: 'windows');
 
   test('macOS: Application Support and the default saves folder', () async {
     final r = RetroArchMelonDSDS(

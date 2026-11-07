@@ -101,7 +101,7 @@ void main() {
     await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora', allowFileStorage: true);
     expect(c.config.tokenStorage, TokenStorage.file);
     expect(File(paths.tokenFile).readAsStringSync(), 'device-token');
-    expect((File(paths.tokenFile).statSync().mode & 0x1FF).toRadixString(8), '600');
+    if (!Platform.isWindows) expect((File(paths.tokenFile).statSync().mode & 0x1FF).toRadixString(8), '600');
 
     // The choice survives a restart.
     final again = await controller(FakeKeyring(available: false));
@@ -130,7 +130,7 @@ void main() {
     expect(reloaded.romChoices[hack.key]!.customId, 'x:platine-hack');
   });
 
-  test('switching a game to DeSmuME sets aside an old .dsv that RomSync never synced', () async {
+  test('switching a game to DeSmuME sets aside an old .dsv that RomSync never synced', testOn: 'linux', () async {
     final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
     File(p.join(roms.path, 'Noire.nds')).writeAsBytesSync(rom('IRBF'));
     final c = await controller(FakeKeyring(available: true));

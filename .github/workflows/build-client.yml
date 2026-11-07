@@ -1,0 +1,95 @@
+# Builds the client for every target and uploads one archive per target.
+# Called by ci.yml (version "ci") and release.yml (the tag's version).
+name: Build client
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version written in the archive names
+        type: string
+        default: ci
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.47.9
+
+jobs:
+  build:
+    name: Client ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: macos
+            runner: macos-latest
+          - target: windows-x64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      # Flutter only publishes x64 Linux archives: install it from git on Linux.
+      - name: Install Flutter (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev
+      - name: Install Flutter (macOS, Windows)
+        if: runner.os != 'Linux'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Build
+        working-directory: client/app
+        run: |
+          case "${{ runner.os }}" in
+            Linux)   flutter build linux --release ;;
+            macOS)   flutter build macos --release ;;
+            Windows) flutter build windows --release ;;
+          esac
+
+      - name: Package
+        working-directory: client/app
+        run: |
+          name="romsync-${{ inputs.version }}-${{ matrix.target }}"
+          mkdir -p dist
+          case "${{ runner.os }}" in
+            Linux)
+              arch="${{ matrix.target }}"; arch="${arch#linux-}"
+              cp -r "build/linux/$arch/release/bundle" "dist/$name"
+              tar -czf "dist/$name.tar.gz" -C dist "$name"
+              rm -rf "dist/$name" ;;
+            macOS)
+              # Universal app (Apple Silicon and Intel), ad-hoc signed by Flutter.
+              lipo -info build/macos/Build/Products/Release/RomSync.app/Contents/MacOS/RomSync
+              ditto -c -k --keepParent build/macos/Build/Products/Release/RomSync.app "dist/$name.zip" ;;
+            Windows)
+              cp -r build/windows/x64/runner/Release "dist/$name"
+              (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
+              rm -rf "dist/$name" ;;
+          esac
+          ls -la dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: romsync-${{ matrix.target }}
+          path: client/app/dist/*
+          if-no-files-found: error

@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 import 'package:test/test.dart';
 
+import 'support/eventually.dart';
 import 'support/fake_server.dart';
 
 final rawProfile = ConversionProfile(
@@ -57,7 +59,7 @@ void main() {
     final bg = BackgroundWatcher(engine: engine, quietPeriod: const Duration(milliseconds: 200));
     await bg.update([e]);
     File(e.savePath).writeAsBytesSync(save(2));
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    await eventually(() => server.activeOf('IRBF')!.sha == sha256.convert(save(2)).toString(), reason: 'uploaded');
     await bg.idle();
     expect(server.activeOf('IRBF')!.data, save(2));
     final requests = server.uploadRequests;

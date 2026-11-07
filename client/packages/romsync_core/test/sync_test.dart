@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 import 'package:test/test.dart';
 
+import 'support/eventually.dart';
 import 'support/fake_server.dart';
 import 'support/roms.dart';
 
@@ -383,7 +384,8 @@ void main() {
         File(h.savePath).writeAsBytesSync(save(20 + i));
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await eventually(() => server.activeOf('IRBF')!.sha == sha(save(23)), reason: 'burst uploaded');
+      await Future<void>.delayed(const Duration(milliseconds: 600));
       expect(server.activeOf('IRBF')!.data, save(23));
       final afterBurst = server.uploadRequests;
       expect(afterBurst, 2, reason: 'first save + one upload for the burst');
