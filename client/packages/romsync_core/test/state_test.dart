@@ -95,6 +95,26 @@ void main() {
     expect(File(p.join(qdir, '${a.uploadId}.bin')).existsSync(), isFalse);
   });
 
+  test('FileTokenStore writes the token with 0600 permissions', () async {
+    final store = FileTokenStore(p.join(dir.path, 'cfg', 'token'));
+    expect(await store.read(), isNull);
+    await store.write('secret-token');
+    expect(await store.read(), 'secret-token');
+    final mode = (await File(store.path).stat()).mode & 0x1FF;
+    expect(mode.toRadixString(8), '600');
+    await store.delete();
+    expect(await store.read(), isNull);
+  });
+
+  test('ClientPaths follow the XDG base directories', () {
+    final a = ClientPaths.fromEnvironment({'HOME': '/home/me'});
+    expect(a.configFile, '/home/me/.config/romsync/config.json');
+    expect(a.queueDir, '/home/me/.local/share/romsync/queue');
+    final b = ClientPaths.fromEnvironment({'HOME': '/home/me', 'XDG_CONFIG_HOME': '/cfg', 'XDG_DATA_HOME': '/data'});
+    expect(b.tokenFile, '/cfg/romsync/token');
+    expect(b.stateFile, '/data/romsync/state.json');
+  });
+
   test('UploadQueue drops entries whose content is missing', () async {
     final qdir = p.join(dir.path, 'queue');
     final q = await UploadQueue.open(qdir);
