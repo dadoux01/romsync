@@ -48,16 +48,19 @@ Les trois applis appellent l'API directement ; le navigateur passe par le site, 
 
 ## Modèle de données
 
-Six tables SQLite suffisent ; le contenu des saves vit hors de la base, dans des fichiers nommés par leur hash.
+Sept tables SQLite suffisent ; le contenu des saves vit hors de la base, dans des fichiers nommés par leur hash. Le schéma évolue par migrations SQL versionnées dans le dépôt (`server/internal/db/migrations`).
 
 | Table | Champs principaux | Notes |
 | --- | --- | --- |
-| `users` | id, username, password\_hash (Argon2id), role (`admin`/`user`), created\_at, retention\_policy | Le premier compte créé devient admin |
-| `invites` | id, token\_hash, created\_by, expires\_at, used\_by, used\_at | Lien à usage unique, 7 jours par défaut |
-| `devices` | id, user\_id, name, platform, token\_hash, created\_at, last\_seen\_at, revoked\_at | Un jeton par appareil, révocable |
-| `games` | id, user\_id, game\_code, title, region, first\_seen\_at, retention\_policy | Unique sur (user\_id, game\_code) |
-| `save_versions` | id, game\_id, blob\_hash, size, saved\_at, uploaded\_at, device\_id, emulator, base\_version\_id, is\_active, pinned, note | Une seule version active par jeu |
+| `users` | id, username, password\_hash (Argon2id), role (`admin`/`user`), created\_at, disabled\_at, retention\_policy | Le premier compte créé devient admin ; `disabled_at` non nul bloque la connexion et les appareils du compte |
+| `sessions` | token\_hash, user\_id, created\_at, expires\_at | Session web, 30 jours, prolongée à chaque utilisation |
+| `invites` | id, token\_hash, created\_by, created\_at, expires\_at, used\_by, used\_at | Lien à usage unique, 7 jours par défaut |
+| `devices` | id, user\_id, name, platform, token\_hash, created\_at, last\_seen\_at, revoked\_at, clock\_skew\_at | Un jeton par appareil, révocable ; `clock_skew_at` = dernier décalage d'horloge détecté |
+| `games` | id, user\_id, game\_code, title, region, chip\_size, first\_seen\_at, retention\_policy | Unique sur (user\_id, game\_code) ; `chip_size` = taille de puce mémorisée ; `retention_policy` NULL = hérite du compte |
+| `save_versions` | id, game\_id, blob\_hash, size, saved\_at, saved\_at\_reported, uploaded\_at, device\_id, emulator, base\_version\_id, upload\_id, is\_active, conflict, pinned, note | Une seule version active par jeu ; `upload_id` unique par compte ; `conflict` = divergence détectée à l'envoi |
 | `pair_codes` | code\_hash, user\_id, expires\_at, used\_at | Code d'appairage, 10 minutes |
+
+Les identifiants (`id`) sont des entiers ; les dates sont stockées et échangées en UTC, au format RFC 3339.
 
 **Stockage des fichiers**
 
@@ -68,9 +71,15 @@ Six tables SQLite suffisent ; le contenu des saves vit hors de la base, dans des
 **Politique de rétention**
 
 - Réglable au niveau du compte, et surchargeable par jeu.
-- Modes : `all` (tout garder), `last_n` (les N dernières), `days` (les versions de moins de N jours), `smart` (tout sur 7 jours, puis une par jour sur 30 jours, puis une par semaine).
-- Ne supprime jamais la version active ni une version épinglée (`pinned`).
-- Appliquée par une tâche périodique du serveur, pas au moment de l'envoi.
+- Stockée en JSON : `{"mode":"all"}`, `{"mode":"last_n","n":10}`, `{"mode":"days","n":30}`, `{"mode":"smart"}`. Valeur par défaut d'un compte : `smart`. Au niveau d'un jeu, `null` signifie « hérite du compte ».
+- Modes :
+  - `all` : tout garder.
+  - `last_n` : les N versions les plus récentes (selon `saved_at`).
+  - `days` : les versions dont `saved_at` date de moins de N jours.
+  - `smart` : tout ce qui a moins de 7 jours ; entre 7 et 30 jours, la plus récente de chaque jour UTC ; au-delà de 30 jours, la plus récente de chaque semaine ISO (UTC).
+- Les calculs se font sur `saved_at` (après correction d'horloge, voir « Protocole de synchronisation »).
+- Ne supprime jamais la version active ni une version épinglée (`pinned`) : l'ensemble conservé est celui que désigne le mode, auquel s'ajoutent toujours la version active et les versions épinglées.
+- Appliquée par une tâche périodique du serveur, pas au moment de l'envoi (intervalle réglable, 1 heure par défaut). Les blobs qui ne sont plus référencés sont supprimés dans la même passe.
 
 ## Identification des jeux
 
@@ -93,6 +102,16 @@ Le 4e caractère du code donne la région (`F` France, `E` USA, `P` Europe, `J` 
 - Homebrew ou ROM sans code valide (`####`, zéros) : repli sur un identifiant dérivé du hash SHA-1 de la ROM, préfixé `h:`.
 - Le titre affiché peut être renommé dans l'interface web ; c'est purement cosmétique.
 
+**Formats d'identifiant acceptés par le serveur** (tout autre format est refusé avec `400 invalid_request`)
+
+| Format | Expression | Usage |
+| --- | --- | --- |
+| Code de cartouche | `^[A-Z0-9]{4}$` | Cas normal (ex. `IRBF`) ; la région est déduite du 4e caractère |
+| Hash de ROM | `^h:[0-9a-f]{40}$` | Homebrew ou ROM sans code valide (SHA-1 de la ROM) |
+| Identifiant forcé | `^x:[a-z0-9-]{1,32}$` | Identifiant personnalisé choisi par l'utilisateur (hack qui change la structure de la save) |
+
+Dans les URL, l'identifiant est encodé normalement (`h%3A…` ou `h:…` sont tous deux acceptés).
+
 ## Format canonique et conversion
 
 Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa taille réelle. Chaque client convertit vers et depuis le format de son émulateur, ce qui permet de passer une save de melonDS à DeSmuME, à la 3DS ou à une flashcard sans manipulation.
@@ -109,13 +128,31 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | Cible | Fichier | Conversion | Statut |
 | --- | --- | --- | --- |
 | melonDS (standalone) | `<rom>.sav` à côté de la ROM ou dans le dossier configuré | Aucune (brut) | Confirmé |
-| DeSmuME | `<rom>.dsv` dans son dossier Battery | Retirer ou ajouter le pied de fichier DeSmuME (≈ 122 octets, commence par `\|<--Snip above here`) | Confirmé |
+| DeSmuME | `<rom>.dsv` dans son dossier Battery | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
 | melonDS DS (RetroArch) | `<rom>.srm` dans le dossier saves de RetroArch | Aucune a priori | À vérifier |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, souvent complété à une taille fixe | À vérifier par modèle |
 
 Chaque profil est un petit fichier déclaratif (chemin, extension, en-tête/pied, règle de taille), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
+
+Côté serveur, les conversions nécessaires à l'import/export du site (brut et DeSmuME en phase 1) sont codées en Go : `go:embed` ne peut pas lire `profiles/`, qui est hors du module. Un test vérifie que le code Go et les fichiers de `profiles/` restent cohérents.
+
+**Pied de fichier DeSmuME** (vérifié sur `desmume/src/mc.cpp` et sur des fichiers `.dsv` réels)
+
+| Décalage depuis la fin des données | Taille | Contenu |
+| --- | --- | --- |
+| 0 | 82 octets | Texte ASCII `\|<--Snip above here to create a raw sav by excluding this DeSmuME savedata footer:` |
+| 82 | 4 octets LE | `size` : taille des données réellement écrites |
+| 86 | 4 octets LE | `padSize` : taille des données dans le fichier (= taille du fichier − 122) |
+| 90 | 4 octets LE | `type` : index dans la table `save_types` de DeSmuME (peut valoir 0 = autodétection) |
+| 94 | 4 octets LE | `addr_size` : 1 (512 o), 2 (8 à 64 Kio), 3 (128 Kio et plus) |
+| 98 | 4 octets LE | `mem_size` : taille de la mémoire de save |
+| 102 | 4 octets LE | `version` : toujours 0 |
+| 106 | 16 octets | Cookie `\|-DESMUME SAVE-\|` |
+
+- Import : le fichier est reconnu au cookie final et à `version = 0` ; on vérifie que `padSize` = taille du fichier − 122, puis on garde les `padSize` premiers octets. `type` n'est pas utilisé.
+- Export : données brutes, puis pied avec `size = padSize = mem_size =` taille brute, `type` = index DeSmuME de cette taille (0 si inconnue), `addr_size` selon la taille, `version = 0`.
 
 ## Protocole de synchronisation
 
@@ -147,9 +184,11 @@ Le client tire la save active avant de lancer le jeu, envoie chaque nouvelle sav
 **Règle « la plus récente gagne »**
 
 - Chaque envoi porte `saved_at` (date de modification du fichier sur l'appareil) et `base_version_id`.
-- Le serveur crée toujours une nouvelle version ; il la rend active si son `saved_at` est postérieur à celui de la version active.
-- Si `base_version_id` n'est pas la version active, il y a eu divergence : le serveur l'enregistre et l'interface web affiche « conflit résolu automatiquement », avec un bouton pour activer l'autre version.
-- Horloges décalées : le serveur compare `saved_at` à son heure de réception et signale l'appareil si l'écart dépasse 5 minutes. Cela limite le risque qu'une horloge fausse fasse gagner une vieille save.
+- Le serveur crée toujours une nouvelle version ; il la rend active si son `saved_at` est strictement postérieur à celui de la version active (en cas d'égalité, la version active reste en place). La première save d'un jeu devient toujours active.
+- Si `base_version_id` n'est pas la version active, il y a eu divergence : le serveur l'enregistre (`conflict = true` sur la nouvelle version) et l'interface web affiche « conflit résolu automatiquement », avec un bouton pour activer l'autre version. Un `X-Base-Version` vide alors que le jeu a déjà une version active compte aussi comme une divergence.
+- Horloges décalées : le serveur compare `saved_at` à son heure de réception.
+  - Si `saved_at` dépasse l'heure de réception de plus de 5 minutes, il est ramené à l'heure de réception ; la valeur d'origine est conservée dans `saved_at_reported`, et `devices.clock_skew_at` est renseigné. Sans cette correction, une save datée dans le futur resterait active et bloquerait toutes les saves suivantes.
+  - Si `saved_at` est antérieur à l'heure de réception de plus de 5 minutes, ce n'est pas forcément une erreur (envoi différé depuis la file d'attente, 3DS) : la valeur est conservée telle quelle.
 
 **Hors ligne**
 
@@ -158,8 +197,9 @@ Le client tire la save active avant de lancer le jeu, envoie chaque nouvelle sav
 
 **Idempotence**
 
-- Chaque envoi porte un identifiant unique généré par le client (`upload_id`) ; un renvoi après une coupure ne crée pas de doublon.
-- Une save au même hash que la version active est ignorée (réponse `200`, aucune version créée).
+- Chaque envoi porte un identifiant unique généré par le client (`upload_id`, 1 à 64 caractères `[A-Za-z0-9_-]`, un UUID est recommandé) ; un renvoi après une coupure ne crée pas de doublon : le serveur renvoie exactement la réponse d'origine (même version, même statut).
+- Une save au même hash que la version active est ignorée (réponse `200`, aucune version créée, `created: false`).
+- Une version créée donne une réponse `201`.
 
 **3DS**
 
@@ -173,8 +213,9 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 
 - Premier démarrage : le site affiche un écran de création du compte admin ; il disparaît ensuite.
 - L'admin génère des liens d'invitation à usage unique (7 jours) ; la personne invitée choisit son identifiant et son mot de passe.
-- Mots de passe hachés avec Argon2id ; session web par cookie `HttpOnly`, `SameSite=Strict`.
-- L'admin peut désactiver un compte et réinitialiser un mot de passe, mais ne voit pas les saves des autres dans l'interface.
+- Mots de passe hachés avec Argon2id ; session web par cookie `HttpOnly`, `SameSite=Strict`, valable 30 jours et prolongée à chaque utilisation.
+- Accepter une invitation ouvre directement une session pour le nouveau compte.
+- L'admin peut désactiver un compte et réinitialiser un mot de passe, mais ne voit pas les saves des autres dans l'interface. Désactiver un compte ferme ses sessions ; ses appareils sont refusés tant qu'il est désactivé. L'admin ne peut pas se désactiver lui-même.
 
 **Appairage d'un appareil**
 
@@ -186,7 +227,8 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 **Sécurité**
 
 - Jetons révocables depuis la liste des appareils ; `last_seen_at` aide à repérer un appareil oublié.
-- Limitation de débit sur la connexion et l'appairage (5 essais par minute et par IP).
+- Limitation de débit sur la connexion, l'appairage, le premier démarrage et l'acceptation d'invitation (5 essais par minute et par IP).
+- Adresse IP du client : par défaut, l'adresse de la connexion TCP. `X-Forwarded-For` n'est lu que si la connexion vient d'une adresse listée dans `ROMSYNC_TRUSTED_PROXIES` (vide par défaut ; ex. `127.0.0.1` derrière `tailscale serve`).
 - Sur 3DS, le jeton est stocké en clair sur la carte SD : c'est documenté, et un jeton volé se révoque sans changer de mot de passe.
 
 ## API REST
@@ -195,11 +237,17 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 
 | Méthode | Route | Auth | Rôle |
 | --- | --- | --- | --- |
+| GET | `/setup` | aucune | Indique si le premier démarrage reste à faire (`{"needed": true}`) |
 | POST | `/setup` | aucune | Crée le compte admin (seulement si aucun compte n'existe) |
 | POST | `/auth/login` | aucune | Ouvre une session web |
 | POST | `/auth/logout` | session | Ferme la session |
+| GET | `/me` | session ou jeton | Utilisateur courant (et appareil courant pour un jeton) |
+| PATCH | `/me` | session | Change la rétention du compte ou le mot de passe (mot de passe actuel requis) |
+| GET | `/users` | admin | Liste les comptes |
+| PATCH | `/users/{id}` | admin | Désactive/réactive un compte, réinitialise son mot de passe |
+| GET | `/invites` | admin | Liste les invitations (en cours, utilisées, expirées) |
 | POST | `/invites` | admin | Crée un lien d'invitation |
-| POST | `/invites/{token}/accept` | aucune | Crée un compte depuis une invitation |
+| POST | `/invites/{token}/accept` | aucune | Crée un compte depuis une invitation et ouvre une session |
 | POST | `/pair-codes` | session | Génère un code d'appairage |
 | POST | `/pair` | aucune | Échange un code contre un jeton d'appareil |
 | GET | `/devices` | session | Liste les appareils du compte |
@@ -218,19 +266,39 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 
 - Corps : contenu brut canonique.
 - En-têtes : `X-Upload-Id`, `X-Saved-At` (ISO 8601), `X-Base-Version` (vide si première save), `X-Emulator`, `X-Content-SHA256`, `X-Game-Title` (optionnel, pour un jeu inconnu).
-- Réponse : la version créée, si elle est devenue active, et `conflict: true` en cas de divergence.
+- En-tête optionnel `X-Force-Size: true` : accepte une taille différente de la taille de puce mémorisée et remplace celle-ci. Accepté seulement avec une session web (refusé avec `403 forbidden` pour un jeton d'appareil).
+- Paramètre optionnel `?profile=desmume` : le corps est un fichier au format du profil (ex. `.dsv`), converti en brut par le serveur avant tout traitement ; `X-Content-SHA256` porte alors sur le fichier envoyé. Sans paramètre, `profile=raw`.
+- Réponse : `{"version": {...}, "created": bool, "active": bool, "conflict": bool}` ; `201` si une version a été créée, `200` sinon.
 - Le serveur vérifie le hash annoncé et crée le jeu s'il n'existe pas encore.
+
+**Pagination** — `GET /games/{code}/versions?limit=50&before=<id>` : versions triées de la plus récente à la plus ancienne (`saved_at`, puis `id`), `limit` entre 1 et 200 (50 par défaut). La réponse contient `next_before`, à repasser en `before` pour la page suivante, ou `null` s'il n'y en a plus.
 
 **Erreurs** — format unique `{"error": {"code": "...", "message": "..."}}`
 
 | Code HTTP | `code` | Cas |
 | --- | --- | --- |
+| 400 | `invalid_request` | Corps, paramètre ou en-tête invalide (identifiant de jeu mal formé, date illisible…) |
 | 400 | `hash_mismatch` | Le contenu ne correspond pas à `X-Content-SHA256` |
-| 401 | `unauthorized` | Jeton absent, révoqué ou session expirée |
-| 404 | `not_found` | Jeu ou version inconnus pour ce compte |
+| 401 | `unauthorized` | Jeton absent, révoqué ou session expirée ; identifiants incorrects ; compte désactivé |
+| 403 | `forbidden` | Authentifié mais pas autorisé (route admin, `X-Force-Size` avec un jeton…) |
+| 404 | `not_found` | Jeu, version, appareil, invitation ou compte inconnus pour ce compte |
+| 409 | `already_setup` | `POST /setup` alors qu'un compte existe déjà |
 | 409 | `size_mismatch` | Taille différente de la taille de puce connue du jeu |
+| 409 | `conflict` | Contrainte d'unicité (identifiant déjà pris…) |
+| 410 | `expired` | Invitation ou code d'appairage expiré ou déjà utilisé |
 | 413 | `too_large` | Fichier au-delà de la limite (16 Mio par défaut) |
-| 429 | `rate_limited` | Trop de tentatives de connexion ou d'appairage |
+| 429 | `rate_limited` | Trop de tentatives de connexion, d'appairage, de premier démarrage ou d'acceptation d'invitation |
+| 500 | `internal` | Erreur inattendue du serveur |
+
+**Configuration du serveur** (variables d'environnement)
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `ROMSYNC_PORT` | `8080` | Port d'écoute HTTP |
+| `ROMSYNC_DATA_DIR` | `/data` | Dossier de la base SQLite et des blobs |
+| `ROMSYNC_MAX_UPLOAD` | `16777216` | Taille maximale d'un envoi, en octets (16 Mio) |
+| `ROMSYNC_TRUSTED_PROXIES` | vide | Adresses ou réseaux CIDR dont on accepte `X-Forwarded-For`, séparés par des virgules |
+| `ROMSYNC_RETENTION_INTERVAL` | `1h` | Intervalle de la tâche de rétention (durée Go) |
 
 ## Clients
 
@@ -253,8 +321,8 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 
 **Import/export sur le site (DS + flashcard, dépannage)**
 
-- Import : glisser un `.sav` ou `.dsv` ; le site détecte le format, demande le jeu si le nom ne suffit pas, puis crée une version.
-- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME, flashcard).
+- Import : glisser un `.sav` ou `.dsv` ; le site détecte le format (cookie DeSmuME en fin de fichier) et l'envoie avec `?profile=desmume` le cas échéant. Le nom d'un fichier de save ne donne pas le code du jeu : l'utilisateur choisit un jeu existant ou saisit un code. En option, il peut désigner le `.nds` correspondant : le navigateur lit localement les 512 premiers octets pour en tirer le code et le titre, et la ROM n'est jamais envoyée.
+- Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME ; flashcard quand son profil aura été vérifié).
 
 ## Dépôt, roadmap et questions ouvertes
 
@@ -287,6 +355,6 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
 
 **Questions ouvertes**
 
-- Framework du site : Svelte, Vue ou htmx sans build.
+- ~~Framework du site~~ : tranché, Svelte 5 + Vite (sans SvelteKit), SPA compilée puis embarquée avec `go:embed`.
 - Chiffrement des saves au repos, utile si le serveur est partagé avec d'autres personnes.
 - Comportement par défaut des profils marqués « à vérifier » tant que les tests aller-retour ne sont pas faits.
