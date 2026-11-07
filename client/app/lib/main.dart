@@ -8,12 +8,13 @@ import 'src/app_controller.dart';
 import 'src/keyring_token_store.dart';
 import 'src/ui/home_page.dart';
 import 'src/ui/pairing_page.dart';
+import 'src/windows_credential_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final controller = AppController(
     paths: ClientPaths.fromEnvironment(),
-    keyring: KeyringTokenStore(),
+    keyring: Platform.isWindows ? WindowsCredentialStore() : KeyringTokenStore(),
     profiles: await loadBundledProfiles(rootBundle),
   );
   await controller.init();

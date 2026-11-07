@@ -4,6 +4,8 @@ analyzer:
   exclude:
     - build/**
     - linux/**
+    - windows/**
+    - macos/**
   language:
     strict-casts: true
     strict-inference: true

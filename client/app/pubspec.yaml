@@ -41,6 +41,8 @@ dependencies:
   path_provider: ^2.1.6
   romsync_core: any
   url_launcher: ^6.3.3
+  win32: ^6.4.0
+  ffi: ^2.1.4
 
 dev_dependencies:
   flutter_test:
