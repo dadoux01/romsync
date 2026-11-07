@@ -158,6 +158,48 @@ void _scenario() {
     expect((await a.api.active(gameId))!.sha256, versions.first.sha256);
   });
 
+  test('6. one save across emulators: melonDS uploads, DeSmuME and RetroArch download the same raw content', () async {
+    final profiles = await ProfileRegistry.loadDirectory(p.join('..', '..', '..', 'profiles'));
+    const crossId = 'x:e2e-cross';
+    LibraryEntry entryFor(Device d, String emulator, String profileId, String file) => LibraryEntry(
+      rom: ScannedRom(file: PlainRomFile(p.join(d.dir, 'roms', 'Cross.nds')), header: null, detectedId: crossId),
+      gameId: crossId,
+      savePath: p.join(d.dir, emulator, file),
+      profile: profiles[profileId]!,
+      emulator: emulator,
+      sharedWith: const [],
+      choice: null,
+    );
+
+    // melonDS (raw .sav) on device A.
+    final raw = Uint8List.fromList(List.generate(64 << 10, (i) => (i * 31 + 7) & 0xFF));
+    final melon = entryFor(a, 'melonds', 'raw', 'Cross.sav');
+    File(melon.savePath)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(raw)
+      ..setLastModifiedSync(base);
+    expect((await a.engine.prepare(melon, chipSize: null)).uploaded, isTrue);
+    final active = (await a.api.active(crossId))!;
+    expect(active.emulator, 'melonds');
+    expect(active.size, raw.length);
+
+    // DeSmuME (.dsv with footer) on device B.
+    final dsm = entryFor(b, 'desmume', 'desmume', 'Cross.dsv');
+    expect((await b.engine.prepare(dsm, chipSize: active.size)).downloaded, isTrue);
+    final dsv = File(dsm.savePath).readAsBytesSync();
+    expect(dsv.length, raw.length + 122);
+    expect(dsv.sublist(dsv.length - 16), '|-DESMUME SAVE-|'.codeUnits);
+    expect(profiles['desmume']!.decode(dsv), raw);
+
+    // RetroArch / melonDS DS (raw .srm) on device B.
+    final srm = entryFor(b, 'retroarch-melondsds', 'retroarch-melondsds', 'Cross.srm');
+    expect((await b.engine.prepare(srm, chipSize: active.size)).downloaded, isTrue);
+    expect(profiles['retroarch-melondsds']!.decode(File(srm.savePath).readAsBytesSync()), raw);
+
+    // Nothing was uploaded back: the three files hold the same raw save.
+    expect((await a.api.versions(crossId)).versions, hasLength(1));
+  });
+
   test('5. divergence: the most recent save wins and the other stays in history', () async {
     // B is behind (last synced on save 3) and plays offline-style: its save
     // is more recent than A's latest.

@@ -18,11 +18,12 @@ class RealServer {
   /// Path of the `go` command: `$GO`, then ~/.local/go/bin/go (the system
   /// one may be too old, e.g. gccgo), then PATH.
   static String? findGo() {
+    final exe = Platform.isWindows ? 'go.exe' : 'go';
     final candidates = [
       Platform.environment['GO'],
-      p.join(Platform.environment['HOME'] ?? '/', '.local', 'go', 'bin', 'go'),
-      for (final d in (Platform.environment['PATH'] ?? '').split(':'))
-        if (d.isNotEmpty) p.join(d, 'go'),
+      p.join(Platform.environment['HOME'] ?? '/', '.local', 'go', 'bin', exe),
+      for (final d in (Platform.environment['PATH'] ?? '').split(Platform.isWindows ? ';' : ':'))
+        if (d.isNotEmpty) p.join(d, exe),
     ];
     for (final c in candidates) {
       if (c != null && File(c).existsSync()) return c;
@@ -34,7 +35,7 @@ class RealServer {
     final go = findGo();
     if (go == null) throw StateError('Go is needed for the end-to-end tests');
     final serverDir = p.normalize(p.join(Directory.current.path, '..', '..', '..', 'server'));
-    final binary = p.join(workDir, 'romsync-server');
+    final binary = p.join(workDir, Platform.isWindows ? 'romsync-server.exe' : 'romsync-server');
     final res = await Process.run(
       go,
       ['build', '-o', binary, './cmd/romsync'],
