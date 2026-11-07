@@ -1,0 +1,6 @@
+# Configuration of the OpenAPI linter (npx @redocly/cli lint api/openapi.yaml).
+extends:
+  - recommended
+rules:
+  # GET /setup is anonymous and cannot fail with a 4xx.
+  operation-4xx-response: off

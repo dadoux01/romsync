@@ -1,0 +1,896 @@
+openapi: 3.1.0
+info:
+  title: RomSync API
+  version: 1.0.0
+  summary: Self-hosted save synchronisation for Nintendo DS games.
+  description: |
+    Every route is prefixed with `/api/v1`. Bodies are JSON, except save
+    contents which are `application/octet-stream`.
+
+    Humans authenticate with a session cookie (`romsync_session`, HttpOnly,
+    SameSite=Strict) obtained from `/auth/login`, `/setup` or an invitation.
+    Devices authenticate with `Authorization: Bearer <token>`, obtained once
+    from `/pair`.
+
+    Every error has the same shape: `{"error": {"code": "...", "message": "..."}}`.
+    See docs/SPEC.md for the sync protocol.
+  license:
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
+servers:
+  - url: /api/v1
+tags:
+  - name: accounts
+    description: First start, sessions, accounts and invitations
+  - name: devices
+    description: Pairing and device tokens
+  - name: games
+    description: Games and their active version
+  - name: versions
+    description: Save upload, history, restore and export
+
+paths:
+  /setup:
+    get:
+      tags: [accounts]
+      operationId: getSetup
+      summary: Tell whether the first-start setup is still needed
+      security: []
+      responses:
+        "200":
+          description: Setup status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [needed]
+                properties:
+                  needed: { type: boolean }
+    post:
+      tags: [accounts]
+      operationId: postSetup
+      summary: Create the administrator account (only when no account exists)
+      description: Opens a session for the new administrator. Rate limited.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201":
+          description: Administrator created and signed in
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/login:
+    post:
+      tags: [accounts]
+      operationId: login
+      summary: Open a web session
+      description: Rate limited (5 attempts per minute and per IP).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/logout:
+    post:
+      tags: [accounts]
+      operationId: logout
+      summary: Close the current web session
+      security: [{ session: [] }]
+      responses:
+        "204": { description: Signed out }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /me:
+    get:
+      tags: [accounts]
+      operationId: getMe
+      summary: Current user, and current device for a device token
+      security: [{ session: [] }, { device: [] }]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, device]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  device:
+                    oneOf:
+                      - $ref: "#/components/schemas/Device"
+                      - type: "null"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [accounts]
+      operationId: patchMe
+      summary: Change the account retention policy or the password
+      description: Changing the password closes the user's other sessions.
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                retention_policy: { $ref: "#/components/schemas/RetentionPolicy" }
+                current_password: { type: string }
+                new_password: { type: string, minLength: 8, maxLength: 256 }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /users:
+    get:
+      tags: [accounts]
+      operationId: listUsers
+      summary: List accounts (administrator)
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /users/{id}:
+    patch:
+      tags: [accounts]
+      operationId: patchUser
+      summary: Disable or re-enable an account, reset its password (administrator)
+      description: |
+        Disabling an account or resetting its password closes its sessions; the
+        devices of a disabled account are refused. An administrator cannot
+        disable their own account.
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                disabled: { type: boolean }
+                password: { type: string, minLength: 8, maxLength: 256 }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /invites:
+    get:
+      tags: [accounts]
+      operationId: listInvites
+      summary: List invitations (administrator)
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Invitations, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items: { $ref: "#/components/schemas/Invite" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [accounts]
+      operationId: createInvite
+      summary: Create a single-use invitation link (administrator)
+      description: The token is returned only once; the server stores its hash.
+      security: [{ session: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expires_in_days: { type: integer, minimum: 1, maximum: 30, default: 7 }
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invite, token]
+                properties:
+                  invite: { $ref: "#/components/schemas/Invite" }
+                  token: { type: string, description: "To be sent to the invitee, e.g. as /invite/<token> in the web UI" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /invites/{token}/accept:
+    post:
+      tags: [accounts]
+      operationId: acceptInvite
+      summary: Create an account from an invitation and sign in
+      description: Rate limited (5 attempts per minute and per IP).
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201":
+          description: Account created and signed in
+          headers:
+            Set-Cookie: { $ref: "#/components/headers/SessionCookie" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Expired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /pair-codes:
+    post:
+      tags: [devices]
+      operationId: createPairCode
+      summary: Generate a pairing code, valid 10 minutes
+      security: [{ session: [] }]
+      responses:
+        "201":
+          description: Pairing code
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, expires_at]
+                properties:
+                  code: { type: string, pattern: "^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$", examples: ["K7QM-4XPA"] }
+                  expires_at: { $ref: "#/components/schemas/Timestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /pair:
+    post:
+      tags: [devices]
+      operationId: pair
+      summary: Exchange a pairing code for a device token
+      description: |
+        The code is accepted in any case, with or without its dash. The token
+        (256 random bits) is returned only once. Rate limited (5 attempts per
+        minute and per IP).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, platform]
+              additionalProperties: false
+              properties:
+                code: { type: string }
+                name: { type: string, minLength: 1, maxLength: 64 }
+                platform: { $ref: "#/components/schemas/Platform" }
+      responses:
+        "201":
+          description: Device paired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, device]
+                properties:
+                  token: { type: string }
+                  device: { $ref: "#/components/schemas/Device" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Expired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /devices:
+    get:
+      tags: [devices]
+      operationId: listDevices
+      summary: List the account's devices (revoked ones last)
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items: { $ref: "#/components/schemas/Device" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /devices/{id}:
+    delete:
+      tags: [devices]
+      operationId: revokeDevice
+      summary: Revoke a device token
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204": { description: Revoked (idempotent) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /games:
+    get:
+      tags: [games]
+      operationId: listGames
+      summary: List games and their active version
+      security: [{ session: [] }, { device: [] }]
+      responses:
+        "200":
+          description: Games, sorted by title
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [games]
+                properties:
+                  games:
+                    type: array
+                    items: { $ref: "#/components/schemas/Game" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /games/{code}:
+    patch:
+      tags: [games]
+      operationId: patchGame
+      summary: Rename a game or change its retention policy
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/GameCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: { type: string, minLength: 1, maxLength: 128 }
+                retention_policy:
+                  description: "`null` makes the game inherit the account policy."
+                  oneOf:
+                    - $ref: "#/components/schemas/RetentionPolicy"
+                    - type: "null"
+      responses:
+        "200":
+          description: Updated game
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [game]
+                properties:
+                  game: { $ref: "#/components/schemas/Game" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /games/{code}/active:
+    get:
+      tags: [games]
+      operationId: getActiveVersion
+      summary: Metadata of the active version
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - $ref: "#/components/parameters/GameCode"
+      responses:
+        "200":
+          description: Active version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /games/{code}/versions:
+    get:
+      tags: [versions]
+      operationId: listVersions
+      summary: Paginated history, newest first (saved_at, then id)
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - $ref: "#/components/parameters/GameCode"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: before
+          in: query
+          description: Value of `next_before` from the previous page.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: A page of versions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [versions, next_before]
+                properties:
+                  versions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Version" }
+                  next_before:
+                    type: [integer, "null"]
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [versions]
+      operationId: uploadVersion
+      summary: Upload a save
+      description: |
+        Creates the game when it does not exist. The new version becomes active
+        when its `saved_at` is strictly after the active version's. A base
+        version that is not the active version is a divergence (`conflict`).
+        A `X-Saved-At` more than 5 minutes after the reception time is clamped
+        to the reception time; the original value is kept in
+        `saved_at_reported` and the device is flagged (`clock_skew_at`).
+
+        Idempotence: a retry with the same `X-Upload-Id` returns the original
+        version with `201`. Content identical to the active version creates
+        nothing and returns `200` with `created: false`.
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - $ref: "#/components/parameters/GameCode"
+        - name: profile
+          in: query
+          description: Format of the body; the server converts it to raw. `X-Content-SHA256` covers the body as sent.
+          schema: { $ref: "#/components/schemas/ProfileID" }
+        - name: X-Upload-Id
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" }
+        - name: X-Saved-At
+          in: header
+          required: true
+          description: Modification date of the save file on the device (ISO 8601 with a time zone).
+          schema: { type: string, format: date-time }
+        - name: X-Base-Version
+          in: header
+          description: Id of the server version the local save derives from; empty for a first save.
+          schema: { type: string }
+        - name: X-Emulator
+          in: header
+          schema: { type: string, maxLength: 64 }
+        - name: X-Content-SHA256
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[0-9a-fA-F]{64}$" }
+        - name: X-Game-Title
+          in: header
+          description: Title for a game the server does not know yet, percent-encoded UTF-8.
+          schema: { type: string }
+        - name: X-Force-Size
+          in: header
+          description: Accept a size different from the game's known chip size and replace it. Web session only.
+          schema: { type: string, enum: ["true", "false"] }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Identical to the active version, nothing created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResult" }
+        "201":
+          description: Version created (or original response of a retried upload)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResult" }
+        "400":
+          description: "`invalid_request` or `hash_mismatch`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`size_mismatch`, or `conflict` when the upload id was used for another game"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413": { $ref: "#/components/responses/TooLarge" }
+
+  /versions/{id}/content:
+    get:
+      tags: [versions]
+      operationId: getVersionContent
+      summary: Download the raw content of a version
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Raw save
+          headers:
+            X-Content-SHA256:
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /versions/{id}/activate:
+    post:
+      tags: [versions]
+      operationId: activateVersion
+      summary: Make a version the active one (restore)
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Activated version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /versions/{id}:
+    patch:
+      tags: [versions]
+      operationId: patchVersion
+      summary: Pin or annotate a version
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                pinned: { type: boolean }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Updated version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionEnvelope" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /versions/{id}/export:
+    get:
+      tags: [versions]
+      operationId: exportVersion
+      summary: Download a version converted for a target (manual import/export)
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - name: profile
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/ProfileID" }
+      responses:
+        "200":
+          description: Converted file (`<code>.sav` or `<code>.dsv`)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: romsync_session
+    device:
+      type: http
+      scheme: bearer
+
+  headers:
+    SessionCookie:
+      description: "`romsync_session=<token>; Path=/; HttpOnly; SameSite=Strict` (Secure over HTTPS), valid 30 days, sliding."
+      schema: { type: string }
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    GameCode:
+      name: code
+      in: path
+      required: true
+      description: "`ABCD` (cartridge code), `h:<sha1>` (ROM hash) or `x:<name>` (forced identifier). The colon may be percent-encoded."
+      schema: { $ref: "#/components/schemas/GameCode" }
+
+  responses:
+    InvalidRequest:
+      description: "`invalid_request`"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: "`unauthorized`: missing, revoked or expired credentials, wrong password, disabled account"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: "`forbidden`: authenticated but not allowed (administrator route, web-session route called with a device token…)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: "`not_found`"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: "`already_setup` or `conflict`"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Expired:
+      description: "`expired`: invitation or pairing code expired or already used"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooLarge:
+      description: "`too_large`"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RateLimited:
+      description: "`rate_limited`"
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [invalid_request, hash_mismatch, unauthorized, forbidden, not_found, already_setup,
+                     size_mismatch, conflict, expired, too_large, rate_limited, internal]
+            message: { type: string }
+
+    Timestamp:
+      type: string
+      format: date-time
+      description: UTC, millisecond precision, e.g. 2026-11-07T12:00:00.000Z
+      examples: ["2026-11-07T12:00:00.000Z"]
+
+    NullableTimestamp:
+      oneOf:
+        - $ref: "#/components/schemas/Timestamp"
+        - type: "null"
+
+    Credentials:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      properties:
+        username: { type: string, pattern: "^[A-Za-z0-9_.-]{1,32}$" }
+        password: { type: string, minLength: 8, maxLength: 256 }
+
+    RetentionPolicy:
+      type: object
+      required: [mode]
+      additionalProperties: false
+      properties:
+        mode: { type: string, enum: [all, last_n, days, smart] }
+        n: { type: integer, minimum: 1, maximum: 100000, description: Required for last_n and days. }
+
+    User:
+      type: object
+      required: [id, username, role, created_at, disabled_at, retention_policy]
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [admin, user] }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        disabled_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        retention_policy: { $ref: "#/components/schemas/RetentionPolicy" }
+
+    UserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+
+    Invite:
+      type: object
+      required: [id, created_by, created_at, expires_at, used_by, used_by_username, used_at, status]
+      properties:
+        id: { type: integer }
+        created_by: { type: integer }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        expires_at: { $ref: "#/components/schemas/Timestamp" }
+        used_by: { type: [integer, "null"] }
+        used_by_username: { type: [string, "null"] }
+        used_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        status: { type: string, enum: [pending, used, expired] }
+
+    Platform:
+      type: string
+      enum: [linux, macos, windows, android, 3ds, other]
+
+    Device:
+      type: object
+      required: [id, name, platform, created_at, last_seen_at, revoked_at, clock_skew_at]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        platform: { $ref: "#/components/schemas/Platform" }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        last_seen_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        revoked_at: { $ref: "#/components/schemas/NullableTimestamp" }
+        clock_skew_at:
+          description: Last time a save from this device was dated more than 5 minutes in the future.
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+
+    GameCode:
+      type: string
+      pattern: "^([A-Z0-9]{4}|h:[0-9a-f]{40}|x:[a-z0-9-]{1,32})$"
+      examples: ["IRBF"]
+
+    ProfileID:
+      type: string
+      enum: [raw, desmume]
+      default: raw
+
+    Game:
+      type: object
+      required: [code, title, region, chip_size, first_seen_at, retention_policy, version_count, conflict, active_version]
+      properties:
+        code: { $ref: "#/components/schemas/GameCode" }
+        title: { type: string }
+        region:
+          type: [string, "null"]
+          description: Fourth character of a cartridge code (F France, E USA, P Europe, J Japan…).
+        chip_size: { type: [integer, "null"], description: Known save size in bytes. }
+        first_seen_at: { $ref: "#/components/schemas/Timestamp" }
+        retention_policy:
+          description: "`null` when the game inherits the account policy."
+          oneOf:
+            - $ref: "#/components/schemas/RetentionPolicy"
+            - type: "null"
+        version_count: { type: integer }
+        conflict: { type: boolean, description: The most recently uploaded version diverged. }
+        active_version:
+          oneOf:
+            - $ref: "#/components/schemas/Version"
+            - type: "null"
+
+    Version:
+      type: object
+      required: [id, game_code, sha256, size, saved_at, saved_at_reported, uploaded_at, device_id, device_name,
+                 emulator, base_version_id, is_active, conflict, pinned, note]
+      properties:
+        id: { type: integer }
+        game_code: { $ref: "#/components/schemas/GameCode" }
+        sha256: { type: string }
+        size: { type: integer }
+        saved_at: { $ref: "#/components/schemas/Timestamp" }
+        saved_at_reported:
+          description: Original saved_at when it was clamped because of a clock in the future.
+          oneOf:
+            - $ref: "#/components/schemas/Timestamp"
+            - type: "null"
+        uploaded_at: { $ref: "#/components/schemas/Timestamp" }
+        device_id: { type: [integer, "null"], description: "`null` for an upload from the web interface." }
+        device_name: { type: [string, "null"] }
+        emulator: { type: string }
+        base_version_id: { type: [integer, "null"] }
+        is_active: { type: boolean }
+        conflict: { type: boolean }
+        pinned: { type: boolean }
+        note: { type: string }
+
+    VersionEnvelope:
+      type: object
+      required: [version]
+      properties:
+        version: { $ref: "#/components/schemas/Version" }
+
+    UploadResult:
+      type: object
+      required: [version, created, active, conflict]
+      properties:
+        version: { $ref: "#/components/schemas/Version" }
+        created: { type: boolean }
+        active: { type: boolean, description: The uploaded version became active. }
+        conflict: { type: boolean }
