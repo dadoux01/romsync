@@ -2,6 +2,7 @@
  * test_update.c - versions, release verification and compatibility, the
  * cases of romsync_core's release_test.dart.
  */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -142,6 +143,192 @@ static void compatibility_with_the_server(void)
     CHECK_INT(rs_check_compatibility(&info, "dev"), RS_COMPAT_OK);
 }
 
+
+/* ---- Ed25519: RFC 8032 vectors, openssl, refusals ---------------------- */
+
+#include "../core/json_file.h"
+#include "../vendor/cjson/cJSON.h"
+
+static int hex_bytes(const char *hex, uint8_t *out, size_t size)
+{
+    size_t n = strlen(hex) / 2;
+    if (n > size)
+        return -1;
+    for (size_t i = 0; i < n; i++) {
+        unsigned v;
+        if (sscanf(hex + 2 * i, "%2x", &v) != 1)
+            return -1;
+        out[i] = (uint8_t)v;
+    }
+    return (int)n;
+}
+
+/* L, the order of the Ed25519 group, little-endian (RFC 8032, 5.1). */
+static const uint8_t ED25519_L[32] = {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7,
+                                      0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10};
+
+/* s += L (little-endian, 32 bytes). */
+static void add_l(uint8_t s[32])
+{
+    unsigned carry = 0;
+    for (int i = 0; i < 32; i++) {
+        unsigned v = s[i] + ED25519_L[i] + carry;
+        s[i] = (uint8_t)v;
+        carry = v >> 8;
+    }
+}
+
+static void rfc8032_vectors_and_refusals(void)
+{
+    rs_buf b = {0};
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/rfc8032-7.1.json"), &b, NULL), RS_OK);
+    rs_buf_terminate(&b);
+    cJSON *doc = cJSON_Parse((const char *)b.data);
+    CHECK(doc != NULL);
+    int count = 0;
+    uint8_t first_key[32];
+    const cJSON *t;
+    cJSON_ArrayForEach(t, cJSON_GetObjectItemCaseSensitive(doc, "tests"))
+    {
+        uint8_t key[32], sig[64], tmp[64];
+        uint8_t *msg = malloc(2048);
+        const char *name = rs_json_str(t, "name", "");
+        CHECK_INT(hex_bytes(rs_json_str(t, "public_key", ""), key, sizeof key), 32);
+        CHECK_INT(hex_bytes(rs_json_str(t, "signature", ""), sig, sizeof sig), 64);
+        int n = hex_bytes(rs_json_str(t, "message", ""), msg, 2048);
+        CHECK(n >= 0);
+        if (count == 0)
+            memcpy(first_key, key, 32);
+        count++;
+
+        if (!rs_ed25519_verify(sig, key, msg, (size_t)n))
+            fprintf(stderr, "    TEST %s: valid signature refused\n", name);
+        CHECK(rs_ed25519_verify(sig, key, msg, (size_t)n));
+
+        /* One byte of the signature, in R and in S. */
+        int idx[] = {0, 31, 32, 63};
+        for (int i = 0; i < 4; i++) {
+            memcpy(tmp, sig, 64);
+            tmp[idx[i]] ^= 1;
+            CHECK(!rs_ed25519_verify(tmp, key, msg, (size_t)n));
+        }
+        /* Modified message, one more byte. */
+        msg[n] = 0;
+        CHECK(!rs_ed25519_verify(sig, key, msg, (size_t)n + 1));
+        if (n > 0) {
+            msg[0] ^= 1;
+            CHECK(!rs_ed25519_verify(sig, key, msg, (size_t)n));
+            msg[0] ^= 1;
+        }
+        /* Another public key. */
+        if (count > 1)
+            CHECK(!rs_ed25519_verify(sig, first_key, msg, (size_t)n));
+        /* Non-canonical S + L (S >= L). */
+        memcpy(tmp, sig, 64);
+        add_l(tmp + 32);
+        if (rs_ed25519_verify(tmp, key, msg, (size_t)n))
+            fprintf(stderr, "    TEST %s: non-canonical signature (S >= L) accepted\n", name);
+        CHECK(!rs_ed25519_verify(tmp, key, msg, (size_t)n));
+        free(msg);
+    }
+    CHECK_INT(count, 5);
+    cJSON_Delete(doc);
+    rs_buf_free(&b);
+}
+
+/* Wrong lengths go through rs_verify_release (the API takes 64 bytes). */
+static void a_signature_of_the_wrong_length_is_refused(void)
+{
+    rs_buf sums = {0}, sig = {0}, pub = {0};
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/SHA256SUMS"), &sums, NULL), RS_OK);
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/SHA256SUMS.sig"), &sig, NULL), RS_OK);
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/release-ed25519.pub"), &pub, NULL), RS_OK);
+    rs_buf_terminate(&sig);
+    rs_buf_terminate(&pub);
+    uint8_t raw[64];
+    CHECK_INT(rs_base64_decode((const char *)sig.data, raw, sizeof raw), 64);
+    char b63[100], b65[100];
+    uint8_t longer[65];
+    memcpy(longer, raw, 64);
+    longer[64] = 0;
+    b64(raw, 63, b63);
+    b64(longer, 65, b65);
+    rs_error err;
+    /* The file content is not checked here: a 3-byte "cia" whose hash is in SHA256SUMS. */
+    CHECK_INT(rs_verify_release(sums.data, sums.len, b63, "romsync-0.5.0-3ds.cia", (const uint8_t *)"cia", 3,
+                                (const char *)pub.data, &err),
+              RS_ERR_REFUSED);
+    CHECK_INT(rs_verify_release(sums.data, sums.len, b65, "romsync-0.5.0-3ds.cia", (const uint8_t *)"cia", 3,
+                                (const char *)pub.data, &err),
+              RS_ERR_REFUSED);
+    CHECK_INT(rs_verify_release(sums.data, sums.len, "", "romsync-0.5.0-3ds.cia", (const uint8_t *)"cia", 3,
+                                (const char *)pub.data, &err),
+              RS_ERR_REFUSED);
+    rs_buf_free(&sums);
+    rs_buf_free(&sig);
+    rs_buf_free(&pub);
+}
+
+/* SHA256SUMS signed by openssl with the commands of the release workflow
+ * (testdata/ed25519/openssl/generate.sh). */
+static void a_sha256sums_signed_by_openssl_is_accepted_and_only_it(void)
+{
+    rs_buf sums = {0}, sig = {0}, pub = {0};
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/SHA256SUMS"), &sums, NULL), RS_OK);
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/SHA256SUMS.sig"), &sig, NULL), RS_OK);
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/openssl/release-ed25519.pub"), &pub, NULL), RS_OK);
+    rs_buf_terminate(&sig);
+    rs_buf_terminate(&pub);
+    rs_error err;
+    CHECK_INT(rs_verify_release(sums.data, sums.len, (const char *)sig.data, "romsync-0.5.0-3ds.cia",
+                                (const uint8_t *)"cia", 3, (const char *)pub.data, &err),
+              RS_OK);
+    CHECK_INT(rs_verify_release(sums.data, sums.len, (const char *)sig.data, "romsync-0.5.0-3ds.cia",
+                                (const uint8_t *)"cia", 3, RS_RELEASE_PUBLIC_KEY, &err),
+              RS_ERR_REFUSED);
+    sums.data[0] ^= 1;
+    CHECK_INT(rs_verify_release(sums.data, sums.len, (const char *)sig.data, "romsync-0.5.0-3ds.cia",
+                                (const uint8_t *)"cia", 3, (const char *)pub.data, &err),
+              RS_ERR_REFUSED);
+    rs_buf_free(&sums);
+    rs_buf_free(&sig);
+    rs_buf_free(&pub);
+}
+
+/* testdata/ed25519/verdicts.json: the same cases as romsync_core's
+ * ed25519_test.dart, which must give the same verdicts (non-regression).
+ * Keys and signatures of another length are invalid, as verifyEd25519. */
+static void verdicts_are_the_same_as_the_dart_client(void)
+{
+    rs_buf b = {0};
+    CHECK_INT(rs_read_file(t_repo("testdata/ed25519/verdicts.json"), &b, NULL), RS_OK);
+    rs_buf_terminate(&b);
+    cJSON *doc = cJSON_Parse((const char *)b.data);
+    CHECK(doc != NULL);
+    int count = 0;
+    const cJSON *c;
+    cJSON_ArrayForEach(c, cJSON_GetObjectItemCaseSensitive(doc, "cases"))
+    {
+        uint8_t key[33], sig[66];
+        uint8_t *msg = malloc(2048);
+        int nk = hex_bytes(rs_json_str(c, "public_key", ""), key, sizeof key);
+        int ns = hex_bytes(rs_json_str(c, "signature", ""), sig, sizeof sig);
+        int nm = hex_bytes(rs_json_str(c, "message", ""), msg, 2048);
+        CHECK(nm >= 0);
+        bool got = nk == 32 && ns == 64 && rs_ed25519_verify(sig, key, msg, (size_t)nm);
+        bool want = rs_json_bool(c, "valid", false);
+        if (got != want)
+            fprintf(stderr, "    %s: got %d, want %d\n", rs_json_str(c, "name", ""), got, want);
+        CHECK(got == want);
+        count++;
+        free(msg);
+    }
+    CHECK(count > 60);
+    cJSON_Delete(doc);
+    rs_buf_free(&b);
+}
+
 void run_update_tests(void)
 {
     RUN(versions_order_no_downgrade_no_pre_release_no_dev_update);
@@ -149,4 +336,8 @@ void run_update_tests(void)
     RUN(base64_and_sums);
     RUN(a_signed_release_is_verified_and_anything_else_refused);
     RUN(compatibility_with_the_server);
+    RUN(rfc8032_vectors_and_refusals);
+    RUN(a_signature_of_the_wrong_length_is_refused);
+    RUN(a_sha256sums_signed_by_openssl_is_accepted_and_only_it);
+    RUN(verdicts_are_the_same_as_the_dart_client);
 }

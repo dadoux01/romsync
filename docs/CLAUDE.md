@@ -46,6 +46,8 @@ profiles/*.json          profils de conversion partagés (copiés dans l'appli
                          par client/tool/sync_profiles.sh)
 api/openapi.yaml         spécification de l'API
 keys/release-ed25519.pub clé publique de signature des releases (docs/releasing.md)
+testdata/ed25519/        vecteurs Ed25519 (RFC 8032, openssl, verdicts.json) partagés
+                         par les tests Dart et C
 client/packages/romsync_updater/   remplacement d'une installation avec retour
                          arrière (romsync-updater.exe sous Windows)
 deploy/                  Dockerfile (compilation croisée amd64/arm64), compose

@@ -125,6 +125,12 @@ bool rs_sum_for(const char *sums, size_t len, const char *name, char hex[65])
     return false;
 }
 
+bool rs_ed25519_verify(const uint8_t signature[64], const uint8_t public_key[32], const uint8_t *message,
+                       size_t len)
+{
+    return crypto_ed25519_check(signature, public_key, message, len) == 0;
+}
+
 rs_status rs_verify_release(const uint8_t *sums, size_t sums_len, const char *signature_b64,
                             const char *file_name, const uint8_t *data, size_t len, const char *public_key_b64,
                             rs_error *err)
@@ -133,7 +139,7 @@ rs_status rs_verify_release(const uint8_t *sums, size_t sums_len, const char *si
     if (rs_base64_decode(signature_b64, sig, sizeof sig) != 64 ||
         rs_base64_decode(public_key_b64, key, sizeof key) != 32)
         return rs_fail(err, RS_ERR_REFUSED, "Signature illisible : mise à jour refusée.");
-    if (crypto_ed25519_check(sig, key, sums, sums_len) != 0)
+    if (!rs_ed25519_verify(sig, key, sums, sums_len))
         return rs_fail(err, RS_ERR_REFUSED,
                        "Signature invalide : cette mise à jour ne vient pas de RomSync, elle est refusée.");
     char expected[65], actual[65];

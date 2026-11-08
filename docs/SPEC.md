@@ -378,6 +378,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 **Signature des releases**
 
 - Chaque release GitHub contient `SHA256SUMS` (SHA-256 de chaque fichier) et `SHA256SUMS.sig`, signature Ed25519 de `SHA256SUMS` en base64. La clé privée n'est accessible qu'au job `sign` de `release.yml`, par l'environnement GitHub `release` réservé aux tags `v*` ; la clé publique est `keys/release-ed25519.pub`, intégrée aux applis (des tests vérifient que leurs copies sont identiques). Détails : `docs/releasing.md`.
+- La vérification Ed25519 est stricte (RFC 8032, section 5.1.7) : une signature non canonique (S ≥ L) est refusée. Côté PC, `pinenacl` ne fait pas ce contrôle : `verifyEd25519` le fait avant de l'appeler. Les vecteurs de la RFC 8032 (section 7.1), une signature produite par openssl comme dans `release.yml`, et une liste commune de 72 cas (`testdata/ed25519/verdicts.json`) donnent les mêmes verdicts en Dart, en C (Monocypher) et avec openssl.
 - Une mise à jour n'est acceptée que si la signature de `SHA256SUMS` est valide pour cette clé, puis si le SHA-256 du fichier téléchargé est celui de `SHA256SUMS`. Sinon elle est refusée et rien n'est installé.
 - Jamais de rétrogradation : seule une version finale (sans suffixe `-rc…`) strictement plus récente est proposée. Une version de développement (`dev`, build local ou de CI) ne propose jamais de mise à jour.
 - Les notes de chaque release commencent par l'ordre de mise à jour : serveur d'abord, puis les clients.

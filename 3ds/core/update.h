@@ -39,6 +39,11 @@ int rs_base64_decode(const char *in, uint8_t *out, size_t size);
 /* The SHA-256 (hex) of name in a sha256sum output, into hex[65]. */
 bool rs_sum_for(const char *sums, size_t len, const char *name, char hex[65]);
 
+/* Ed25519 signature check (RFC 8032): true when signature is valid for
+ * message and public_key. */
+bool rs_ed25519_verify(const uint8_t signature[64], const uint8_t public_key[32], const uint8_t *message,
+                       size_t len);
+
 /* Checks a downloaded release file: the Ed25519 signature of sums
  * (signature_b64: the content of SHA256SUMS.sig) with public_key_b64, then
  * the SHA-256 of data against its line in sums. RS_ERR_REFUSED with a

@@ -73,6 +73,39 @@ String? currentUpdatePlatform() => switch (Abi.current()) {
   _ => null,
 };
 
+/// Ed25519 signature check (RFC 8032): false for a wrong length, a forged
+/// or modified signature or message, or another key.
+bool verifyEd25519({required Uint8List publicKey, required Uint8List signature, required Uint8List message}) {
+  if (publicKey.length != 32 || signature.length != 64) return false;
+  // RFC 8032, section 5.1.7, step 1: "If any of the decodings fail
+  // (including S being out of range), the signature is invalid", S being
+  // the second half of the signature, a little-endian integer that must be
+  // lower than L, the group order. pinenacl (like TweetNaCl) skips this
+  // check and accepts S + L, a second valid-looking signature of the same
+  // message: refuse it here, as Monocypher does on the 3DS.
+  if (!_isCanonicalScalar(Uint8List.sublistView(signature, 32))) return false;
+  try {
+    return VerifyKey(publicKey).verify(signature: Signature(signature), message: message);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// L = 2^252 + 27742317777372353535851937790883648493, little-endian
+/// (RFC 8032, section 5.1).
+const _groupOrder = [
+  0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, //
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+];
+
+/// Whether the 32-byte little-endian scalar [s] is lower than L.
+bool _isCanonicalScalar(Uint8List s) {
+  for (var i = 31; i >= 0; i--) {
+    if (s[i] != _groupOrder[i]) return s[i] < _groupOrder[i];
+  }
+  return false; // s == L
+}
+
 class UpdateVerificationException implements Exception {
   UpdateVerificationException(this.message);
   final String message;
@@ -99,13 +132,7 @@ Future<void> verifyReleaseFile({
   } on FormatException {
     throw UpdateVerificationException('Signature illisible : mise à jour refusée.');
   }
-  var valid = false;
-  try {
-    valid = sig.length == 64 && key.length == 32 && VerifyKey(key).verify(signature: Signature(sig), message: sums);
-  } catch (_) {
-    valid = false;
-  }
-  if (!valid) {
+  if (!verifyEd25519(publicKey: key, signature: sig, message: sums)) {
     throw UpdateVerificationException(
       'Signature invalide : cette mise à jour ne vient pas de RomSync, elle est refusée.',
     );
