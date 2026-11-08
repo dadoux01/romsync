@@ -202,6 +202,23 @@ void main() {
       expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isFalse);
     });
 
+    test('a choice against a server too old for X-Activate is refused, nothing sent', () async {
+      h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
+      await h.engine.prepare(h.entry(), chipSize: null);
+      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
+      h.writeLocal(save(3), h.now);
+      server.apiLevel = null; // 0.4.0: no GET /server
+      final requests = server.uploadRequests;
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isTrue);
+      await expectLater(
+        h.engine.prepare(h.entry(), chipSize: null, choice: DivergenceChoice.server),
+        throwsA(isA<ServerTooOldException>()),
+      );
+      expect(server.uploadRequests, requests);
+      expect(h.queue.isEmpty, isTrue);
+      expect(h.readLocal(), save(3));
+    });
+
     test('first sync of a device whose save differs from the server: divergence', () async {
       server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
       h.writeLocal(save(3), h.now);

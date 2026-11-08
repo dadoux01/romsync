@@ -12,6 +12,7 @@ import '../state/file_access.dart';
 import '../state/json_file.dart';
 import '../state/save_state.dart';
 import '../state/upload_queue.dart';
+import '../update/release.dart';
 import 'backups.dart';
 import 'library.dart';
 import 'size_rule.dart';
@@ -114,6 +115,17 @@ class SyncException implements Exception {
   String toString() => message;
 }
 
+/// The server is too old to apply the user's choice after a divergence
+/// (no X-Activate): nothing was sent, the server must be updated first.
+class ServerTooOldException extends SyncException {
+  ServerTooOldException(this.serverVersion)
+    : super(
+        'Le serveur RomSync ($serverVersion) est trop ancien pour appliquer ce choix : '
+        'rien n’a été envoyé ni écrasé. Mets d’abord à jour le serveur, puis recommence.',
+      );
+  final String serverVersion;
+}
+
 /// The sync protocol of docs/SPEC.md, "Protocole de synchronisation".
 ///
 /// Every upload goes through the persistent [queue], so that its upload id
@@ -139,6 +151,18 @@ class SyncEngine {
 
   /// Runs [fn] after the previous engine operation: uploads, downloads and
   /// state changes never interleave.
+  ServerInfo? _serverInfo;
+  bool _serverInfoKnown = false;
+
+  /// The server's version and level, read once (null: before 0.5.0).
+  Future<ServerInfo?> serverInfo() async {
+    if (!_serverInfoKnown) {
+      _serverInfo = await api.serverInfo();
+      _serverInfoKnown = true;
+    }
+    return _serverInfo;
+  }
+
   Future<T> _serial<T>(Future<T> Function() fn) {
     final result = _tail.then((_) => fn());
     _tail = result.then((_) {}, onError: (_) {});
@@ -359,6 +383,14 @@ class SyncEngine {
                 localModified: local?.modified,
               ),
             );
+          }
+          if (diverged) {
+            // The choice relies on X-Activate: never send it to a server
+            // that would ignore it and apply "most recent wins".
+            final info = await serverInfo();
+            if ((info?.apiLevel ?? 1) < requiredServerApiLevel) {
+              throw ServerTooOldException(info?.version ?? 'antérieur à 0.5.0');
+            }
           }
           final mode = !diverged
               ? UploadMode.auto

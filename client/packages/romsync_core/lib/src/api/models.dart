@@ -155,3 +155,63 @@ class PairResult {
   final String token;
   final RemoteDevice device;
 }
+
+/// `GET /server` (docs/SPEC.md, "Compatibilité").
+class ServerInfo {
+  ServerInfo({required this.version, required this.apiLevel, required this.minClientVersion, required this.updates});
+  final String version;
+  final int apiLevel;
+  final String minClientVersion;
+
+  /// The update relay is enabled.
+  final bool updates;
+
+  factory ServerInfo.fromJson(Map<String, Object?> j) => ServerInfo(
+    version: j['version']! as String,
+    apiLevel: j['api_level']! as int,
+    minClientVersion: j['min_client_version']! as String,
+    updates: (j['updates'] as bool?) ?? false,
+  );
+}
+
+/// A file of a relayed release.
+class UpdateFile {
+  UpdateFile({required this.name, required this.size, required this.url});
+  final String name;
+  final int size;
+
+  /// Path on the server (`/api/v1/updates/files/…`).
+  final String url;
+
+  factory UpdateFile.fromJson(Map<String, Object?> j) =>
+      UpdateFile(name: j['name']! as String, size: j['size']! as int, url: j['url']! as String);
+}
+
+/// `GET /updates/{platform}`: the latest client and its signed checksums.
+class UpdateInfo {
+  UpdateInfo({
+    required this.version,
+    required this.notes,
+    required this.publishedAt,
+    required this.file,
+    required this.sums,
+    required this.signature,
+  });
+  final String version;
+
+  /// Release notes (Markdown).
+  final String notes;
+  final DateTime publishedAt;
+  final UpdateFile file;
+  final UpdateFile sums;
+  final UpdateFile signature;
+
+  factory UpdateInfo.fromJson(Map<String, Object?> j) => UpdateInfo(
+    version: j['version']! as String,
+    notes: (j['notes'] as String?) ?? '',
+    publishedAt: _date(j['published_at']),
+    file: UpdateFile.fromJson(j['file']! as Map<String, Object?>),
+    sums: UpdateFile.fromJson(j['sums']! as Map<String, Object?>),
+    signature: UpdateFile.fromJson(j['signature']! as Map<String, Object?>),
+  );
+}

@@ -59,11 +59,17 @@ jobs:
 
       - name: Build
         working-directory: client/app
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
+          # The release version is built in (romsyncClientVersion); a CI
+          # build stays "dev" and never updates itself.
+          args=()
+          [ "$VERSION" != ci ] && args+=("--dart-define=ROMSYNC_VERSION=$VERSION")
           case "${{ runner.os }}" in
-            Linux)   flutter build linux --release ;;
-            macOS)   flutter build macos --release ;;
-            Windows) flutter build windows --release ;;
+            Linux)   flutter build linux --release "${args[@]}" ;;
+            macOS)   flutter build macos --release "${args[@]}" ;;
+            Windows) flutter build windows --release "${args[@]}" ;;
           esac
 
       - name: Package

@@ -50,7 +50,11 @@ class RealServer {
   }
 
   Future<void> start() async {
-    _process = await Process.start(binary, [], environment: {'ROMSYNC_PORT': '$port', 'ROMSYNC_DATA_DIR': dataDir});
+    _process = await Process.start(
+      binary,
+      [],
+      environment: {'ROMSYNC_PORT': '$port', 'ROMSYNC_DATA_DIR': dataDir, 'ROMSYNC_UPDATES': 'off'},
+    );
     _process!.stdout.transform(utf8.decoder).listen(_log.write);
     _process!.stderr.transform(utf8.decoder).listen(_log.write);
     final client = HttpClient();

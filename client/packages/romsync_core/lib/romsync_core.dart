@@ -31,6 +31,4 @@ export 'src/sync/play_session.dart';
 export 'src/sync/size_rule.dart';
 export 'src/sync/status.dart';
 export 'src/sync/watcher.dart';
-
-/// Version of the client, shown in the interface.
-const romsyncClientVersion = '0.1.0';
+export 'src/update/release.dart';

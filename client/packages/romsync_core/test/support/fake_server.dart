@@ -29,6 +29,9 @@ class FakeServer {
   final chipSize = <String, int>{};
   bool online = true;
 
+  /// api_level of GET /server; null answers 404 (a server before 0.5.0).
+  int? apiLevel = 2;
+
   /// When set, the next upload is processed but its response is lost.
   bool dropNextUploadResponse = false;
 
@@ -78,6 +81,10 @@ class FakeServer {
   Future<http.Response> _handle(http.Request req) async {
     if (!online) throw const SocketException('Connection refused');
     final path = Uri.decodeComponent(req.url.path.replaceFirst('/api/v1', ''));
+    if (path == '/server') {
+      if (apiLevel == null) return _err(404, 'not_found');
+      return _ok({'version': '0.5.0', 'api_level': apiLevel, 'min_client_version': '0.4.0', 'updates': false});
+    }
     final active = RegExp(r'^/games/(.+)/active$').firstMatch(path);
     if (req.method == 'GET' && active != null) {
       final v = activeOf(active[1]!);

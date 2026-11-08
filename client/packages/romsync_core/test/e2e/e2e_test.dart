@@ -112,6 +112,11 @@ void _scenario() {
     final active = await a.api.active(gameId);
     expect(active!.size, 8192);
     expect(active.deviceName, 'Fedora');
+    // The real server is compatible with this client.
+    final info = await a.api.serverInfo();
+    expect(info!.apiLevel, greaterThanOrEqualTo(requiredServerApiLevel));
+    expect(checkCompatibility(info, clientVersion: '0.5.0'), Compatibility.ok);
+    expect(await a.api.platformUpdate('linux-x64'), isNull, reason: 'relay without release: no update');
   });
 
   test('2. a second device downloads it before playing', () async {

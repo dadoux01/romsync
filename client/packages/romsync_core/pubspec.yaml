@@ -12,6 +12,7 @@ dependencies:
   http: ^1.6.0
   meta: ^1.19.0
   path: ^1.9.1
+  pinenacl: ^0.6.0
   toml: ^0.18.0
   uuid: ^4.6.0
 

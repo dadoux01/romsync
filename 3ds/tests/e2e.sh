@@ -29,7 +29,7 @@ trap cleanup EXIT INT TERM
 # A free port chosen by the system.
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 url="http://127.0.0.1:$port"
-ROMSYNC_PORT=$port ROMSYNC_DATA_DIR="$work/data" "$work/romsync-server" >"$work/server.log" 2>&1 &
+ROMSYNC_PORT=$port ROMSYNC_DATA_DIR="$work/data" ROMSYNC_UPDATES=off "$work/romsync-server" >"$work/server.log" 2>&1 &
 server_pid=$!
 
 i=0

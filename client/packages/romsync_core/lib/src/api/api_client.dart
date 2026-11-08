@@ -187,5 +187,74 @@ class RomSyncApi {
     return res.bodyBytes;
   }
 
+  /// `GET /server`: version and compatibility level of the server, or null
+  /// for a server older than 0.5.0 (no such route: level 1).
+  Future<ServerInfo?> serverInfo() async {
+    try {
+      return ServerInfo.fromJson(await _json('GET', '/server'));
+    } on ApiException catch (e) {
+      if (e.status == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// `GET /updates/{platform}`: the latest client relayed by the server, or
+  /// null when the relay is disabled, knows no release yet, or has no file
+  /// for this platform.
+  Future<UpdateInfo?> platformUpdate(String platform) async {
+    try {
+      return UpdateInfo.fromJson(await _json('GET', '/updates/${Uri.encodeComponent(platform)}'));
+    } on ApiException catch (e) {
+      if (e.status == 404 || e.status == 503) return null;
+      rethrow;
+    }
+  }
+
+  /// Downloads a file of the relay ([path] is an absolute path on the
+  /// server, `/api/v1/updates/files/…`) into [dest], reporting progress.
+  Future<void> downloadFile(
+    String path,
+    File dest, {
+    void Function(int received, int? total)? onProgress,
+    Duration idleTimeout = const Duration(seconds: 60),
+  }) async {
+    final req = http.Request('GET', baseUrl.replace(path: '${baseUrl.path}$path'));
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    final http.StreamedResponse res;
+    try {
+      res = await _client.send(req).timeout(timeout);
+    } on SocketException catch (e) {
+      throw ServerUnreachableException(e);
+    } on TimeoutException catch (e) {
+      throw ServerUnreachableException(e);
+    } on http.ClientException catch (e) {
+      throw ServerUnreachableException(e);
+    }
+    if (res.statusCode != 200) {
+      final body = await res.stream.bytesToString();
+      var code = 'internal';
+      var message = 'HTTP ${res.statusCode}';
+      try {
+        final err = (jsonDecode(body) as Map<String, Object?>)['error']! as Map<String, Object?>;
+        code = err['code']! as String;
+        message = err['message']! as String;
+      } catch (_) {}
+      throw ApiException(res.statusCode, code, message);
+    }
+    final sink = dest.openWrite();
+    var received = 0;
+    try {
+      await for (final chunk in res.stream.timeout(idleTimeout)) {
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, res.contentLength);
+      }
+    } on TimeoutException catch (e) {
+      throw ServerUnreachableException(e);
+    } finally {
+      await sink.close();
+    }
+  }
+
   void close() => _client.close();
 }
