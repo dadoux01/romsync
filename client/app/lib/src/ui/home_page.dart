@@ -3,23 +3,102 @@ import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
 import 'choice_dialog.dart';
+import 'divergence_dialog.dart';
 import 'history_page.dart';
 import 'issue_tile.dart';
 import 'settings_page.dart';
 import 'status_chip.dart';
 
 /// The game list with the state of each save.
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
   final AppController controller;
 
-  Future<void> _launch(BuildContext context, LibraryEntry entry) async {
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  AppController get controller => widget.controller;
+  var _dialogOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    controller.addListener(_onChange);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_onChange);
+    super.dispose();
+  }
+
+  /// A "choix à faire" notification was clicked: open its dialog.
+  void _onChange() {
+    final path = controller.promptDivergence;
+    if (path == null || _dialogOpen) return;
+    controller.promptDivergence = null;
+    final d = controller.divergences[path];
+    if (d != null) WidgetsBinding.instance.addPostFrameCallback((_) => _resolve(context, d));
+  }
+
+  String _title(Divergence d) =>
+      controller.rows.where((r) => r.entry.savePath == d.savePath).firstOrNull?.remote?.title ??
+      controller.entryFor(d)?.title ??
+      d.gameId;
+
+  Future<DivergenceChoice?> _ask(BuildContext context, Divergence d, {bool launching = false}) async {
+    _dialogOpen = true;
+    try {
+      return await showDialog<DivergenceChoice>(
+        context: context,
+        builder: (_) => DivergenceDialog(title: _title(d), divergence: d, launching: launching),
+      );
+    } finally {
+      _dialogOpen = false;
+    }
+  }
+
+  /// A divergence found outside a launch (background, during a game).
+  Future<void> _resolve(BuildContext context, Divergence d) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final entry = controller.entryFor(d);
+    if (entry == null) return;
+    final choice = await _ask(context, d);
+    if (choice == null) return;
+    try {
+      final r = await controller.resolveDivergence(entry, choice);
+      if (r.needsChoice && context.mounted) return await _resolve(context, r.divergence!);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            choice == DivergenceChoice.local
+                ? 'Save locale envoyée : c’est la save active.'
+                : r.backupPath == null
+                ? 'Save du serveur récupérée ; ta save locale est dans l’historique.'
+                : 'Save du serveur récupérée ; ta save locale est dans l’historique et dans ${r.backupPath}.',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e'), duration: const Duration(seconds: 8)));
+    }
+  }
+
+  Future<void> _launch(BuildContext context, LibraryEntry entry, [DivergenceChoice? choice]) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final messages = await controller.launch(entry);
+      final messages = await controller.launch(entry, choice: choice);
       for (final m in messages) {
         messenger.showSnackBar(SnackBar(content: Text(m), duration: const Duration(seconds: 8)));
       }
+    } on DivergenceException catch (e) {
+      if (!context.mounted) return;
+      final picked = await _ask(context, e.divergence, launching: true);
+      if (picked != null && context.mounted) await _launch(context, entry, picked);
     } catch (e) {
       if (!context.mounted) return;
       await showDialog<void>(
@@ -130,6 +209,15 @@ class HomePage extends StatelessWidget {
                   leading: const Icon(Icons.sports_esports),
                   actions: const [SizedBox.shrink()],
                 ),
+              for (final d in c.divergences.values)
+                MaterialBanner(
+                  content: Text(
+                    'Choix à faire pour ${_title(d)} : deux appareils ont joué sans se synchroniser. '
+                    'Rien n’a été envoyé.',
+                  ),
+                  leading: Icon(Icons.call_split, color: scheme.error),
+                  actions: [TextButton(onPressed: () => _resolve(context, d), child: const Text('Choisir'))],
+                ),
               for (final issue in c.emulatorIssues.values.expand((i) => i)) IssueTile(issue),
               for (final w in c.warnings) ListTile(leading: const Icon(Icons.info_outline), title: Text(w)),
               if (c.config.romFolders.isEmpty)
@@ -176,7 +264,7 @@ class _GameTile extends StatelessWidget {
   });
   final GameRow row;
   final AppController controller;
-  final Future<void> Function(BuildContext, LibraryEntry) onLaunch;
+  final Future<void> Function(BuildContext, LibraryEntry, [DivergenceChoice?]) onLaunch;
   final Future<void> Function(BuildContext, LibraryEntry) onChoose;
   final Future<void> Function(BuildContext, LibraryEntry, String) onEmulator;
 

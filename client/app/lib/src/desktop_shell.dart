@@ -70,6 +70,16 @@ class DesktopShell {
     final notifications = native.NotificationManager.instance;
     _nativeNotifications = notifications.isSupported() && notifications.initialize();
     controller.onNotice = (title, body) => unawaited(_notify(title, body));
+    if (_nativeNotifications) {
+      // A click on a notification opens RomSync, and the dialog of a
+      // divergence waiting for a choice.
+      notifications.addListener((e) {
+        if (e is native.NotificationActivatedEvent) {
+          show();
+          controller.openPendingDivergence();
+        }
+      });
+    }
   }
 
   Future<void> _notify(String title, String body) async {

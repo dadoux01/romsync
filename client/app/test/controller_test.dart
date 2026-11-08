@@ -217,4 +217,92 @@ void main() {
     expect(notices.single.$2, contains('Asahi'));
     expect(c.background!.watched, [c.rows.single.entry.savePath]);
   });
+
+  test('a divergent save: the launch asks first, the background holds it and notifies once', testOn: '!windows', () async {
+    final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
+    File(p.join(roms.path, 'Noire.nds')).writeAsBytesSync(rom('IRBF'));
+    final notices = <(String, String)>[];
+    var uploads = 0;
+    final active = {
+      'id': 12,
+      'game_code': 'IRBF',
+      'sha256': 'ab' * 32,
+      'size': 512,
+      'saved_at': '2026-11-07T12:00:00.000Z',
+      'uploaded_at': '2026-11-07T12:00:00.000Z',
+      'device_name': 'Asahi',
+      'is_active': true,
+    };
+    final remote = MockClient((req) async {
+      switch (req.url.path) {
+        case '/api/v1/pair':
+          return http.Response(
+            jsonEncode({
+              'token': 't',
+              'device': {'id': 7, 'name': 'Fedora', 'platform': 'linux'},
+            }),
+            201,
+          );
+        case '/api/v1/games/IRBF/active':
+          return http.Response(jsonEncode({'version': active, 'chip_size': 512}), 200);
+        case '/api/v1/games/IRBF/versions':
+          uploads++;
+          return http.Response('{}', 500);
+      }
+      return http.Response(
+        jsonEncode({
+          'games': [
+            {'code': 'IRBF', 'title': 'Pokémon Noire', 'chip_size': 512, 'active_version': active},
+          ],
+        }),
+        200,
+      );
+    });
+    final c = AppController(
+      paths: paths,
+      keyring: FakeKeyring(available: true),
+      profiles: profiles,
+      httpClient: remote,
+      scanner: RomScanner(findSevenZip: false),
+      refreshInterval: const Duration(hours: 1),
+      environment: {'HOME': p.join(tmp.path, 'home'), 'PATH': ''},
+    );
+    c.onNotice = (title, body) => notices.add((title, body));
+    await c.init();
+    addTearDown(c.dispose);
+    await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora');
+    await c.addFolder(roms.path);
+    // An executable that exists, so that the launch checks pass (the game
+    // is never started: the divergence stops the launch first).
+    final exe = File(p.join(tmp.path, 'melonDS'))..writeAsStringSync('#!/bin/sh\n');
+    await Process.run('chmod', ['+x', exe.path]);
+    await c.updateEmulator(EmulatorSettings(executable: exe.path));
+    final entry = c.rows.single.entry;
+    // A local save this device never synced, different from the server's.
+    File(entry.savePath)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(List.filled(512, 3));
+
+    // Before a launch: the user is asked, nothing is sent.
+    await expectLater(
+      c.launch(entry),
+      throwsA(isA<DivergenceException>().having((e) => e.divergence.server.deviceName, 'from', 'Asahi')),
+    );
+    expect(uploads, 0);
+
+    // In the background: held in the queue, announced once.
+    await c.engine!.sendIfChanged(entry, null);
+    await c.refresh();
+    await c.refresh();
+    expect(uploads, 0);
+    expect(c.divergences.keys, [entry.savePath]);
+    expect(c.rows.single.status.status, SaveStatus.diverged);
+    final choice = notices.where((n) => n.$1.startsWith('Choix à faire'));
+    expect(choice, hasLength(1));
+    expect(choice.single.$1, contains('Pokémon Noire'));
+
+    // A click on the notification asks the home page to open the dialog.
+    c.openPendingDivergence();
+    expect(c.promptDivergence, entry.savePath);
+  });
 }

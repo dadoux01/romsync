@@ -16,6 +16,15 @@ class GameRow {
   final String? error;
 }
 
+/// Thrown by [AppController.launch] when the local save diverges from the
+/// server's: ask the user, then launch again with the choice.
+class DivergenceException implements Exception {
+  DivergenceException(this.divergence);
+  final Divergence divergence;
+  @override
+  String toString() => 'Deux appareils ont joué sans se synchroniser.';
+}
+
 /// Thrown when pairing needs the user's consent to store the token in a file.
 class KeyringUnavailableException implements Exception {
   @override
@@ -69,6 +78,14 @@ class AppController extends ChangeNotifier {
 
   /// Shows a desktop notification (set by the desktop shell).
   void Function(String title, String body)? onNotice;
+
+  /// Divergences waiting for the user's choice, by save path: automatic
+  /// uploads held back (docs/SPEC.md, "Divergence").
+  Map<String, Divergence> divergences = {};
+
+  /// Save path whose divergence dialog should open (a notification was
+  /// clicked); the home page shows it and clears it.
+  String? promptDivergence;
 
   /// Saves watched while the app sits in the tray (games launched without
   /// RomSync); null until paired.
@@ -135,7 +152,36 @@ class AppController extends ChangeNotifier {
   void _onEvent(SyncEvent e) {
     events.insert(0, e);
     if (events.length > 50) events.removeLast();
+    // An automatic upload was held back: refresh to show and announce it.
+    if (e.kind == SyncEventKind.needsChoice) unawaited(refresh());
     notifyListeners();
+  }
+
+  /// Opens the divergence dialog of the first waiting save (a "choix à
+  /// faire" notification was clicked).
+  void openPendingDivergence() {
+    if (divergences.isEmpty) return;
+    promptDivergence = divergences.keys.first;
+    notifyListeners();
+  }
+
+  /// The library entry of a divergence, if the ROM is still there.
+  LibraryEntry? entryFor(Divergence d) =>
+      rows.where((r) => r.entry.savePath == d.savePath && r.entry.gameId == d.gameId).firstOrNull?.entry;
+
+  /// Applies the user's [choice] to a divergence found outside a launch.
+  /// "server" downloads the server's save: refused while that game runs
+  /// from RomSync, since the emulator would overwrite it.
+  Future<PrepareResult> resolveDivergence(LibraryEntry entry, DivergenceChoice choice) async {
+    final e = engine;
+    if (e == null) throw SyncException('Appareil non appairé.');
+    if (choice == DivergenceChoice.server && _runningSave == entry.savePath) {
+      throw SyncException('Ferme d’abord le jeu en cours : RomSync téléchargera ensuite la save du serveur.');
+    }
+    final remote = rows.where((r) => r.entry.key == entry.key).firstOrNull?.remote;
+    final r = await e.prepare(entry, chipSize: remote?.chipSize, choice: choice);
+    await refresh();
+    return r;
   }
 
   Future<void> _saveConfig() => config.save(paths.configFile);
@@ -301,6 +347,9 @@ class AppController extends ChangeNotifier {
     Map<String, RemoteGame> remote = {};
     if (e != null && a != null) {
       final flush = await e.flushQueue();
+      if (!flush.offline && !flush.unauthorized) {
+        divergences = {for (final d in flush.held) d.savePath: d};
+      }
       if (flush.unauthorized) {
         unauthorizedMessage = 'Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.';
       }
@@ -340,6 +389,7 @@ class AppController extends ChangeNotifier {
             remote: remote[entry.gameId],
             queued: queued,
             online: e != null && online,
+            held: queue.forSave(entry.savePath).any((u) => u.held),
           ),
         ),
       );
@@ -352,12 +402,24 @@ class AppController extends ChangeNotifier {
     for (final n in downloadNotices([for (final r in out) (r.entry, r.status, r.remote)], _notified)) {
       onNotice?.call('Nouvelle save : ${n.title}', n.message);
     }
+    // Held uploads: announce each divergence once.
+    for (final d in divergences.values) {
+      if (!_notified.add('diverged#${d.savePath}#${d.server.id}')) continue;
+      final title =
+          remote[d.gameId]?.title ?? out.where((r) => r.entry.savePath == d.savePath).firstOrNull?.entry.title;
+      onNotice?.call(
+        'Choix à faire pour ${title ?? d.gameId}',
+        'Deux appareils ont joué sans se synchroniser : rien n’a été envoyé. Ouvre RomSync pour choisir la save à garder.',
+      );
+    }
     notifyListeners();
   }
 
   /// Syncs, launches the game, watches its save and syncs at exit. Returns
-  /// messages to show (offline warning, backup…).
-  Future<List<String>> launch(LibraryEntry entry) async {
+  /// messages to show (offline warning, backup…). Throws
+  /// [DivergenceException] when the user must choose first: launch again
+  /// with the [choice].
+  Future<List<String>> launch(LibraryEntry entry, {DivergenceChoice? choice}) async {
     final e = engine;
     if (e == null) throw SyncException('Appareil non appairé.');
     if (runningGame != null) throw SyncException('Une partie est déjà en cours : $runningGame.');
@@ -366,7 +428,12 @@ class AppController extends ChangeNotifier {
 
     final messages = <String>[];
     final remote = rows.where((r) => r.entry.key == entry.key).firstOrNull?.remote;
-    final prep = await e.prepare(entry, chipSize: remote?.chipSize);
+    final prep = await e.prepare(entry, chipSize: remote?.chipSize, choice: choice);
+    if (prep.needsChoice) {
+      await refresh();
+      throw DivergenceException(prep.divergence!);
+    }
+    if (choice != null) divergences.remove(entry.savePath);
     if (prep.offline) messages.add(prep.message!);
     if (prep.downloaded) {
       messages.add(
