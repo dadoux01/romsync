@@ -11,6 +11,7 @@ func (s *Server) routes(r chi.Router) {
 	r.Post("/auth/login", s.handle(s.postLogin))
 	r.Post("/invites/{token}/accept", s.handle(s.acceptInvite))
 	r.Post("/pair", s.handle(s.postPair))
+	r.Get("/server", s.handle(s.getServer))
 
 	// Web session or device token.
 	r.Group(func(r chi.Router) {
@@ -21,6 +22,9 @@ func (s *Server) routes(r chi.Router) {
 		r.Get("/games/{code}/versions", s.handle(s.listVersions))
 		r.Post("/games/{code}/versions", s.handle(s.postVersion))
 		r.Get("/versions/{id}/content", s.handle(s.getContent))
+		r.Get("/updates", s.handle(s.getUpdates))
+		r.Get("/updates/{platform}", s.handle(s.getPlatformUpdate))
+		r.Get("/updates/files/{version}/{name}", s.handle(s.getUpdateFile))
 	})
 
 	// Web session only.

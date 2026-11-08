@@ -20,6 +20,24 @@ func TestLoadDefaults(t *testing.T) {
 	if len(c.TrustedProxies) != 0 {
 		t.Fatalf("trusted proxies must be empty by default")
 	}
+	if !c.Updates || c.UpdateRepo != "dadoux01/romsync" || c.GitHubToken != "" || c.UpdateInterval != 6*time.Hour {
+		t.Fatalf("unexpected update defaults: %+v", c)
+	}
+}
+
+func TestLoadUpdateSettings(t *testing.T) {
+	c, err := Load(env(map[string]string{
+		"ROMSYNC_UPDATES":         "off",
+		"ROMSYNC_UPDATE_REPO":     "someone/romsync-fork",
+		"ROMSYNC_GITHUB_TOKEN":    " ghp_example ",
+		"ROMSYNC_UPDATE_INTERVAL": "1h",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Updates || c.UpdateRepo != "someone/romsync-fork" || c.GitHubToken != "ghp_example" || c.UpdateInterval != time.Hour {
+		t.Fatalf("unexpected update settings: %+v", c)
+	}
 }
 
 func TestLoadValues(t *testing.T) {
@@ -48,6 +66,11 @@ func TestLoadErrors(t *testing.T) {
 		{"ROMSYNC_MAX_UPLOAD": "-1"},
 		{"ROMSYNC_TRUSTED_PROXIES": "not-an-ip"},
 		{"ROMSYNC_RETENTION_INTERVAL": "10s"},
+		{"ROMSYNC_UPDATES": "maybe"},
+		{"ROMSYNC_UPDATE_REPO": "no-slash"},
+		{"ROMSYNC_UPDATE_REPO": "a/b/c"},
+		{"ROMSYNC_UPDATE_REPO": "../x"},
+		{"ROMSYNC_UPDATE_INTERVAL": "1m"},
 	} {
 		if _, err := Load(env(tc)); err == nil {
 			t.Errorf("expected an error for %v", tc)

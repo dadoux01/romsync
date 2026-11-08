@@ -14,6 +14,7 @@ import (
 	"github.com/dadoux01/romsync/server/internal/auth"
 	"github.com/dadoux01/romsync/server/internal/blobs"
 	"github.com/dadoux01/romsync/server/internal/config"
+	"github.com/dadoux01/romsync/server/internal/updates"
 )
 
 // Server holds the dependencies of the API handlers.
@@ -21,6 +22,8 @@ type Server struct {
 	db      *sql.DB
 	blobs   *blobs.Store
 	cfg     config.Config
+	version string
+	updates *updates.Relay // nil when the relay is disabled
 	now     func() time.Time
 	limiter *rateLimiter
 
@@ -34,6 +37,10 @@ type Options struct {
 	DB     *sql.DB
 	Blobs  *blobs.Store
 	Config config.Config
+	// Version is the server's version ("dev" for a local build).
+	Version string
+	// Updates relays the releases to the clients; nil disables it.
+	Updates *updates.Relay
 	// Now overrides the clock (tests); time.Now when nil.
 	Now func() time.Time
 	// PasswordParams overrides the Argon2id cost (tests); auth.DefaultParams when zero.
@@ -46,6 +53,10 @@ func New(o Options) *Server {
 	if now == nil {
 		now = time.Now
 	}
+	version := o.Version
+	if version == "" {
+		version = "dev"
+	}
 	pw := o.PasswordParams
 	if pw == (auth.Argon2Params{}) {
 		pw = auth.DefaultParams
@@ -54,6 +65,8 @@ func New(o Options) *Server {
 		db:       o.DB,
 		blobs:    o.Blobs,
 		cfg:      o.Config,
+		version:  version,
+		updates:  o.Updates,
 		now:      now,
 		limiter:  newRateLimiter(5, time.Minute),
 		pwParams: pw,

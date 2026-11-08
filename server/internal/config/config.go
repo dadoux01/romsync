@@ -22,6 +22,14 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 	// RetentionInterval is the period of the retention job.
 	RetentionInterval time.Duration
+	// Updates enables the update relay (ROMSYNC_UPDATES=off disables it).
+	Updates bool
+	// UpdateRepo is the GitHub repository whose releases are relayed.
+	UpdateRepo string
+	// GitHubToken is optional: only needed for a private repository.
+	GitHubToken string
+	// UpdateInterval is the period of the release check.
+	UpdateInterval time.Duration
 }
 
 // Defaults returns the configuration used when no variable is set.
@@ -31,6 +39,9 @@ func Defaults() Config {
 		DataDir:           "/data",
 		MaxUpload:         16 << 20,
 		RetentionInterval: time.Hour,
+		Updates:           true,
+		UpdateRepo:        "dadoux01/romsync",
+		UpdateInterval:    6 * time.Hour,
 	}
 }
 
@@ -74,7 +85,42 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		c.RetentionInterval = d
 	}
+	switch strings.ToLower(getenv("ROMSYNC_UPDATES")) {
+	case "", "on", "true", "1":
+	case "off", "false", "0":
+		c.Updates = false
+	default:
+		return c, fmt.Errorf("ROMSYNC_UPDATES: expected on or off, got %q", getenv("ROMSYNC_UPDATES"))
+	}
+	if v := strings.TrimSpace(getenv("ROMSYNC_UPDATE_REPO")); v != "" {
+		owner, name, ok := strings.Cut(v, "/")
+		if !ok || !validRepoPart(owner) || !validRepoPart(name) {
+			return c, fmt.Errorf("ROMSYNC_UPDATE_REPO: expected owner/name, got %q", v)
+		}
+		c.UpdateRepo = v
+	}
+	c.GitHubToken = strings.TrimSpace(getenv("ROMSYNC_GITHUB_TOKEN"))
+	if v := getenv("ROMSYNC_UPDATE_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 10*time.Minute {
+			return c, fmt.Errorf("ROMSYNC_UPDATE_INTERVAL: invalid duration %q (minimum 10m)", v)
+		}
+		c.UpdateInterval = d
+	}
 	return c, nil
+}
+
+// validRepoPart accepts a GitHub owner or repository name.
+func validRepoPart(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // ParsePrefixes parses a comma-separated list of IP addresses or CIDR networks.

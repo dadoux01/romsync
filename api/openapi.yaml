@@ -28,6 +28,8 @@ tags:
     description: Games and their active version
   - name: versions
     description: Save upload, history, restore and export
+  - name: updates
+    description: Server version, compatibility and the relay of signed releases
 
 paths:
   /setup:
@@ -707,6 +709,117 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /server:
+    get:
+      tags: [updates]
+      operationId: getServer
+      summary: Server version and compatibility level
+      description: >-
+        Lets a client check that the server has the features it needs
+        (`api_level`, see docs/SPEC.md "Compatibilité") and that it is not too
+        old for the server (`min_client_version`). A server without this route
+        (before 0.5.0) counts as level 1.
+      security: []
+      responses:
+        "200":
+          description: Server information
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, api_level, min_client_version, updates]
+                properties:
+                  version: { type: string, description: '"0.5.0", or "dev" for a local build' }
+                  api_level: { type: integer, minimum: 1 }
+                  min_client_version: { type: string }
+                  updates: { type: boolean, description: The update relay is enabled }
+
+  /updates:
+    get:
+      tags: [updates]
+      operationId: getUpdates
+      summary: Latest release known by the relay (website banner)
+      security: [{ session: [] }, { device: [] }]
+      responses:
+        "200":
+          description: Latest final release
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [server_version, latest, checked_at]
+                properties:
+                  server_version: { type: string }
+                  latest:
+                    type: object
+                    required: [version, notes, published_at, url]
+                    properties:
+                      version: { type: string }
+                      notes: { type: string, description: Release notes (Markdown) }
+                      published_at: { type: string, format: date-time }
+                      url: { type: string, description: Page of the release }
+                  checked_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/UpdatesUnavailable" }
+
+  /updates/{platform}:
+    get:
+      tags: [updates]
+      operationId: getPlatformUpdate
+      summary: Latest client of a platform, with the signed checksums
+      description: >-
+        The client compares the version with its own (never downgrades),
+        downloads the three files, verifies the Ed25519 signature of
+        SHA256SUMS with its built-in key, then the SHA-256 of the file.
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema: { type: string, enum: [linux-x64, linux-arm64, macos, windows-x64, 3ds] }
+      responses:
+        "200":
+          description: Latest client
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, notes, published_at, file, sums, signature]
+                properties:
+                  version: { type: string }
+                  notes: { type: string }
+                  published_at: { type: string, format: date-time }
+                  file: { $ref: "#/components/schemas/UpdateFile" }
+                  sums: { $ref: "#/components/schemas/UpdateFile" }
+                  signature: { $ref: "#/components/schemas/UpdateFile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/UpdatesUnavailable" }
+
+  /updates/files/{version}/{name}:
+    get:
+      tags: [updates]
+      operationId: getUpdateFile
+      summary: A file of the latest release, from the server's cache
+      security: [{ session: [] }, { device: [] }]
+      parameters:
+        - { name: version, in: path, required: true, schema: { type: string } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: File content
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`updates_unavailable`: GitHub could not provide the file"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/UpdatesUnavailable" }
+
 components:
   securitySchemes:
     session:
@@ -736,6 +849,11 @@ components:
       schema: { $ref: "#/components/schemas/GameCode" }
 
   responses:
+    UpdatesUnavailable:
+      description: "`updates_unavailable`: relay disabled (ROMSYNC_UPDATES=off) or no release known yet"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     InvalidRequest:
       description: "`invalid_request`"
       content:
@@ -781,6 +899,14 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    UpdateFile:
+      type: object
+      required: [name, size, url]
+      properties:
+        name: { type: string }
+        size: { type: integer }
+        url: { type: string, description: "Path on this server: /api/v1/updates/files/{version}/{name}" }
+
     Error:
       type: object
       required: [error]

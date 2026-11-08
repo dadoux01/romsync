@@ -19,6 +19,7 @@ import (
 	"github.com/dadoux01/romsync/server/internal/config"
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/retention"
+	"github.com/dadoux01/romsync/server/internal/updates"
 	"github.com/dadoux01/romsync/server/internal/webui"
 )
 
@@ -78,7 +79,13 @@ func run() error {
 	job := &retention.Job{DB: conn, Blobs: store, BlobDir: filepath.Join(cfg.DataDir, "blobs"), Now: time.Now}
 	go job.Run(ctx, cfg.RetentionInterval)
 
-	srv := api.New(api.Options{DB: conn, Blobs: store, Config: cfg})
+	var relay *updates.Relay
+	if cfg.Updates {
+		relay = updates.NewRelay(cfg.UpdateRepo, cfg.GitHubToken, filepath.Join(cfg.DataDir, "updates"))
+		go relay.Run(ctx, cfg.UpdateInterval)
+	}
+
+	srv := api.New(api.Options{DB: conn, Blobs: store, Config: cfg, Version: version, Updates: relay})
 	httpSrv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           srv.Handler(webui.Handler()),
@@ -87,7 +94,8 @@ func run() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		slog.Info("listening", "version", version, "port", cfg.Port, "data_dir", cfg.DataDir)
+		slog.Info("listening", "version", version, "port", cfg.Port, "data_dir", cfg.DataDir,
+			"updates", cfg.Updates, "update_repo", cfg.UpdateRepo)
 		errc <- httpSrv.ListenAndServe()
 	}()
 
