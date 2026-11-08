@@ -80,6 +80,7 @@ Les identifiants (`id`) sont des entiers ; les dates sont stockées et échangé
 - Les calculs se font sur `saved_at` (après correction d'horloge, voir « Protocole de synchronisation »).
 - Ne supprime jamais la version active ni une version épinglée (`pinned`) : l'ensemble conservé est celui que désigne le mode, auquel s'ajoutent toujours la version active et les versions épinglées.
 - Appliquée par une tâche périodique du serveur, pas au moment de l'envoi (intervalle réglable, 1 heure par défaut). Les blobs qui ne sont plus référencés sont supprimés dans la même passe.
+- Une version peut aussi être supprimée à la main depuis le site (bouton « Supprimer » de l'historique), avec les mêmes protections : jamais la version active ni une version épinglée. Son fichier part à la passe suivante s'il n'est plus référencé. Les versions qui la désignaient comme `base_version_id` gardent cet identifiant.
 
 ## Identification des jeux
 
@@ -304,6 +305,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | GET | `/versions/{id}/content` | session ou jeton | Télécharge le contenu brut |
 | POST | `/versions/{id}/activate` | session | Fait d'une ancienne version la version active |
 | PATCH | `/versions/{id}` | session | Épingle ou annote une version |
+| DELETE | `/versions/{id}` | session | Supprime une version de l'historique (refusé, 409 `conflict`, pour la version active ou une version épinglée) |
 | GET | `/versions/{id}/export?profile=desmume` | session | Export converti, pour l'import/export manuel |
 
 **Envoi d'une save** — `POST /games/{code}/versions`

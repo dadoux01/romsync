@@ -562,6 +562,35 @@ func (s *Server) activateVersion(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// DELETE /versions/{id}
+//
+// Removes a version from the history. The active version and pinned
+// versions are protected, as in the retention policy. The blob is removed by
+// the next retention pass when no version references it any more: deleting
+// it here could race with an upload of the same content.
+func (s *Server) deleteVersion(w http.ResponseWriter, r *http.Request) error {
+	v, _, err := s.versionParam(r)
+	if err != nil {
+		return err
+	}
+	if v.IsActive {
+		return errConflict("the active version cannot be deleted: restore another version first")
+	}
+	if v.Pinned {
+		return errConflict("a pinned version cannot be deleted: unpin it first")
+	}
+	// The condition re-checks the protections in case of a concurrent change.
+	res, err := s.db.ExecContext(r.Context(), `DELETE FROM save_versions WHERE id = ? AND is_active = 0 AND pinned = 0`, v.ID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return errConflict("the version became active or pinned in the meantime")
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
 const maxNoteLen = 500
 
 // PATCH /versions/{id}

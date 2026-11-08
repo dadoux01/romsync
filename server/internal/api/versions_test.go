@@ -376,3 +376,45 @@ func TestDeduplicatedBlobs(t *testing.T) {
 		t.Fatalf("expected 1 distinct blob, got %d (%v)", n, err)
 	}
 }
+
+func TestDeleteVersion(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	dev, _ := e.pairDevice(admin, "PC")
+	t0 := e.clock.Now().Add(-time.Hour)
+
+	var ids []int64
+	var base int64
+	for i := 0; i < 3; i++ {
+		v := dev.uploadOK(upload{code: "IRBF", data: save(byte(i + 1)), savedAt: t0.Add(time.Duration(i) * time.Minute), base: base}, 201).Version
+		ids = append(ids, v.ID)
+		base = v.ID
+	}
+	path := func(id int64) string { return fmt.Sprintf("/api/v1/versions/%d", id) }
+
+	// Web session only; the active and pinned versions are protected.
+	expectErr(t, dev.delete(path(ids[0])), 403, "forbidden")
+	expectErr(t, admin.delete(path(ids[2])), 409, "conflict")
+	expect(t, admin.patch(path(ids[0]), map[string]any{"pinned": true}), 200)
+	expectErr(t, admin.delete(path(ids[0])), 409, "conflict")
+
+	// An old version: gone from the history, the others are untouched (the
+	// next one still names it as its base).
+	expect(t, admin.delete(path(ids[1])), 204)
+	expectErr(t, admin.delete(path(ids[1])), 404, "not_found")
+	var page struct{ Versions []versionJSON }
+	admin.get("/api/v1/games/IRBF/versions").json(t, &page)
+	if len(page.Versions) != 2 || page.Versions[0].ID != ids[2] || page.Versions[1].ID != ids[0] {
+		t.Fatalf("unexpected history %+v", page.Versions)
+	}
+	if b := page.Versions[0].BaseVersionID; b == nil || *b != ids[1] {
+		t.Fatalf("base of the next version changed: %v", b)
+	}
+	if got := dev.active("IRBF"); got.ID != ids[2] {
+		t.Fatalf("active is %d, want %d", got.ID, ids[2])
+	}
+
+	// Another account cannot delete it.
+	other := e.newUser(admin, "bob")
+	expectErr(t, other.delete(path(ids[0])), 404, "not_found")
+}

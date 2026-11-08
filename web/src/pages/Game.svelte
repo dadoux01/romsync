@@ -58,6 +58,11 @@
     run(() => api.activate(v.id));
   }
 
+  function remove(v: Version) {
+    if (!confirm(`Supprimer définitivement la version du ${formatDate(v.saved_at)} ? Elle disparaîtra de l’historique et ne pourra plus être restaurée.`)) return;
+    run(() => api.deleteVersion(v.id));
+  }
+
   function editNote(v: Version) {
     const note = prompt('Note pour cette version :', v.note);
     if (note !== null) run(() => api.updateVersion(v.id, { note }));
@@ -172,6 +177,15 @@
                 <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
                 <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
                 <a class="button" href={api.exportURL(v.id, 'flashcard')} download title="Complétée avec 0xFF jusqu’à 512 Kio au moins, jamais coupée (format à vérifier selon la flashcard)">flashcard</a>
+                {#if !v.is_active && !v.pinned}
+                  <button class="danger" onclick={() => remove(v)}>Supprimer</button>
+                {:else}
+                  <button
+                    class="danger"
+                    disabled
+                    title={v.is_active ? 'La version active ne peut pas être supprimée : restaure d’abord une autre version.' : 'Désépingle-la d’abord pour pouvoir la supprimer.'}
+                  >Supprimer</button>
+                {/if}
               </div>
             </td>
           </tr>

@@ -167,6 +167,7 @@ export const api = {
   activate: (id: number) => request<{ version: Version }>('POST', `/versions/${id}/activate`).then((r) => r.version),
   updateVersion: (id: number, patch: { pinned?: boolean; note?: string }) =>
     request<{ version: Version }>('PATCH', `/versions/${id}`, { json: patch }).then((r) => r.version),
+  deleteVersion: (id: number) => request<void>('DELETE', `/versions/${id}`),
 
   /** Uploads a save file from the web interface. */
   async upload(opts: {

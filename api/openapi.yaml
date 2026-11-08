@@ -643,6 +643,23 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [versions]
+      operationId: deleteVersion
+      summary: Delete a version from the history
+      description: >-
+        The active version and pinned versions cannot be deleted (409
+        `conflict`). The stored file is removed by the next retention pass
+        when no other version references it.
+      security: [{ session: [] }]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204": { description: Version deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /versions/{id}/export:
     get:
