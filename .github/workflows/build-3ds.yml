@@ -27,9 +27,12 @@ jobs:
   build:
     name: 3DS homebrew
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm:latest
+    # Pinned by digest (tag 20260610). Dependabot does not update container
+    # images of workflows: bump it by hand (skopeo inspect --raw
+    # docker://docker.io/devkitpro/devkitarm:<tag> | sha256sum).
+    container: docker.io/devkitpro/devkitarm:20260610@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: makerom and bannertool
         run: |
@@ -46,20 +49,24 @@ jobs:
 
       - name: Build
         working-directory: 3ds
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          version="${{ inputs.version }}"
+          version="$VERSION"
           [ "$version" = ci ] && version=0.0.0
           make VERSION="$version" cia
           ls -la romsync.3dsx romsync.cia
 
       - name: Package
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           mkdir -p dist
-          cp 3ds/romsync.3dsx "dist/romsync-${{ inputs.version }}-3ds.3dsx"
-          cp 3ds/romsync.cia "dist/romsync-${{ inputs.version }}-3ds.cia"
+          cp 3ds/romsync.3dsx "dist/romsync-$VERSION-3ds.3dsx"
+          cp 3ds/romsync.cia "dist/romsync-$VERSION-3ds.cia"
           ls -la dist
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: romsync-3ds
           path: dist/*

@@ -1,8 +1,12 @@
 # Publishes a release when a v* tag is pushed (e.g. v0.3.0):
 # - a GitHub Release with the clients (Linux x64/arm64 tar.gz, macOS zip,
-#   Windows zip) and the 3DS homebrew (.3dsx and .cia);
+#   Windows zip), the 3DS homebrew (.3dsx and .cia), SHA256SUMS and its
+#   Ed25519 signature SHA256SUMS.sig (see docs/releasing.md);
 # - the server image on ghcr.io (linux/amd64 and linux/arm64), tagged with
 #   the exact version (0.3.0), the minor version (0.3) and latest.
+#
+# The signing key is only available to the "sign" job, through the
+# "release" environment, which only accepts v* tags.
 name: Release
 
 on:
@@ -23,6 +27,11 @@ jobs:
       - id: v
         run: |
           version="${GITHUB_REF_NAME#v}"
+          # A strict format: the version ends up in file names and scripts.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::invalid version tag: $GITHUB_REF_NAME"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi >> "$GITHUB_OUTPUT"
 
@@ -48,15 +57,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/romsync
           # 0.3.0, 0.3 and, for final releases only, latest.
@@ -65,7 +74,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
           flavor: |
             latest=${{ needs.version.outputs.prerelease == 'false' }}
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: deploy/Dockerfile
@@ -77,26 +86,98 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  release:
-    name: GitHub Release
-    needs: [version, client, homebrew-3ds, image]
+  # Signs SHA256SUMS. Only GitHub's own actions and openssl run here: this
+  # is the only job that sees RELEASE_SIGNING_KEY.
+  sign:
+    name: Sign
+    needs: [client, homebrew-3ds]
     runs-on: ubuntu-latest
+    environment: release
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: keys
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: romsync-*
           path: dist
           merge-multiple: true
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/release.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          # The key must match the public key built into the apps.
+          actual=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64)
+          expected=$(tr -d '[:space:]' < keys/release-ed25519.pub)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::RELEASE_SIGNING_KEY does not match keys/release-ed25519.pub"
+            exit 1
+          fi
+          openssl pkeyutl -sign -inkey "$key" -rawin -in dist/SHA256SUMS -out "$RUNNER_TEMP/sig.bin"
+          base64 -w0 "$RUNNER_TEMP/sig.bin" > dist/SHA256SUMS.sig
+          echo >> dist/SHA256SUMS.sig
+      - name: Verify with the public key
+        run: |
+          # SubjectPublicKeyInfo of an Ed25519 key: fixed prefix + 32 bytes.
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d keys/release-ed25519.pub; } > "$RUNNER_TEMP/pub.der"
+          openssl pkey -pubin -inform DER -in "$RUNNER_TEMP/pub.der" -out "$RUNNER_TEMP/pub.pem"
+          base64 -d dist/SHA256SUMS.sig > "$RUNNER_TEMP/sig.bin"
+          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/pub.pem" -rawin -in dist/SHA256SUMS -sigfile "$RUNNER_TEMP/sig.bin"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signature
+          path: |
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: [version, client, homebrew-3ds, image, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: romsync-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signature
+          path: dist
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
+          # The update order first, then GitHub's generated notes.
+          {
+            echo '## Updating'
+            echo
+            echo 'Update the **server first** (pull the new image, e.g. with Dockge), then the clients'
+            echo '(PC app, 3DS homebrew). A client newer than its server says so instead of relying on'
+            echo 'features the server does not have yet.'
+            echo
+            echo '`SHA256SUMS` is signed with the release key (`SHA256SUMS.sig`, Ed25519, see'
+            echo '`docs/releasing.md`).'
+            echo
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$GITHUB_REF_NAME" --jq .body
+          } > notes.md
+          flags=()
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "RomSync ${{ needs.version.outputs.version }}" \
-            --generate-notes \
-            ${{ needs.version.outputs.prerelease == 'true' && '--prerelease' || '' }}
+            --title "RomSync $VERSION" \
+            --notes-file notes.md \
+            "${flags[@]}"

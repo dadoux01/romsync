@@ -45,6 +45,7 @@ client/app/              Flutter : interface seulement (Linux, macOS, Windows)
 profiles/*.json          profils de conversion partagés (copiés dans l'appli
                          par client/tool/sync_profiles.sh)
 api/openapi.yaml         spécification de l'API
+keys/release-ed25519.pub clé publique de signature des releases (docs/releasing.md)
 deploy/                  Dockerfile (compilation croisée amd64/arm64), compose
 .github/workflows/       ci.yml, build-client.yml et build-3ds.yml (réutilisables),
                          release.yml

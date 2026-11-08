@@ -1,0 +1,15 @@
+# Keeps the GitHub Actions of the workflows up to date. They are pinned by
+# commit SHA with the version in a comment; Dependabot updates both.
+# The devkitARM container image (build-3ds.yml) is pinned by digest and
+# updated by hand: Dependabot does not handle workflow container images.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci

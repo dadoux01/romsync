@@ -104,6 +104,15 @@ content of the save chip (see [`profiles/README.md`](profiles/README.md)):
   `build(deploy): …`, `refactor: …`.
 - Keep each commit focused and with tests passing.
 - CI must be green: lint, tests, web build, OpenAPI lint and Docker build.
+- GitHub Actions are pinned by commit SHA (Dependabot keeps them up to date);
+  never interpolate `${{ … }}` values that come from inputs or events inside
+  `run:` scripts, pass them through `env:`.
+
+## Releases
+
+Releases are published from `v*` tags; `SHA256SUMS` is signed with the
+release key. The steps, the signing key and the repository protections are
+described (in French) in [`docs/releasing.md`](docs/releasing.md).
 
 ## License
 
