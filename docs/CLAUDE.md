@@ -2,7 +2,7 @@
 
 Synchronisation auto-hébergée des saves Nintendo DS : un serveur Go, un site
 Svelte embarqué dans le binaire, un client Flutter (Linux, macOS, Windows),
-puis Android et un homebrew 3DS. Les phases 1 à 3 de la roadmap sont livrées.
+puis un homebrew 3DS. Les phases 1 à 3 de la roadmap sont livrées.
 
 ## Référence
 
@@ -115,5 +115,6 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 ## En attente
 
 - Profil flashcard : `to_verify` jusqu'au test sur DSTT.
-- Phases suivantes : 4 (Android : DraStic, melonDS Android, sélecteur de
-  dossiers), 5 (homebrew 3DS).
+- Phases suivantes : 4 (homebrew 3DS), 5 (Android, en attente d'un testeur :
+  l'utilisateur n'a pas de téléphone Android, recherches dans
+  `docs/research/android.md`), 6 (iOS, à étudier, rien n'est codé).

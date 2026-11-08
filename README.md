@@ -11,7 +11,8 @@ stays in the history and can be restored, within a retention policy you choose.
 > **Status:** phase 3 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
 > the server, the web interface and the **desktop client** for Linux (x86-64
 > and ARM64), macOS and Windows, with melonDS, DeSmuME and RetroArch
-> (melonDS DS), are usable. Android and the 3DS homebrew come next.
+> (melonDS DS), are usable. The 3DS homebrew comes next; Android waits for a tester
+> (see `docs/research/android.md`) and iOS is still being studied.
 
 ## Features
 

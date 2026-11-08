@@ -141,7 +141,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | melonDS (standalone) | `<rom>.sav` à côté de la ROM ou dans le dossier configuré | Aucune (brut) | Confirmé |
 | DeSmuME | `<rom>.dsv` dans son dossier Battery (détail ci-dessous) | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
 | melonDS DS (RetroArch) | `<rom>.srm` dans le dossier des saves de RetroArch (détail ci-dessous) | Aucune : tampon SRAM brut (`retro_get_memory_data`, `src/libretro/sram.cpp` de melonds-ds) | Confirmé par un aller-retour réel sous Windows (progression identique dans melonDS) |
-| DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
+| DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Brut, ou brut suivi du pied DeSmuME (sources contradictoires, voir `docs/research/android.md`) | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF jusqu'à max(512 Kio, `chip_size`), jamais coupé (profil `flashcard`) | À vérifier par modèle |
 
@@ -389,8 +389,13 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
 1. Serveur + site : comptes, invitations, versions, rétention, import/export manuel. Utilisable seul avec la DSTT.
 2. Appli Flutter sur Linux : bibliothèque, lanceur melonDS, synchro complète. Premier usage réel sur Fedora.
 3. Profils DeSmuME et melonDS DS ; builds macOS (Asahi : Linux ARM64) et Windows ; icône de barre système ; publication des versions (GitHub Releases, image `ghcr.io`).
-4. Android : DraStic, melonDS Android, accès aux dossiers via le sélecteur système.
-5. Homebrew 3DS : synchro au démarrage, puis lancement via nds-bootstrap.
+4. Homebrew 3DS : synchro au démarrage, puis lancement via nds-bootstrap.
+5. Android (en attente d'un testeur) : DraStic, melonDS Android, RetroArch avec melonDS DS, accès aux dossiers via le sélecteur système. Recherches déjà faites (ce qui est vérifié, ce qui reste incertain, sources) : `docs/research/android.md`.
+6. iOS (à étudier, rien n'est codé) :
+   - RetroArch iOS : son dossier est visible dans l'appli Fichiers ; à vérifier : emplacement des `.srm` et accès depuis une autre appli.
+   - Delta : ses saves ne sont pas accessibles depuis une autre appli ; seulement l'import/export manuel d'une save par jeu, avec le site de RomSync.
+   - Automatisation via Raccourcis : lire une save dans Fichiers et l'envoyer à l'API, ou télécharger la version active, sans appli à installer.
+   - Installation d'une appli : compte développeur Apple payant, ou AltStore et identifiant Apple gratuit (signature à renouveler tous les 7 jours).
 
 **Questions ouvertes**
 
