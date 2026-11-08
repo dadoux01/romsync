@@ -74,6 +74,15 @@
     editingTitle = false;
   }
 
+  // Where a divergent version started from: the version its device had
+  // last synced (base_version_id), to see what happened at a glance.
+  function baseLabel(v: Version): string {
+    if (v.base_version_id === null) return 'ne partait d’aucune version (premier envoi de cet appareil pour ce jeu)';
+    const base = versions.find((x) => x.id === v.base_version_id);
+    if (!base) return `partait de la version n° ${v.base_version_id}, absente de l’historique affiché (supprimée ou plus ancienne)`;
+    return `partait de la version du ${formatDate(base.saved_at)} (${base.device_name ?? 'site web'})`;
+  }
+
   // "Conflit résolu automatiquement": the latest upload diverged. The other
   // candidate is that upload when it lost, or the most recent other version
   // when it won.
@@ -122,7 +131,7 @@
       <span>
         La save envoyée le {formatDate(conflict.latest.uploaded_at)}
         {conflict.latest.device_name ? `par ${conflict.latest.device_name}` : 'depuis le site'} ne partait pas de la version active.
-        La save faite le plus récemment est restée active ; l’autre est conservée dans l’historique.
+        {conflict.latest.is_active ? 'C’est elle qui est active' : 'Elle n’est pas active'} ; l’autre version est conservée dans l’historique.
       </span>
       {#if conflict.other && !conflict.other.is_active}
         <div><button onclick={() => activate(conflict.other!)}>Activer l’autre version ({formatDate(conflict.other.saved_at)})</button></div>
@@ -166,6 +175,7 @@
                 {#if v.conflict}<span class="badge warn" title="Envoyée sans partir de la version active">divergente</span>{/if}
                 {#if v.pinned}<span class="badge">épinglée</span>{/if}
               </div>
+              {#if v.conflict}<div class="muted small">{baseLabel(v)}</div>{/if}
             </td>
             <td>
               <div class="row">
