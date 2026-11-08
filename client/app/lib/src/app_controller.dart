@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
+
+import 'update_manager.dart';
 
 /// A line of the game list.
 class GameRow {
@@ -43,8 +47,50 @@ class AppController extends ChangeNotifier {
     RomScanner? scanner,
     this.refreshInterval = const Duration(minutes: 1),
     this.environment,
+    UpdateManager Function(AppController)? updates,
   }) : fileStore = fileStore ?? FileTokenStore(paths.tokenFile),
-       scanner = scanner ?? RomScanner();
+       scanner = scanner ?? RomScanner() {
+    this.updates = updates?.call(this) ?? _defaultUpdates();
+  }
+
+  /// Updates of the app (see UpdateManager).
+  late final UpdateManager updates;
+
+  /// Quits the app (set by the desktop shell); exit(0) by default.
+  Future<void> Function()? quitApp;
+
+  UpdateManager _defaultUpdates() => UpdateManager(
+    paths: paths,
+    config: () => config,
+    saveConfig: _saveConfig,
+    api: () => api,
+    blockedReason: updateBlockedReason,
+    onNotice: (t, b) => onNotice?.call(t, b),
+    restart: (target, staged) => installAndRestart(
+      target,
+      staged,
+      quit: () async => quitApp != null ? quitApp!() : exit(0),
+      logFile: p.join(paths.dataDir, 'updater.log'),
+    ),
+  );
+
+  /// Why an update must wait: never during a game nor with pending uploads.
+  String? updateBlockedReason() {
+    if (runningGame != null) {
+      return 'Partie en cours ($runningGame) : la mise à jour s’installera à la fin de la partie.';
+    }
+    if (!queue.isEmpty) {
+      final held = queue.items.where((u) => u.held).length;
+      return '${queue.length} envoi(s) en attente${held > 0 ? ', dont $held en attente de ton choix (divergence)' : ''} : '
+          'la mise à jour s’installera dès qu’ils seront partis.';
+    }
+    return null;
+  }
+
+  /// Compatibility with the server, once it answered (docs/SPEC.md,
+  /// "Compatibilité").
+  Compatibility? compatibility;
+  ServerInfo? serverInfo;
 
   final ClientPaths paths;
   final TokenStore keyring;
@@ -121,13 +167,21 @@ class AppController extends ChangeNotifier {
     }
     _timer = Timer.periodic(refreshInterval, (_) => unawaited(refresh()));
     await rescan();
+    unawaited(updates.start());
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     unawaited(background?.stop());
+    updates.dispose();
     super.dispose();
+  }
+
+  Future<void> setAutoUpdateCheck(bool value) async {
+    config.autoUpdateCheck = value;
+    await _saveConfig();
+    notifyListeners();
   }
 
   Future<void> setKeepInTray(bool value) async {
@@ -138,6 +192,8 @@ class AppController extends ChangeNotifier {
 
   void _connect(String token) {
     unawaited(background?.stop());
+    compatibility = null;
+    serverInfo = null;
     api = RomSyncApi(serverUrl: config.serverUrl!, token: token, client: httpClient);
     engine = SyncEngine(
       api: api!,
@@ -356,6 +412,15 @@ class AppController extends ChangeNotifier {
       try {
         remote = {for (final g in await a.games()) g.code: g};
         online = true;
+        if (compatibility == null) {
+          // Informative only: an unexpected answer must not stop the sync.
+          try {
+            serverInfo = await e.serverInfo();
+            compatibility = checkCompatibility(serverInfo);
+          } on Object catch (err) {
+            debugPrint('server compatibility check failed: $err');
+          }
+        }
       } on ServerUnreachableException {
         online = false;
       } on ApiException catch (err) {
@@ -403,6 +468,7 @@ class AppController extends ChangeNotifier {
       onNotice?.call('Nouvelle save : ${n.title}', n.message);
     }
     // Held uploads: announce each divergence once.
+    unawaited(updates.conditionsChanged());
     for (final d in divergences.values) {
       if (!_notified.add('diverged#${d.savePath}#${d.server.id}')) continue;
       final title =

@@ -8,6 +8,7 @@ import 'history_page.dart';
 import 'issue_tile.dart';
 import 'settings_page.dart';
 import 'status_chip.dart';
+import 'update_widgets.dart';
 
 /// The game list with the state of each save.
 class HomePage extends StatefulWidget {
@@ -164,7 +165,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: controller,
+      listenable: Listenable.merge([controller, controller.updates]),
       builder: (context, _) {
         final c = controller;
         final scheme = Theme.of(context).colorScheme;
@@ -188,6 +189,8 @@ class _HomePageState extends State<HomePage> {
           ),
           body: ListView(
             children: [
+              CompatibilityBanner(controller: c),
+              UpdateBanner(updates: c.updates),
               if (c.unauthorizedMessage != null)
                 MaterialBanner(
                   content: Text(c.unauthorizedMessage!),

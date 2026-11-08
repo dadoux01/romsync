@@ -107,6 +107,8 @@ class ClientConfig {
     this.tokenStorage = TokenStorage.keyring,
     this.keepInTray = true,
     Map<String, RomChoice>? romChoices,
+    this.autoUpdateCheck = true,
+    this.lastUpdateCheck,
   }) : romFolders = romFolders ?? [],
        emulators = emulators ?? {},
        gameEmulators = gameEmulators ?? {},
@@ -141,6 +143,12 @@ class ClientConfig {
   /// Choices for ROMs sharing a game identifier, by ROM key.
   final Map<String, RomChoice> romChoices;
 
+  /// Check for a new version at start and every 24 hours.
+  bool autoUpdateCheck;
+
+  /// Last check for a new version.
+  DateTime? lastUpdateCheck;
+
   bool get isPaired => serverUrl != null && deviceId != null;
 
   Map<String, Object?> toJson() => {
@@ -155,6 +163,8 @@ class ClientConfig {
     'token_storage': tokenStorage.name,
     'keep_in_tray': keepInTray,
     'rom_choices': {for (final e in romChoices.entries) e.key: e.value.toJson()},
+    'auto_update_check': autoUpdateCheck,
+    'last_update_check': lastUpdateCheck?.toUtc().toIso8601String(),
   };
 
   factory ClientConfig.fromJson(Map<String, Object?> j) => ClientConfig(
@@ -180,6 +190,8 @@ class ClientConfig {
       for (final e in ((j['rom_choices'] as Map<String, Object?>?) ?? const {}).entries)
         e.key: RomChoice.fromJson(e.value! as Map<String, Object?>),
     },
+    autoUpdateCheck: (j['auto_update_check'] as bool?) ?? true,
+    lastUpdateCheck: j['last_update_check'] == null ? null : DateTime.tryParse(j['last_update_check']! as String),
   );
 
   static Future<ClientConfig> load(String path) async {

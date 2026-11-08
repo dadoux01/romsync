@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../update_manager.dart';
 import 'emulator_card.dart';
+import 'update_widgets.dart';
 
 /// Server, ROM folders, emulators and backups.
 class SettingsPage extends StatefulWidget {
@@ -20,7 +22,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: c,
+      listenable: Listenable.merge([c, c.updates]),
       builder: (context, _) {
         final text = Theme.of(context).textTheme;
         return Scaffold(
@@ -109,7 +111,39 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const Divider(),
-              Text('RomSync $romsyncClientVersion', style: text.bodySmall),
+              Text('Mises à jour', style: text.titleMedium),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: c.config.autoUpdateCheck,
+                onChanged: c.setAutoUpdateCheck,
+                title: const Text('Rechercher les mises à jour automatiquement'),
+                subtitle: const Text(
+                  'Au démarrage puis toutes les 24 heures, auprès de ton serveur RomSync. Rien n’est installé '
+                  'sans ton accord.',
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('RomSync $romsyncClientVersion'),
+                subtitle: Text(
+                  [
+                    if (c.updates.message != null) c.updates.message!,
+                    if (c.config.lastUpdateCheck != null)
+                      'Dernière vérification : ${c.config.lastUpdateCheck!.toLocal().toString().substring(0, 16)}',
+                  ].join('\n'),
+                ),
+                trailing: c.updates.phase == UpdatePhase.checking
+                    ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : c.updates.phase == UpdatePhase.available
+                    ? FilledButton(
+                        onPressed: () => showUpdateNotes(context, c.updates),
+                        child: const Text('Voir la mise à jour'),
+                      )
+                    : TextButton(
+                        onPressed: () => c.updates.check(manual: true),
+                        child: const Text('Rechercher une mise à jour'),
+                      ),
+              ),
             ],
           ),
         );
