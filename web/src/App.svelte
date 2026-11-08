@@ -13,6 +13,7 @@
   import Settings from './pages/Settings.svelte';
   import Admin from './pages/Admin.svelte';
   import NotFound from './pages/NotFound.svelte';
+  import UpdateBanner from './components/UpdateBanner.svelte';
 
   onMount(loadSession);
 
@@ -68,6 +69,7 @@
     </div>
   </header>
   <main>
+    {#if session.user.role === 'admin'}<UpdateBanner />{/if}
     {#if path === '/'}
       <Games />
     {:else if game}

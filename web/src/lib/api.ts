@@ -164,6 +164,12 @@ export const api = {
       'GET',
       `/games/${enc(code)}/versions?limit=${limit}${before ? `&before=${before}` : ''}`,
     ),
+  /** Latest release known by the server's relay (503 when unknown or disabled). */
+  updates: () =>
+    request<{ server_version: string; latest: { version: string; notes: string; published_at: string; url: string } }>(
+      'GET',
+      '/updates',
+    ),
   activate: (id: number) => request<{ version: Version }>('POST', `/versions/${id}/activate`).then((r) => r.version),
   updateVersion: (id: number, patch: { pinned?: boolean; note?: string }) =>
     request<{ version: Version }>('PATCH', `/versions/${id}`, { json: patch }).then((r) => r.version),

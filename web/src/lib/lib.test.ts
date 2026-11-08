@@ -59,3 +59,17 @@ describe('formatSize', () => {
     expect(formatSize(8 * 1024 * 1024)).toBe('8 Mio');
   });
 });
+
+describe('versions', () => {
+  it('orders releases and pre-releases', async () => {
+    const { isNewer, parseVersion } = await import('./version');
+    expect(isNewer('0.5.0', '0.4.0')).toBe(true);
+    expect(isNewer('0.5.0', '0.5.0-rc1')).toBe(true);
+    expect(isNewer('0.5.0-rc2', '0.5.0-rc1')).toBe(true);
+    expect(isNewer('0.10.0', '0.9.9')).toBe(true);
+    expect(isNewer('0.4.0', '0.5.0')).toBe(false);
+    expect(isNewer('0.5.0', '0.5.0')).toBe(false);
+    expect(isNewer('0.5.0', 'dev')).toBe(false);
+    expect(parseVersion('1.02.0')).toBeNull();
+  });
+});
