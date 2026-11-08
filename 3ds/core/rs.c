@@ -205,14 +205,18 @@ rs_status rs_read_file(const char *path, rs_buf *out, rs_error *err)
             return rs_fail(err, RS_ERR_NOT_FOUND, "%s introuvable", path);
         return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
     }
+    /* Read straight into the buffer, 16 KiB at a time: a chunk on the stack
+     * would eat the 3DS's small stack. */
     out->len = 0;
-    uint8_t chunk[16 * 1024];
-    size_t n;
-    while ((n = fread(chunk, 1, sizeof chunk, f)) > 0) {
-        if (!rs_buf_append(out, chunk, n)) {
+    for (;;) {
+        if (!reserve(out, 16 * 1024)) {
             fclose(f);
             return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante pour lire %s", path);
         }
+        size_t n = fread(out->data + out->len, 1, out->cap - out->len, f);
+        if (n == 0)
+            break;
+        out->len += n;
     }
     bool failed = ferror(f);
     fclose(f);

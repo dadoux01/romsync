@@ -48,9 +48,10 @@ $(BUILD)/e2e: $(CORE_OBJ) $(BUILD)/tests/e2e.o $(BUILD)/tests/platform_linux.o $
 $(BUILD)/run_tests: $(CORE_OBJ) $(TEST_OBJ) $(CJSON_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CURL_LIBS)
 
+# Same stack limit as the 3DS build for the core (see ../Makefile).
 $(BUILD)/core/%.o: ../core/%.c ../core/*.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CURL_CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -Wstack-usage=4096 $(CURL_CFLAGS) -c -o $@ $<
 
 $(BUILD)/tests/%.o: %.c *.h ../core/*.h
 	@mkdir -p $(dir $@)

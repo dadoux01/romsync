@@ -24,6 +24,15 @@
 #define SOC_BUFFER_SIZE 0x100000
 static u32 *soc_buffer;
 
+/* Stack of the main thread. libctru carves it out of the start of the heap
+ * (system/stack_adjust.s) and gives it 32 KiB by default: too little for
+ * curl and the file helpers, and an overflow writes below 0x08000000,
+ * where nothing is mapped (data abort). 256 KiB leaves plenty of room. */
+u32 __stacksize__ = 256 * 1024;
+
+/* The app state is large (settings, profiles): keep it off the stack. */
+static app a;
+
 static const char *status_color(rs_save_status s, bool error)
 {
     if (error)
@@ -123,7 +132,6 @@ int main(void)
     curl_global_init(CURL_GLOBAL_DEFAULT);
     srand((unsigned)time(NULL));
 
-    app a;
     bool ok = app_init(&a);
     if (ok && !network)
         ui_message("Réseau", "Le service réseau n'a pas démarré : RomSync fonctionnera hors ligne.");

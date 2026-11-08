@@ -38,7 +38,9 @@ VERSION_PARTS := $(subst ., ,$(firstword $(subst -, ,$(VERSION))))
 
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # -Wno-format-truncation: messages and paths are cut on purpose by snprintf.
-CFLAGS  := -g -std=gnu99 -Wall -Wextra -Werror -Wno-format-truncation -O2 -mword-relocations \
+# -Wstack-usage: the main thread's stack is small on the 3DS (see
+# app/main.c); a function with a large frame fails the build.
+CFLAGS  := -g -std=gnu99 -Wall -Wextra -Werror -Wno-format-truncation -Wstack-usage=4096 -O2 -mword-relocations \
            -ffunction-sections $(ARCH)
 CFLAGS  += $(INCLUDE) -D__3DS__ -DCURL_STATICLIB
 ASFLAGS := -g $(ARCH)

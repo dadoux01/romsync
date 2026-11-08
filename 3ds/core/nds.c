@@ -5,6 +5,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "sha.h"
@@ -128,29 +129,33 @@ rs_status rs_rom_identify_header(const char *path, rs_nds_header *header, rs_err
 rs_status rs_rom_identify(const char *path, rs_nds_header *header, char id[RS_GAME_ID_MAX],
                           rs_error *err)
 {
+    rs_status st = rs_rom_identify_header(path, header, err);
+    if (st != RS_OK)
+        return st;
+    if (rs_nds_has_valid_code(header)) {
+        rs_strlcpy(id, header->game_code, RS_GAME_ID_MAX);
+        return RS_OK;
+    }
     FILE *f = fopen(path, "rb");
     if (!f)
         return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
-    uint8_t buf[16 * 1024];
-    size_t n = fread(buf, 1, sizeof buf, f);
-    if (!rs_nds_parse(buf, n, header)) {
+    /* On the heap: the 3DS stack is small. */
+    enum { CHUNK = 16 * 1024 };
+    uint8_t *buf = malloc(CHUNK);
+    if (!buf) {
         fclose(f);
-        return rs_fail(err, RS_ERR_FORMAT, "%s : en-tête de ROM trop court", rs_basename(path));
-    }
-    if (rs_nds_has_valid_code(header)) {
-        fclose(f);
-        rs_strlcpy(id, header->game_code, RS_GAME_ID_MAX);
-        return RS_OK;
+        return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
     }
     /* Homebrew: identify the ROM by the SHA-1 of the whole file, read in
      * chunks so that a large file never sits in memory. */
     rs_sha1 c;
     rs_sha1_init(&c);
-    do {
+    size_t n;
+    while ((n = fread(buf, 1, CHUNK, f)) > 0)
         rs_sha1_update(&c, buf, n);
-    } while ((n = fread(buf, 1, sizeof buf, f)) > 0);
     bool failed = ferror(f);
     fclose(f);
+    free(buf);
     if (failed)
         return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
     uint8_t d[20];
