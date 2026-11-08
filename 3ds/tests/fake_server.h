@@ -50,6 +50,7 @@ typedef struct {
     char refuse_uploads[32];        /* when set, answer 409 with this code */
     int upload_requests;
     rs_time server_now;             /* sent in the Date header when not 0 */
+    int api_level;                  /* GET /server; 0 answers 404 (before 0.5.0) */
     int64_t seq;
 } fake_server;
 

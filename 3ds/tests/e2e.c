@@ -16,6 +16,7 @@
 #include "../core/platform.h"
 #include "../core/sha.h"
 #include "../core/sync.h"
+#include "../core/update.h"
 #include "test.h"
 
 int t_failures = 0;
@@ -337,6 +338,20 @@ static void the_game_list_shows_the_game(void)
     free(games);
 }
 
+static void the_server_is_compatible_and_its_relay_is_off(void)
+{
+    rs_server_info info;
+    bool exists = false;
+    CHECK_INT(rs_api_server(&ds.api, &info, &exists, NULL), RS_OK);
+    CHECK(exists);
+    CHECK(info.api_level >= RS_REQUIRED_API_LEVEL);
+    CHECK_INT(rs_check_compatibility(&info, "0.5.0"), RS_COMPAT_OK);
+    rs_update_info u;
+    CHECK_INT(rs_api_platform_update(&ds.api, "3ds", &u, &exists, NULL), RS_OK);
+    CHECK(!exists); /* the end-to-end server runs with ROMSYNC_UPDATES=off */
+    rs_update_info_free(&u);
+}
+
 static void a_revoked_or_wrong_token_is_refused(void)
 {
     rs_api bad = ds.api;
@@ -369,6 +384,7 @@ int main(int argc, char **argv)
         RUN(a_save_padded_with_zeros_with_the_active_content_is_no_divergence);
         RUN(a_divergence_waits_for_the_choice_then_applies_it);
         RUN(the_game_list_shows_the_game);
+        RUN(the_server_is_compatible_and_its_relay_is_off);
         RUN(a_revoked_or_wrong_token_is_refused);
     }
     free_device(&ds);

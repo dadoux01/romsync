@@ -12,6 +12,7 @@ void fake_init(fake_server *s)
 {
     memset(s, 0, sizeof *s);
     s->online = true;
+    s->api_level = 2;
 }
 
 void fake_free(fake_server *s)
@@ -284,6 +285,16 @@ rs_status fake_send(void *ctx, const rs_http_request *req, rs_http_response *res
         res->status = 200;
         rs_buf_append(&res->body, v->data.data, v->data.len);
         rs_strlcpy(res->content_sha256, v->sha, sizeof res->content_sha256);
+    } else if (strcmp(path, "/server") == 0) {
+        if (!s->api_level) {
+            reply_error(res, 404, "not_found");
+        } else {
+            char json[160];
+            snprintf(json, sizeof json,
+                     "{\"version\":\"0.5.0\",\"api_level\":%d,\"min_client_version\":\"0.4.0\",\"updates\":false}",
+                     s->api_level);
+            reply(res, 200, json);
+        }
     } else if (strcmp(path, "/games") == 0) {
         games(s, res);
     } else if (strcmp(path, "/pair") == 0) {

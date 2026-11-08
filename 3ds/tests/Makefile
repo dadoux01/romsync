@@ -32,6 +32,8 @@ TESTS   := main.c $(filter-out main.c e2e.c,$(wildcard *.c))
 CORE_OBJ  := $(patsubst ../core/%.c,$(BUILD)/core/%.o,$(CORE))
 TEST_OBJ  := $(patsubst %.c,$(BUILD)/tests/%.o,$(TESTS))
 CJSON_OBJ := $(BUILD)/vendor/cJSON.o
+MONO_OBJ  := $(BUILD)/vendor/monocypher.o $(BUILD)/vendor/monocypher-ed25519.o
+VENDOR_OBJ := $(CJSON_OBJ) $(MONO_OBJ)
 
 .PHONY: test e2e clean
 test: $(BUILD)/run_tests
@@ -42,10 +44,10 @@ test: $(BUILD)/run_tests
 e2e: $(BUILD)/e2e
 	./e2e.sh $(BUILD)/e2e
 
-$(BUILD)/e2e: $(CORE_OBJ) $(BUILD)/tests/e2e.o $(BUILD)/tests/platform_linux.o $(CJSON_OBJ)
+$(BUILD)/e2e: $(CORE_OBJ) $(BUILD)/tests/e2e.o $(BUILD)/tests/platform_linux.o $(VENDOR_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CURL_LIBS)
 
-$(BUILD)/run_tests: $(CORE_OBJ) $(TEST_OBJ) $(CJSON_OBJ)
+$(BUILD)/run_tests: $(CORE_OBJ) $(TEST_OBJ) $(VENDOR_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CURL_LIBS)
 
 # Same stack limit as the 3DS build for the core (see ../Makefile).
@@ -59,6 +61,10 @@ $(BUILD)/tests/%.o: %.c *.h ../core/*.h
 
 # Third-party code: same sanitizers, without -Werror.
 $(CJSON_OBJ): ../vendor/cjson/cJSON.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=c99 -g -O1 $(SANITIZE) -c -o $@ $<
+
+$(BUILD)/vendor/%.o: ../vendor/monocypher/%.c ../vendor/monocypher/*.h
 	@mkdir -p $(dir $@)
 	$(CC) -std=c99 -g -O1 $(SANITIZE) -c -o $@ $<
 

@@ -79,6 +79,38 @@ rs_status rs_api_download(rs_api *api, int64_t version_id, rs_buf *out, rs_error
 /* GET /games. *games is malloc'ed (free it). */
 rs_status rs_api_games(rs_api *api, rs_remote_game **games, int *count, rs_error *err);
 
+/* GET /server (docs/SPEC.md, "Compatibilité"). */
+typedef struct {
+    char version[32];
+    int api_level;
+    char min_client_version[32];
+    bool updates; /* the update relay is enabled */
+} rs_server_info;
+
+/* *exists is false for a server older than 0.5.0 (no such route: level 1). */
+rs_status rs_api_server(rs_api *api, rs_server_info *out, bool *exists, rs_error *err);
+
+/* A file of a release relayed by the server. */
+typedef struct {
+    char name[96];
+    int64_t size;
+    char url[256]; /* path on the server: /api/v1/updates/files/... */
+} rs_update_file;
+
+typedef struct {
+    char version[32];
+    char *notes; /* release notes (Markdown), malloc'ed: rs_update_info_free */
+    rs_update_file file, sums, signature;
+} rs_update_info;
+
+/* GET /updates/{platform}. *exists is false when the relay is disabled,
+ * knows no release, or has no file for the platform. */
+rs_status rs_api_platform_update(rs_api *api, const char *platform, rs_update_info *out, bool *exists,
+                                 rs_error *err);
+void rs_update_info_free(rs_update_info *u);
+/* Downloads a relayed file (path as given in rs_update_file.url). */
+rs_status rs_api_get_file(rs_api *api, const char *path, rs_buf *out, rs_error *err);
+
 /* Percent-encodes s like JavaScript's encodeComponent (UTF-8 bytes). */
 void rs_url_encode(const char *s, char *out, size_t size);
 

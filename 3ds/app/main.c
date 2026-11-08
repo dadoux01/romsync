@@ -16,6 +16,7 @@
 #include "../core/twilight.h"
 #include "app.h"
 #include "ui.h"
+#include "updater.h"
 
 #define LIST_ROWS (UI_ROWS - 3)
 
@@ -150,14 +151,18 @@ int main(void)
         ui_message("TWiLight Menu++",
                    "sd:/_nds/TWiLightMenu/ est introuvable : RomSync suppose les réglages par défaut (saves dans "
                    "le dossier saves/ de chaque dossier de ROMs).");
+    bool updated = false;
     if (ok) {
         app_rescan(&a);
         app_sync_all(&a); /* uploads first, then downloads */
+        app_check_compatibility(&a);
+        if (a.config.check_updates)
+            updated = app_check_update(&a, false);
     }
 
     int sel = 0, scroll = 0;
     bool redraw = true;
-    while (ok && aptMainLoop()) {
+    while (ok && !updated && aptMainLoop()) {
         if (redraw) {
             draw_list(&a, sel, scroll);
             draw_details(&a, sel);
@@ -195,7 +200,8 @@ int main(void)
             redraw = true;
         }
         if (k & KEY_SELECT) {
-            app_settings(&a);
+            if (app_settings(&a))
+                break; /* a new version was installed */
             redraw = true;
         }
         if (sel >= a.lib.count)

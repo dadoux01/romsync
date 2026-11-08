@@ -14,6 +14,7 @@
 
 #include "sha.h"
 #include "size_rule.h"
+#include "update.h"
 
 static void emit(const rs_engine *e, rs_event_kind kind, const char *game_id, const char *message)
 {
@@ -396,6 +397,31 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
             if (diverged && choice == RS_CHOICE_NONE) {
                 set_divergence(out, entry, &active);
                 goto done;
+            }
+            if (diverged) {
+                /* The choice relies on X-Activate: never send it to a server
+                 * that would ignore it and apply "most recent wins". */
+                if (!e->server_api_level) {
+                    rs_server_info info;
+                    bool exists;
+                    st = rs_api_server(e->api, &info, &exists, err);
+                    if (st == RS_ERR_OFFLINE) {
+                        st = go_offline(e, entry, &local, out, err);
+                        goto done;
+                    }
+                    if (st != RS_OK)
+                        goto done;
+                    e->server_api_level = exists ? info.api_level : 1;
+                    rs_strlcpy(e->server_version, exists ? info.version : "antérieur à 0.5.0",
+                               sizeof e->server_version);
+                }
+                if (e->server_api_level < RS_REQUIRED_API_LEVEL) {
+                    st = rs_fail(err, RS_ERR_REFUSED,
+                                 "Le serveur RomSync (%s) est trop ancien pour appliquer ce choix : rien n'a été "
+                                 "envoyé ni écrasé. Mets d'abord à jour le serveur, puis recommence.",
+                                 e->server_version);
+                    goto done;
+                }
             }
             rs_upload_mode mode = !diverged                    ? RS_UPLOAD_AUTO
                                   : choice == RS_CHOICE_LOCAL ? RS_UPLOAD_LOCAL

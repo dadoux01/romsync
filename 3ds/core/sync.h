@@ -70,6 +70,10 @@ typedef struct {
     /* Optional: called for each thing the engine does (interface, log). */
     void (*on_event)(void *ctx, rs_event_kind kind, const char *game_id, const char *message);
     void *event_ctx;
+    /* The server's level (GET /server), read once: 0 until then, 1 for a
+     * server older than 0.5.0. */
+    int server_api_level;
+    char server_version[32];
 } rs_engine;
 
 /* The raw content of a local save file. */

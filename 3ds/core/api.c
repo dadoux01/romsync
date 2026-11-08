@@ -318,3 +318,102 @@ void rs_http_response_free(rs_http_response *res)
 {
     rs_buf_free(&res->body);
 }
+
+/* ---- Server and updates ------------------------------------------------ */
+
+rs_status rs_api_server(rs_api *api, rs_server_info *out, bool *exists, rs_error *err)
+{
+    memset(out, 0, sizeof *out);
+    *exists = false;
+    char url[512];
+    api_url(api, "/server", url, sizeof url);
+    rs_http_request req = {.method = "GET", .url = url};
+    rs_http_response res;
+    rs_error local = {0};
+    rs_status st = api_send(api, &req, &res, &local);
+    if (st == RS_ERR_API && local.http_status == 404) {
+        rs_http_response_free(&res);
+        return RS_OK; /* before 0.5.0 */
+    }
+    if (err && st != RS_OK)
+        *err = local;
+    cJSON *j = NULL;
+    if (st == RS_OK)
+        st = json_body(&res, &j, err);
+    if (st == RS_OK) {
+        rs_strlcpy(out->version, rs_json_str(j, "version", ""), sizeof out->version);
+        out->api_level = (int)rs_json_num(j, "api_level", 1);
+        rs_strlcpy(out->min_client_version, rs_json_str(j, "min_client_version", ""), sizeof out->min_client_version);
+        out->updates = rs_json_bool(j, "updates", false);
+        *exists = true;
+    }
+    cJSON_Delete(j);
+    rs_http_response_free(&res);
+    return st;
+}
+
+static void parse_update_file(const cJSON *j, rs_update_file *f)
+{
+    rs_strlcpy(f->name, rs_json_str(j, "name", ""), sizeof f->name);
+    f->size = (int64_t)rs_json_num(j, "size", 0);
+    rs_strlcpy(f->url, rs_json_str(j, "url", ""), sizeof f->url);
+}
+
+rs_status rs_api_platform_update(rs_api *api, const char *platform, rs_update_info *out, bool *exists,
+                                 rs_error *err)
+{
+    memset(out, 0, sizeof *out);
+    *exists = false;
+    char path[96], url[512];
+    snprintf(path, sizeof path, "/updates/%s", platform);
+    api_url(api, path, url, sizeof url);
+    rs_http_request req = {.method = "GET", .url = url};
+    rs_http_response res;
+    rs_error local = {0};
+    rs_status st = api_send(api, &req, &res, &local);
+    if (st == RS_ERR_API && (local.http_status == 404 || local.http_status == 503)) {
+        rs_http_response_free(&res);
+        return RS_OK;
+    }
+    if (err && st != RS_OK)
+        *err = local;
+    cJSON *j = NULL;
+    if (st == RS_OK)
+        st = json_body(&res, &j, err);
+    if (st == RS_OK) {
+        rs_strlcpy(out->version, rs_json_str(j, "version", ""), sizeof out->version);
+        out->notes = rs_strdup(rs_json_str(j, "notes", ""));
+        parse_update_file(cJSON_GetObjectItemCaseSensitive(j, "file"), &out->file);
+        parse_update_file(cJSON_GetObjectItemCaseSensitive(j, "sums"), &out->sums);
+        parse_update_file(cJSON_GetObjectItemCaseSensitive(j, "signature"), &out->signature);
+        *exists = out->version[0] && out->file.url[0] && out->sums.url[0] && out->signature.url[0];
+    }
+    cJSON_Delete(j);
+    rs_http_response_free(&res);
+    return st;
+}
+
+void rs_update_info_free(rs_update_info *u)
+{
+    free(u->notes);
+    u->notes = NULL;
+}
+
+rs_status rs_api_get_file(rs_api *api, const char *path, rs_buf *out, rs_error *err)
+{
+    /* Only the relay's files: a path of this server, never another host. */
+    if (strncmp(path, "/api/v1/updates/files/", 22) != 0 || strstr(path, ".."))
+        return rs_fail(err, RS_ERR_FORMAT, "Adresse de fichier inattendue");
+    char url[512];
+    snprintf(url, sizeof url, "%s%s", api->base_url, path);
+    rs_http_request req = {.method = "GET", .url = url};
+    rs_http_response res;
+    rs_status st = api_send(api, &req, &res, err);
+    if (st == RS_OK) {
+        rs_buf_free(out);
+        *out = res.body;
+        res.body = (rs_buf){0};
+    }
+    rs_http_response_free(&res);
+    return st;
+}

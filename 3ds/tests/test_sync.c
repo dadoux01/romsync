@@ -321,6 +321,28 @@ static void choice_server_archives_the_local_save_then_downloads_with_backup(voi
     h_free(h);
 }
 
+static void a_choice_against_a_server_too_old_for_x_activate_is_refused(void)
+{
+    harness *h = h_new();
+    write_local(h, save(1));
+    prepare(h, "IRBF", RS_OK);
+    h->now += 3 * HOUR;
+    fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    write_local(h, save(3));
+    h->server.api_level = 0; /* 0.4.0: no GET /server */
+    int requests = h->server.upload_requests;
+    CHECK(prepare(h, "IRBF", RS_OK).needs_choice);
+    rs_entry e = h_entry(h, "IRBF");
+    rs_prepare_result r;
+    rs_error err = {0};
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_SERVER, &r, &err), RS_ERR_REFUSED);
+    CHECK(strstr(err.message, "trop ancien") != NULL);
+    CHECK_INT(h->server.upload_requests, requests);
+    CHECK_INT(h->queue.count, 0);
+    CHECK(local_is(h, save(3)));
+    h_free(h);
+}
+
 static void first_sync_of_a_console_whose_save_differs_from_the_server_is_a_divergence(void)
 {
     harness *h = h_new();
@@ -706,6 +728,7 @@ void run_sync_tests(void)
     RUN(divergence_sends_and_overwrites_nothing_until_the_user_chooses);
     RUN(choice_local_is_sent_and_active_even_when_older);
     RUN(choice_server_archives_the_local_save_then_downloads_with_backup);
+    RUN(a_choice_against_a_server_too_old_for_x_activate_is_refused);
     RUN(first_sync_of_a_console_whose_save_differs_from_the_server_is_a_divergence);
     RUN(an_upload_right_after_a_download_is_never_divergent);
     RUN(a_save_padded_with_zeros_with_the_active_content_is_no_divergence);

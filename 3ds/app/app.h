@@ -70,7 +70,8 @@ void app_choose_sharing(app *a, int index);
 /* Syncs the game, then starts it through YANBF. Returns true when the jump
  * is scheduled: the app must then exit at once. */
 bool app_launch(app *a, int index);
-/* Settings menu. */
-void app_settings(app *a);
+/* Settings menu. Returns true when a new version was installed: the app
+ * must exit. */
+bool app_settings(app *a);
 
 #endif

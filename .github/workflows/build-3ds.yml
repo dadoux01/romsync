@@ -52,9 +52,8 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          version="$VERSION"
-          [ "$version" = ci ] && version=0.0.0
-          make VERSION="$version" cia
+          # A CI build stays "dev": it never offers updates.
+          if [ "$VERSION" = ci ]; then make cia; else make VERSION="$VERSION" cia; fi
           ls -la romsync.3dsx romsync.cia
 
       - name: Package

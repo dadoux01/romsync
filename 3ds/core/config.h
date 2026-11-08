@@ -46,6 +46,7 @@ typedef struct {
     rs_rom_folder folders[RS_MAX_FOLDERS];
     int folder_count;
     int keep_backups;
+    bool check_updates; /* look for a new version at start (true by default) */
 
     rs_rom_choice *choices;
     int choice_count;

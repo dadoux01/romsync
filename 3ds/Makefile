@@ -22,8 +22,9 @@ include $(DEVKITARM)/3ds_rules
 
 TARGET      := romsync
 BUILD       := build
-# app: the 3DS layer (libctru); core: the portable C core; vendor: cJSON.
-SOURCES     := app core vendor/cjson
+# app: the 3DS layer (libctru); core: the portable C core; vendor: cJSON
+# and Monocypher (Ed25519, to verify the signed updates).
+SOURCES     := app core vendor/cjson vendor/monocypher
 ROMFS       := romfs
 
 APP_TITLE       := RomSync
@@ -31,10 +32,12 @@ APP_DESCRIPTION := Synchronisation des saves DS
 APP_AUTHOR      := RomSync
 ICON            := meta/icon.png
 
-# Version written in the CIA (make VERSION=0.4.0 cia; "-rc1" suffixes are
-# ignored).
-VERSION ?= 0.0.0
-VERSION_PARTS := $(subst ., ,$(firstword $(subst -, ,$(VERSION))))
+# Version of a release (make VERSION=0.5.0 cia): built into the app
+# (RS_VERSION, compared with the updates) and written in the CIA ("-rc1"
+# suffixes are ignored there). Without it the build is "dev", which never
+# updates itself, and the CIA version is 0.0.0.
+VERSION ?=
+VERSION_PARTS := $(subst ., ,$(firstword $(subst -, ,$(or $(VERSION),0.0.0))))
 
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # -Wno-format-truncation: messages and paths are cut on purpose by snprintf.
@@ -42,7 +45,7 @@ ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # app/main.c); a function with a large frame fails the build.
 CFLAGS  := -g -std=gnu99 -Wall -Wextra -Werror -Wno-format-truncation -Wstack-usage=4096 -O2 -mword-relocations \
            -ffunction-sections $(ARCH)
-CFLAGS  += $(INCLUDE) -D__3DS__ -DCURL_STATICLIB
+CFLAGS  += $(INCLUDE) -D__3DS__ -DCURL_STATICLIB -DRS_VERSION='"$(or $(VERSION),dev)"'
 ASFLAGS := -g $(ARCH)
 LDFLAGS  = -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
@@ -107,6 +110,9 @@ else
 $(OUTPUT).3dsx: $(OUTPUT).elf $(_3DSXDEPS)
 
 $(OUTPUT).elf: $(OFILES)
+
+# Third-party code: warnings are not errors there.
+monocypher.o monocypher-ed25519.o cJSON.o: CFLAGS += -Wno-error
 
 -include $(DEPSDIR)/*.d
 

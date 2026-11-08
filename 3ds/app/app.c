@@ -13,6 +13,7 @@
 #include "browser.h"
 #include "launch.h"
 #include "ui.h"
+#include "updater.h"
 
 #define TOKEN_FILE APP_DIR "/token.txt"
 
@@ -515,10 +516,15 @@ static void manage_folders(app *a)
     }
 }
 
-void app_settings(app *a)
+bool app_settings(app *a)
 {
-    static const char *items[] = {"Dossiers de ROMs", "Copies .backup gardées par save", "Appairer de nouveau",
+    static const char *items[] = {"Dossiers de ROMs",
+                                  "Copies .backup gardées par save",
+                                  "Rechercher les mises à jour au démarrage",
+                                  "Rechercher une mise à jour maintenant",
+                                  "Appairer de nouveau",
                                   "Retour"};
+    enum { N_ITEMS = 6 };
     int sel = 0;
     bool redraw = true;
     while (aptMainLoop()) {
@@ -526,15 +532,18 @@ void app_settings(app *a)
             ui_top();
             ui_clear();
             ui_print(UI_CYAN "Réglages" UI_RESET "\n\n");
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < N_ITEMS; i++) {
                 ui_print(i == sel ? UI_INVERSE "> " : "  ");
                 if (i == 1)
                     ui_print("%s : %d", items[i], a->config.keep_backups);
+                else if (i == 2)
+                    ui_print("%s : %s", items[i], a->config.check_updates ? "oui" : "non");
                 else
                     ui_print("%s", items[i]);
                 ui_print(UI_RESET "\n");
             }
-            ui_print("\nServeur : %s\nAppareil : %s\n", a->config.server_url, a->config.device_name);
+            ui_print("\nServeur : %s\nAppareil : %s\nRomSync %s\n", a->config.server_url, a->config.device_name,
+                     RS_VERSION);
             ui_bottom();
             ui_clear();
             ui_print(UI_CYAN "Réglages" UI_RESET "\n\nA : choisir\nGauche/Droite : nombre de copies\nB : retour\n");
@@ -545,7 +554,7 @@ void app_settings(app *a)
         u32 k = hidKeysDown();
         if (k & KEY_B)
             break;
-        if ((k & KEY_DOWN) && sel < 3)
+        if ((k & KEY_DOWN) && sel < N_ITEMS - 1)
             sel++, redraw = true;
         if ((k & KEY_UP) && sel > 0)
             sel--, redraw = true;
@@ -556,14 +565,23 @@ void app_settings(app *a)
             rs_config_save(&a->config, NULL);
             redraw = true;
         }
+        if (sel == 2 && (k & (KEY_A | KEY_LEFT | KEY_RIGHT))) {
+            a->config.check_updates = !a->config.check_updates;
+            rs_config_save(&a->config, NULL);
+            redraw = true;
+            continue;
+        }
         if (k & KEY_A) {
             if (sel == 0)
                 manage_folders(a);
-            else if (sel == 2)
+            else if (sel == 3 && app_check_update(a, true))
+                return true;
+            else if (sel == 4)
                 app_pair(a);
-            else if (sel == 3)
+            else if (sel == 5)
                 break;
             redraw = true;
         }
     }
+    return false;
 }
