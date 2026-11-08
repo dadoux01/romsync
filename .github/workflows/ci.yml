@@ -13,8 +13,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Lists what changed since the previous push (or the base of a pull
+  # request), so that each part only runs when its files change. A change
+  # under .github/, or a history that cannot be compared, runs everything.
+  changes:
+    name: Changed parts
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.f.outputs.server }}
+      web: ${{ steps.f.outputs.web }}
+      client: ${{ steps.f.outputs.client }}
+      client_build: ${{ steps.f.outputs.client_build }}
+      core_3ds: ${{ steps.f.outputs.core_3ds }}
+      build_3ds: ${{ steps.f.outputs.build_3ds }}
+      openapi: ${{ steps.f.outputs.openapi }}
+      docker: ${{ steps.f.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: f
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          all=false
+          files=
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] ||
+             ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            all=true
+          else
+            files=$(git diff --name-only "$BASE"...HEAD)
+            if grep -q '^\.github/' <<<"$files"; then all=true; fi
+          fi
+          printf 'Changed files:\n%s\n' "$files"
+          out() {
+            if $all || grep -qE "$2" <<<"$files"; then v=true; else v=false; fi
+            echo "$1=$v" | tee -a "$GITHUB_OUTPUT"
+          }
+          out server '^(server|api)/'
+          out web '^web/'
+          # The client's and the 3DS core's end-to-end tests run the server.
+          out client '^(client|profiles|server)/'
+          out client_build '^(client|profiles)/'
+          out core_3ds '^(3ds|profiles|server)/'
+          out build_3ds '^(3ds|profiles)/'
+          out openapi '^api/'
+          out docker '^(server|web|deploy)/'
+
   server:
     name: Server (lint, tests)
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,6 +86,8 @@ jobs:
 
   web:
     name: Web interface (check, tests, build)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -55,6 +106,8 @@ jobs:
 
   client:
     name: Client tests (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.client == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -102,15 +155,20 @@ jobs:
         working-directory: client/app
         run: flutter test
 
+  # Jobs below wait for others that may be skipped: run when nothing they
+  # need failed or was cancelled.
   client-build:
     name: Client builds
-    needs: client
+    needs: [changes, client]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.changes.outputs.client_build == 'true' }}
     uses: ./.github/workflows/build-client.yml
     with:
       version: ci
 
   core-3ds:
     name: 3DS core (unit and end-to-end tests)
+    needs: changes
+    if: needs.changes.outputs.core_3ds == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -128,13 +186,16 @@ jobs:
 
   build-3ds:
     name: 3DS builds
-    needs: core-3ds
+    needs: [changes, core-3ds]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.changes.outputs.build_3ds == 'true' }}
     uses: ./.github/workflows/build-3ds.yml
     with:
       version: ci
 
   openapi:
     name: OpenAPI lint
+    needs: changes
+    if: needs.changes.outputs.openapi == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -146,7 +207,8 @@ jobs:
   docker:
     name: Docker image
     runs-on: ubuntu-latest
-    needs: [server, web]
+    needs: [changes, server, web]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && needs.changes.outputs.docker == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
