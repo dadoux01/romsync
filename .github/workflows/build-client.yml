@@ -72,6 +72,13 @@ jobs:
             Windows) flutter build windows --release "${args[@]}" ;;
           esac
 
+      # Windows cannot replace the running RomSync: a separate program
+      # (client/packages/romsync_updater) swaps the folders after it exits.
+      - name: Updater (Windows)
+        if: runner.os == 'Windows'
+        working-directory: client/packages/romsync_updater
+        run: dart compile exe bin/romsync_updater.dart -o ../../app/build/windows/x64/runner/Release/romsync-updater.exe
+
       - name: Package
         working-directory: client/app
         env:

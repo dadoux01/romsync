@@ -49,6 +49,7 @@ client-profiles:
 client-test:
 	cd client && flutter pub get && flutter analyze
 	cd client/packages/romsync_core && dart test -x e2e
+	cd client/packages/romsync_updater && dart test
 	cd client/app && flutter test
 
 client-e2e:

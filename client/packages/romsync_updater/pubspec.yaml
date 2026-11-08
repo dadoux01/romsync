@@ -1,0 +1,12 @@
+name: romsync_updater
+description: Replaces an installed RomSync client by a new version, with rollback (docs/SPEC.md, "Mises à jour"). Used in-process on Linux and macOS, and as a separate program on Windows, where a running executable cannot be replaced.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.30.0

@@ -148,6 +148,9 @@ jobs:
       - name: romsync_core tests
         working-directory: client/packages/romsync_core
         run: dart test -x e2e
+      - name: romsync_updater tests
+        working-directory: client/packages/romsync_updater
+        run: dart test
       - name: End-to-end tests against the real server
         working-directory: client/packages/romsync_core
         run: dart test -t e2e
