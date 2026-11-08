@@ -178,7 +178,9 @@ int main(void)
             redraw = true;
         }
         if (k & KEY_X) {
-            ui_message("Lancer", "Le lancement des jeux arrive dans une prochaine version.");
+            /* On success the jump to the game happens when RomSync exits. */
+            if (app_launch(&a, sel))
+                break;
             redraw = true;
         }
         if (k & KEY_SELECT) {

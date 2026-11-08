@@ -11,6 +11,7 @@
 #include "../core/platform.h"
 #include "../core/twilight.h"
 #include "browser.h"
+#include "launch.h"
 #include "ui.h"
 
 #define TOKEN_FILE APP_DIR "/token.txt"
@@ -338,6 +339,44 @@ void app_sync_one(app *a, int index)
     finish_sync(a, offline);
     if (a->views[index].error)
         ui_message("Synchronisation", a->views[index].message);
+}
+
+/* ---- Launch ------------------------------------------------------------ */
+
+bool app_launch(app *a, int index)
+{
+    if (index < 0 || index >= a->lib.count)
+        return false;
+    rs_game *g = &a->lib.games[index];
+    if (g->entry.needs_choice) {
+        ui_message("Lancer", "Plusieurs ROMs partagent l'identifiant de ce jeu : choisis d'abord de partager ou "
+                             "séparer leur save (Y).");
+        return false;
+    }
+    char why[600];
+    if (!launch_check(g->entry.rom_path, why, sizeof why)) {
+        ui_message("Lancement impossible", why);
+        return false;
+    }
+
+    /* Sync before launch (docs/SPEC.md, "Avant le lancement"). */
+    bool offline = !wifi_connected() || !a->api.token[0];
+    ui_progress("Avant le lancement", g->entry.title);
+    sync_game(a, index, &offline);
+    finish_sync(a, offline);
+    game_view *v = &a->views[index];
+    if (v->error && !ui_confirm("Synchronisation", v->message, "Lancer quand même", "Annuler"))
+        return false;
+    if (offline && !v->error)
+        ui_message("Hors ligne", "Serveur injoignable : la partie se lance avec la save locale. Rouvre RomSync après "
+                                 "avoir joué : ta save partira dès que le serveur répondra.");
+
+    ui_progress("Lancement", "Démarrage du jeu...\n\nAprès la partie, rouvre RomSync pour envoyer ta save.");
+    if (!launch_start(g->entry.rom_path, why, sizeof why)) {
+        ui_message("Lancement impossible", why);
+        return false;
+    }
+    return true;
 }
 
 /* ---- Shared identifiers ------------------------------------------------ */
