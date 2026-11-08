@@ -184,7 +184,7 @@ void main() {
     final profiles = await ProfileRegistry.loadDirectory(p.join('..', '..', '..', 'profiles'));
     final srm = profiles['retroarch-melondsds']!;
     expect(srm.extension, '.srm');
-    expect(srm.confirmed, isFalse, reason: 'to_verify until a real round trip with RetroArch');
+    expect(srm.confirmed, isTrue, reason: 'confirmed by a real round trip with RetroArch on Windows');
     for (final n in [512, 8192, 65536, 524288]) {
       final raw = Uint8List.fromList(List.generate(n, (i) => (i * 13) & 0xFF));
       expect(srm.encode(raw), raw);

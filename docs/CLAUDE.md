@@ -114,8 +114,6 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 
 ## En attente
 
-- Profil RetroArch (`retroarch-melondsds`) : reste `to_verify` jusqu'au test
-  aller-retour réel de l'utilisateur ; le passer en `confirmed` ensuite.
 - Profil flashcard : `to_verify` jusqu'au test sur DSTT.
 - Phases suivantes : 4 (Android : DraStic, melonDS Android, sélecteur de
   dossiers), 5 (homebrew 3DS).

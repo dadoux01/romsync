@@ -140,7 +140,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | --- | --- | --- | --- |
 | melonDS (standalone) | `<rom>.sav` à côté de la ROM ou dans le dossier configuré | Aucune (brut) | Confirmé |
 | DeSmuME | `<rom>.dsv` dans son dossier Battery (détail ci-dessous) | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
-| melonDS DS (RetroArch) | `<rom>.srm` dans le dossier des saves de RetroArch (détail ci-dessous) | Aucune : tampon SRAM brut (`retro_get_memory_data`, `src/libretro/sram.cpp` de melonds-ds) | À vérifier par un aller-retour réel |
+| melonDS DS (RetroArch) | `<rom>.srm` dans le dossier des saves de RetroArch (détail ci-dessous) | Aucune : tampon SRAM brut (`retro_get_memory_data`, `src/libretro/sram.cpp` de melonds-ds) | Confirmé par un aller-retour réel sous Windows (progression identique dans melonDS) |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Aucune a priori | À vérifier |
 | nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF jusqu'à max(512 Kio, `chip_size`), jamais coupé (profil `flashcard`) | À vérifier par modèle |
