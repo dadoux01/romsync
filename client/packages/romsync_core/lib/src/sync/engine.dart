@@ -14,6 +14,7 @@ import '../state/save_state.dart';
 import '../state/upload_queue.dart';
 import 'backups.dart';
 import 'library.dart';
+import 'size_rule.dart';
 
 /// The raw content of a local save file.
 class LocalSave {
@@ -37,7 +38,33 @@ class SyncEvent {
   String toString() => '${kind.name}: $message';
 }
 
-enum SyncEventKind { uploaded, queued, downloaded, upToDate, offline, failed }
+enum SyncEventKind { uploaded, queued, downloaded, upToDate, offline, failed, needsChoice }
+
+/// What the user chooses after a divergence (docs/SPEC.md, "Divergence").
+enum DivergenceChoice {
+  /// "Envoyer ma save locale": it is sent and becomes active.
+  local,
+
+  /// "Prendre celle du serveur": the local save is sent as an inactive
+  /// version, then the server's active version is downloaded (the local
+  /// file is copied into .backup first).
+  server,
+}
+
+/// Two devices played without syncing: the local save changed, and the
+/// server's active version is neither the one this device last synced nor
+/// the same content. Nothing is sent nor overwritten until the user chooses.
+class Divergence {
+  Divergence({required this.gameId, required this.savePath, required this.server, this.localModified});
+  final String gameId;
+  final String savePath;
+
+  /// The server's active version.
+  final RemoteVersion server;
+
+  /// When the local save was written, if known.
+  final DateTime? localModified;
+}
 
 /// Outcome of flushing the upload queue.
 class FlushResult {
@@ -47,11 +74,22 @@ class FlushResult {
 
   /// Uploads refused by the server (moved to the `failed` folder).
   final List<String> failures = [];
+
+  /// Automatic uploads held back because they diverge, one per save file:
+  /// they stay in the queue until the user chooses.
+  final List<Divergence> held = [];
 }
 
 /// Outcome of the sync before a launch.
 class PrepareResult {
-  PrepareResult({required this.offline, this.uploaded = false, this.downloaded = false, this.backupPath, this.message});
+  PrepareResult({
+    required this.offline,
+    this.uploaded = false,
+    this.downloaded = false,
+    this.backupPath,
+    this.message,
+    this.divergence,
+  });
 
   /// The server could not be reached: the game is launched with a warning
   /// and local changes wait in the queue.
@@ -62,6 +100,11 @@ class PrepareResult {
   /// Copy of the local save replaced by the download.
   final String? backupPath;
   final String? message;
+
+  /// Set when the user must choose before the launch: nothing was sent nor
+  /// overwritten. Call [SyncEngine.prepare] again with the choice.
+  final Divergence? divergence;
+  bool get needsChoice => divergence != null;
 }
 
 class SyncException implements Exception {
@@ -138,11 +181,42 @@ class SyncEngine {
 
   Future<FlushResult> _flush() async {
     final res = FlushResult();
+    // Active version of each game, read once per flush and forgotten after
+    // an upload of that game.
+    final actives = <String, (RemoteVersion?, int?)>{};
+    final heldSaves = <String>{};
     for (final u in queue.items) {
+      // The uploads after a held one wait too: the queue keeps its order.
+      if (heldSaves.contains(u.savePath)) continue;
       final data = await queue.content(u);
       final st = states[u.savePath];
       final base = st != null && st.gameId == u.gameId ? st.lastSyncedVersionId : null;
       try {
+        if (u.mode == UploadMode.auto) {
+          final (active, chip) = actives[u.gameId] ??= await api.activeWithChip(u.gameId);
+          if (active != null &&
+              active.id != base &&
+              !await sameContentAsActive(
+                raw: data,
+                hash: u.sha256,
+                active: active,
+                chipSize: chip,
+                activeContent: () => api.download(active.id),
+              )) {
+            // Divergence: never sent automatically (docs/SPEC.md).
+            heldSaves.add(u.savePath);
+            res.held.add(Divergence(gameId: u.gameId, savePath: u.savePath, server: active, localModified: u.savedAt));
+            if (!u.held) {
+              await queue.update(u.savePath, (x) => x.mode == UploadMode.auto ? x.copyWith(held: true) : x);
+              _emit(
+                SyncEventKind.needsChoice,
+                'Deux appareils ont joué sans se synchroniser : choix à faire',
+                u.gameId,
+              );
+            }
+            continue;
+          }
+        }
         final r = await api.upload(
           gameId: u.gameId,
           data: data,
@@ -151,7 +225,13 @@ class SyncEngine {
           baseVersionId: base,
           emulator: u.emulator,
           title: u.title,
+          activate: switch (u.mode) {
+            UploadMode.auto => null,
+            UploadMode.local => true,
+            UploadMode.archive => false,
+          },
         );
+        actives.remove(u.gameId);
         // The local hash is kept: the server may have cut padding, so its
         // hash can differ from the local file's.
         await states.recordSync(u.savePath, gameId: u.gameId, versionId: r.version.id, hash: u.sha256, at: _now());
@@ -161,8 +241,10 @@ class SyncEngine {
           SyncEventKind.uploaded,
           !r.created
               ? 'Save identique à la version active'
+              : u.mode == UploadMode.archive
+              ? 'Save locale archivée sur le serveur'
               : r.active
-              ? 'Save envoyée${r.conflict ? ' (divergence : la plus récente gagne)' : ''}'
+              ? 'Save envoyée${r.conflict ? ' (divergence)' : ''}'
               : 'Save envoyée, mais une version plus récente reste active',
           u.gameId,
         );
@@ -193,7 +275,7 @@ class SyncEngine {
   }
 
   /// Queues [save] for [entry] unless the same content is already queued.
-  Future<bool> enqueue(LibraryEntry entry, LocalSave save) => _serial(() async {
+  Future<bool> enqueue(LibraryEntry entry, LocalSave save, {UploadMode mode = UploadMode.auto}) => _serial(() async {
     if (queue.forSave(entry.savePath).any((u) => u.sha256 == save.hash && u.gameId == entry.gameId)) {
       return false;
     }
@@ -206,13 +288,18 @@ class SyncEngine {
       emulator: entry.emulator,
       title: entry.title,
       now: _now(),
+      mode: mode,
     );
     _emit(SyncEventKind.queued, 'Save mise en file d’attente', entry.gameId);
     return true;
   });
 
   /// Sync before launching [entry]'s game (steps 1 to 4).
-  Future<PrepareResult> prepare(LibraryEntry entry, {required int? chipSize}) async {
+  ///
+  /// When the local save diverges from the server, nothing is sent nor
+  /// overwritten and the result carries the [PrepareResult.divergence]:
+  /// call again with the user's [choice].
+  Future<PrepareResult> prepare(LibraryEntry entry, {required int? chipSize, DivergenceChoice? choice}) async {
     if (entry.unavailable != null) throw SyncException(entry.unavailable!);
     if (entry.needsChoice) {
       throw SyncException(
@@ -225,56 +312,90 @@ class SyncEngine {
     final local = await readLocal(entry.savePath, entry.profile);
     if (flush.offline) return _offline(entry, local);
 
-    // 2. Active version of the game.
-    RemoteVersion? active;
     try {
-      active = await api.active(entry.gameId);
+      // 2. Active version of the game.
+      var (active, chip) = await api.activeWithChip(entry.gameId);
+      chip ??= chipSize;
+
+      var uploaded = false;
+      var st = stateOf(entry);
+      // Uploads still queued once the server answered: held back by a
+      // divergence.
+      final held = queue.forSave(entry.savePath).where((u) => u.gameId == entry.gameId).toList();
+      final localChanged = local != null && local.hash != st?.lastSyncedHash;
+      if (localChanged || held.isNotEmpty) {
+        final server = active;
+        final same =
+            server != null &&
+            local != null &&
+            await sameContentAsActive(
+              raw: local.raw,
+              hash: local.hash,
+              active: server,
+              chipSize: chip,
+              activeContent: () => api.download(server.id),
+            );
+        if (held.isEmpty && same) {
+          // Same content as the server (once padding is removed): nothing
+          // to send.
+          await states.recordSync(
+            entry.savePath,
+            gameId: entry.gameId,
+            versionId: server.id,
+            hash: local.hash,
+            at: _now(),
+          );
+        } else {
+          // 4. Changed outside a sync. It diverges when the server's active
+          // version is not the one this device last synced.
+          final diverged = server != null && (held.isNotEmpty || (server.id != st?.lastSyncedVersionId && !same));
+          if (diverged && choice == null) {
+            return PrepareResult(
+              offline: false,
+              divergence: Divergence(
+                gameId: entry.gameId,
+                savePath: entry.savePath,
+                server: server,
+                localModified: local?.modified,
+              ),
+            );
+          }
+          final mode = !diverged
+              ? UploadMode.auto
+              : choice == DivergenceChoice.local
+              ? UploadMode.local
+              : UploadMode.archive;
+          if (diverged) await _setMode(entry, mode);
+          if (local != null) await enqueue(entry, local, mode: mode);
+          flush = await flushQueue();
+          if (flush.offline) return await _offline(entry, local);
+          if (flush.failures.isNotEmpty) throw SyncException(flush.failures.join('\n'));
+          // Another device uploaded in the meantime: ask again.
+          final again = flush.held.where((d) => d.savePath == entry.savePath).firstOrNull;
+          if (again != null) return PrepareResult(offline: false, divergence: again);
+          uploaded = true;
+          (active, chip) = await api.activeWithChip(entry.gameId);
+        }
+        st = stateOf(entry);
+      }
+
+      // 3. Unchanged local save and a newer version on the server (or the
+      // user chose it): download.
+      if (active != null && active.id != st?.lastSyncedVersionId) {
+        final backup = await download(entry, active, chipSize: chip ?? chipSize);
+        return PrepareResult(offline: false, uploaded: uploaded, downloaded: true, backupPath: backup);
+      }
+      _emit(SyncEventKind.upToDate, 'Save à jour', entry.gameId);
+      return PrepareResult(offline: false, uploaded: uploaded);
     } on ServerUnreachableException {
       return _offline(entry, local);
     }
-
-    var uploaded = false;
-    var st = stateOf(entry);
-    final localChanged = local != null && local.hash != st?.lastSyncedHash;
-    if (localChanged) {
-      if (active != null && local.hash == active.sha256) {
-        // Same content as the server: nothing to send.
-        await states.recordSync(
-          entry.savePath,
-          gameId: entry.gameId,
-          versionId: active.id,
-          hash: local.hash,
-          at: _now(),
-        );
-      } else {
-        // 4. Changed outside a sync (offline game…): send it first; the
-        // server applies "most recent wins" before the download.
-        await enqueue(entry, local);
-        flush = await flushQueue();
-        if (flush.offline) return _offline(entry, local);
-        if (flush.failures.isNotEmpty) throw SyncException(flush.failures.join('\n'));
-        uploaded = true;
-        try {
-          active = await api.active(entry.gameId);
-        } on ServerUnreachableException {
-          return _offline(entry, local);
-        }
-      }
-      st = stateOf(entry);
-    }
-
-    // 3. Unchanged local save and a newer version on the server: download.
-    if (active != null && active.id != st?.lastSyncedVersionId) {
-      try {
-        final backup = await download(entry, active, chipSize: chipSize);
-        return PrepareResult(offline: false, uploaded: uploaded, downloaded: true, backupPath: backup);
-      } on ServerUnreachableException {
-        return _offline(entry, local);
-      }
-    }
-    _emit(SyncEventKind.upToDate, 'Save à jour', entry.gameId);
-    return PrepareResult(offline: false, uploaded: uploaded);
   }
+
+  /// Applies the user's choice to the uploads of [entry] already queued.
+  Future<void> _setMode(LibraryEntry entry, UploadMode mode) => _serial(
+    () => queue.update(entry.savePath, (u) => u.gameId == entry.gameId ? u.copyWith(mode: mode, held: false) : u),
+  );
 
   Future<PrepareResult> _offline(LibraryEntry entry, LocalSave? local) async {
     if (local != null && local.hash != stateOf(entry)?.lastSyncedHash) await enqueue(entry, local);

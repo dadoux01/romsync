@@ -28,6 +28,7 @@ export 'src/sync/emulator_switch.dart';
 export 'src/sync/engine.dart';
 export 'src/sync/library.dart';
 export 'src/sync/play_session.dart';
+export 'src/sync/size_rule.dart';
 export 'src/sync/status.dart';
 export 'src/sync/watcher.dart';
 

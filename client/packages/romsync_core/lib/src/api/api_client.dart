@@ -124,12 +124,16 @@ class RomSyncApi {
 
   /// The active version of a game, or null when the game or its active
   /// version does not exist yet.
-  Future<RemoteVersion?> active(String gameId) async {
+  Future<RemoteVersion?> active(String gameId) async => (await activeWithChip(gameId)).$1;
+
+  /// The active version of a game and the game's chip size (null when
+  /// unknown), or (null, null) when there is no active version.
+  Future<(RemoteVersion?, int?)> activeWithChip(String gameId) async {
     try {
       final j = await _json('GET', '/games/${_game(gameId)}/active');
-      return RemoteVersion.fromJson(j['version']! as Map<String, Object?>);
+      return (RemoteVersion.fromJson(j['version']! as Map<String, Object?>), j['chip_size'] as int?);
     } on ApiException catch (e) {
-      if (e.status == 404) return null;
+      if (e.status == 404) return (null, null);
       rethrow;
     }
   }
@@ -154,6 +158,7 @@ class RomSyncApi {
     int? baseVersionId,
     String emulator = '',
     String? title,
+    bool? activate,
   }) async {
     final req = http.Request('POST', _url('/games/${_game(gameId)}/versions'))
       ..bodyBytes = data
@@ -165,6 +170,8 @@ class RomSyncApi {
         'X-Emulator': emulator,
         'X-Content-SHA256': sha256.convert(data).toString(),
         if (title != null && title.isNotEmpty) 'X-Game-Title': Uri.encodeComponent(title),
+        // The user's choice after a divergence; absent: most recent wins.
+        if (activate != null) 'X-Activate': '$activate',
       });
     final res = await _send(req);
     return UploadResult.fromJson(jsonDecode(res.body) as Map<String, Object?>);

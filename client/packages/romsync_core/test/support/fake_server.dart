@@ -24,6 +24,9 @@ class FakeServer {
   final active = <String, int>{};
   final uploadIds = <String, int>{};
   final latestConflict = <String, bool>{};
+
+  /// Chip size of each game: set by its first save, or by the test.
+  final chipSize = <String, int>{};
   bool online = true;
 
   /// When set, the next upload is processed but its response is lost.
@@ -39,6 +42,7 @@ class FakeServer {
   FakeVersion addVersion(String code, List<int> data, DateTime savedAt, {bool makeActive = true}) {
     final v = FakeVersion(++_seq, code, Uint8List.fromList(data), savedAt.toUtc(), null);
     versions.add(v);
+    chipSize.putIfAbsent(code, () => data.length);
     if (makeActive) active[code] = v.id;
     return v;
   }
@@ -64,6 +68,8 @@ class FakeServer {
     'size_event': null,
   };
 
+  static bool _padding(List<int> b) => b.isNotEmpty && (b[0] == 0 || b[0] == 0xFF) && b.every((c) => c == b[0]);
+
   http.Response _ok(Object body, [int status = 200]) => http.Response(jsonEncode(body), status);
   http.Response _err(int status, String code) => _ok({
     'error': {'code': code, 'message': code},
@@ -75,7 +81,7 @@ class FakeServer {
     final active = RegExp(r'^/games/(.+)/active$').firstMatch(path);
     if (req.method == 'GET' && active != null) {
       final v = activeOf(active[1]!);
-      return v == null ? _err(404, 'not_found') : _ok({'version': _json(v)});
+      return v == null ? _err(404, 'not_found') : _ok({'version': _json(v), 'chip_size': chipSize[active[1]!]});
     }
     final upload = RegExp(r'^/games/(.+)/versions$').firstMatch(path);
     if (req.method == 'POST' && upload != null) {
@@ -112,9 +118,24 @@ class FakeServer {
       return _ok({'version': _json(v), 'created': true, 'active': active[code] == v.id, 'conflict': v.conflict}, 201);
     }
     if (refuseUploads != null) return _err(409, refuseUploads!);
-    final data = req.bodyBytes;
+    var data = req.bodyBytes;
     if (sha256.convert(data).toString() != req.headers['X-Content-SHA256']) return _err(400, 'hash_mismatch');
     final cur = activeOf(code);
+    // Size rules of server/internal/syncrule/size.go.
+    final chip = chipSize[code];
+    if (chip != null && data.length != chip) {
+      if (data.length > chip && _padding(data.sublist(chip))) {
+        data = Uint8List.fromList(data.sublist(0, chip));
+      } else if (data.length < chip &&
+          cur != null &&
+          cur.data.length > data.length &&
+          _padding(cur.data.sublist(data.length))) {
+        chipSize[code] = data.length;
+      } else {
+        return _err(409, 'size_mismatch');
+      }
+    }
+    chipSize.putIfAbsent(code, () => data.length);
     if (cur != null && cur.sha == sha256.convert(data).toString()) {
       return _ok({'version': _json(cur), 'created': false, 'active': true, 'conflict': false});
     }
@@ -126,7 +147,12 @@ class FakeServer {
     versions.add(v);
     uploadIds[id] = v.id;
     latestConflict[code] = conflict;
-    final activate = cur == null || savedAt.isAfter(cur.savedAt);
+    final activate = switch (req.headers['X-Activate']) {
+      _ when cur == null => true,
+      'true' => true,
+      'false' => false,
+      _ => savedAt.isAfter(cur.savedAt),
+    };
     if (activate) active[code] = v.id;
     if (dropNextUploadResponse) {
       dropNextUploadResponse = false;

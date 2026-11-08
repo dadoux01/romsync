@@ -4,6 +4,7 @@ library;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 import 'package:test/test.dart';
@@ -23,6 +24,8 @@ final rawProfile = ConversionProfile(
   padTo: null,
   padByte: null,
 );
+
+String sha(List<int> b) => sha256.convert(b).toString();
 
 Uint8List save(int seed) => Uint8List.fromList(List.generate(8192, (i) => (i * 13 + seed * 7) & 0xFF));
 
@@ -200,28 +203,72 @@ void _scenario() {
     expect((await a.api.versions(crossId)).versions, hasLength(1));
   });
 
-  test('5. divergence: the most recent save wins and the other stays in history', () async {
-    // B is behind (last synced on save 3) and plays offline-style: its save
-    // is more recent than A's latest.
+  test('5. divergence: nothing is sent before the user chooses', () async {
+    // B is behind (last synced on save 3) and played without syncing.
+    final before = (await history()).length;
     b.write(save(6), base.add(const Duration(minutes: 50)));
-    final rb = await b.prepare();
-    expect(rb.uploaded, isTrue);
-    expect(rb.downloaded, isFalse, reason: 'its save is the most recent one');
-    final games = await a.api.games();
-    final game = games.firstWhere((g) => g.code == gameId);
-    expect(game.conflict, isTrue, reason: 'conflit résolu automatiquement');
-    expect(game.activeVersion!.deviceName, 'Asahi');
+    final asked = await b.prepare();
+    expect(asked.needsChoice, isTrue);
+    expect(asked.divergence!.server.deviceName, isNot('Asahi'));
+    expect(await history(), hasLength(before), reason: 'nothing sent');
+    expect(b.read(), save(6), reason: 'nothing overwritten');
 
-    // A had an older divergent save: uploaded, kept in history, then A
-    // downloads the winner and keeps its own copy in .backup.
-    a.write(save(7), base.add(const Duration(minutes: 45)));
-    final ra = await a.prepare();
+    // "Envoyer ma save locale": sent and active.
+    final rb = await b.engine.prepare(b.entry, chipSize: null, choice: DivergenceChoice.local);
+    expect(rb.uploaded, isTrue);
+    expect(rb.downloaded, isFalse);
+    final game = (await a.api.games()).firstWhere((g) => g.code == gameId);
+    expect(game.conflict, isTrue);
+    expect(game.activeVersion!.deviceName, 'Asahi');
+    expect(game.activeVersion!.sha256, sha(save(6)));
+
+    // A also played without syncing, later: "Prendre celle du serveur".
+    // Its save is archived (not active although more recent), then the
+    // server's save is downloaded and the local one copied into .backup.
+    a.write(save(7), base.add(const Duration(minutes: 55)));
+    expect((await a.prepare()).needsChoice, isTrue);
+    final ra = await a.engine.prepare(a.entry, chipSize: null, choice: DivergenceChoice.server);
     expect(ra.uploaded, isTrue);
     expect(ra.downloaded, isTrue);
     expect(a.read(), save(6));
     expect(File(ra.backupPath!).readAsBytesSync(), save(7));
     final versions = await history();
-    expect(versions.where((v) => v.conflict).length, 2);
+    final archived = versions.firstWhere((v) => v.sha256 == sha(save(7)));
+    expect(archived.isActive, isFalse);
+    expect(archived.conflict, isTrue);
     expect(versions.firstWhere((v) => v.isActive).deviceName, 'Asahi');
+
+    // Both are in sync again: no question, nothing to do.
+    expect((await a.prepare()).needsChoice, isFalse);
+    expect((await b.prepare()).needsChoice, isFalse);
+  });
+
+  test('7. an upload right after a download is never divergent', () async {
+    a.write(save(8), base.add(const Duration(minutes: 58)));
+    final ra = await a.prepare();
+    expect(ra.needsChoice, isFalse);
+    expect(ra.uploaded, isTrue);
+    final rb = await b.prepare();
+    expect(rb.downloaded, isTrue);
+    b.write(save(9), base.add(const Duration(minutes: 59)));
+    final rb2 = await b.prepare();
+    expect(rb2.needsChoice, isFalse);
+    expect(rb2.uploaded, isTrue);
+    final active = (await history()).firstWhere((v) => v.isActive);
+    expect(active.sha256, sha(save(9)));
+    expect(active.conflict, isFalse);
+  });
+
+  test('8. a save padded with zeros, same content as the active one, is no divergence', () async {
+    // B made the active version; A is behind and its file holds the same
+    // progression padded with 0x00 (as TWiLight Menu++ does).
+    final before = (await history()).length;
+    a.write([...save(9), ...List.filled(8192, 0)], base.add(const Duration(minutes: 59)));
+    final r = await a.prepare();
+    expect(r.needsChoice, isFalse);
+    expect(r.uploaded, isFalse);
+    expect(r.downloaded, isFalse, reason: 'already the same progression');
+    expect(await history(), hasLength(before));
+    expect((await a.prepare()).uploaded, isFalse);
   });
 }

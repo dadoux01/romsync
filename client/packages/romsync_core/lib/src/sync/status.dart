@@ -18,6 +18,10 @@ enum SaveStatus {
   /// Several local ROMs share the identifier: waiting for the user.
   needsChoice,
 
+  /// Two devices played without syncing: an upload is held back until the
+  /// user chooses which save to keep.
+  diverged,
+
   /// The ROM cannot be synced with its emulator (archive not supported,
   /// save folder unknown…).
   unavailable,
@@ -40,7 +44,8 @@ class SaveStatusInfo {
 ///
 /// [localHash] is the SHA-256 of the raw local save, or null when there is
 /// no local save file. [remote] is null when the server does not know the
-/// game; [online] tells whether the server answered.
+/// game; [online] tells whether the server answered; [held] whether an
+/// upload of this save is held back by a divergence.
 SaveStatusInfo computeStatus({
   required bool needsChoice,
   bool unavailable = false,
@@ -49,9 +54,11 @@ SaveStatusInfo computeStatus({
   required RemoteGame? remote,
   required int queued,
   required bool online,
+  bool held = false,
 }) {
   if (needsChoice) return const SaveStatusInfo(SaveStatus.needsChoice);
   if (unavailable) return const SaveStatusInfo(SaveStatus.unavailable);
+  if (held) return const SaveStatusInfo(SaveStatus.diverged);
   final conflict = remote?.conflict ?? false;
   final localChanged = localHash != null && localHash != state?.lastSyncedHash;
   if (!online) {

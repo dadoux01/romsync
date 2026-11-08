@@ -6,6 +6,19 @@ import 'package:uuid/uuid.dart';
 
 import 'json_file.dart';
 
+/// How an upload is activated on the server (docs/SPEC.md, "Divergence").
+enum UploadMode {
+  /// "Most recent wins"; held back when it would diverge.
+  auto,
+
+  /// The user chose the local save: it becomes active (`X-Activate: true`).
+  local,
+
+  /// The user chose the server's save: the local one is only archived
+  /// (`X-Activate: false`).
+  archive,
+}
+
 /// An upload waiting for the server (docs/SPEC.md, "Hors ligne").
 class PendingUpload {
   PendingUpload({
@@ -18,6 +31,8 @@ class PendingUpload {
     required this.createdAt,
     this.emulator = '',
     this.title,
+    this.mode = UploadMode.auto,
+    this.held = false,
   });
 
   /// Generated once when the save is queued and reused for every retry, so
@@ -34,6 +49,27 @@ class PendingUpload {
   final String emulator;
   final String? title;
 
+  /// The user's choice after a divergence; [UploadMode.auto] otherwise.
+  final UploadMode mode;
+
+  /// An automatic upload held back because it diverges from the server:
+  /// it waits for the user's choice.
+  final bool held;
+
+  PendingUpload copyWith({UploadMode? mode, bool? held}) => PendingUpload(
+    uploadId: uploadId,
+    gameId: gameId,
+    savePath: savePath,
+    sha256: sha256,
+    size: size,
+    savedAt: savedAt,
+    createdAt: createdAt,
+    emulator: emulator,
+    title: title,
+    mode: mode ?? this.mode,
+    held: held ?? this.held,
+  );
+
   Map<String, Object?> toJson() => {
     'upload_id': uploadId,
     'game_id': gameId,
@@ -44,6 +80,8 @@ class PendingUpload {
     'created_at': createdAt.toUtc().toIso8601String(),
     'emulator': emulator,
     'title': title,
+    'mode': mode.name,
+    'held': held,
   };
 
   factory PendingUpload.fromJson(Map<String, Object?> j) => PendingUpload(
@@ -56,6 +94,8 @@ class PendingUpload {
     createdAt: DateTime.parse(j['created_at']! as String),
     emulator: (j['emulator'] as String?) ?? '',
     title: j['title'] as String?,
+    mode: UploadMode.values.asNameMap()[j['mode']] ?? UploadMode.auto,
+    held: (j['held'] as bool?) ?? false,
   );
 }
 
@@ -103,6 +143,7 @@ class UploadQueue {
     String emulator = '',
     String? title,
     DateTime? now,
+    UploadMode mode = UploadMode.auto,
   }) async {
     final u = PendingUpload(
       uploadId: _uuid.v4(),
@@ -114,11 +155,20 @@ class UploadQueue {
       createdAt: (now ?? DateTime.now()).toUtc(),
       emulator: emulator,
       title: title,
+      mode: mode,
     );
     await writeBytesAtomic(_contentPath(u.uploadId), data);
     _items.add(u);
     await _persist();
     return u;
+  }
+
+  /// Replaces the queued uploads of [savePath] by [update]'s result.
+  Future<void> update(String savePath, PendingUpload Function(PendingUpload) update) async {
+    for (var i = 0; i < _items.length; i++) {
+      if (_items[i].savePath == savePath) _items[i] = update(_items[i]);
+    }
+    await _persist();
   }
 
   Future<Uint8List> content(PendingUpload u) => File(_contentPath(u.uploadId)).readAsBytes();

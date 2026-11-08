@@ -138,39 +138,110 @@ void main() {
       expect(server.uploadRequests, before);
     });
 
-    test('local save changed outside a sync and newer: sent first, no download', () async {
+    test('local save changed outside a sync, server unchanged: sent, no question', () async {
+      h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
+      await h.engine.prepare(h.entry(), chipSize: null);
+      h.writeLocal(save(2), h.now.subtract(const Duration(hours: 4))); // even with an older date
+      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(r.needsChoice, isFalse);
+      expect(r.uploaded, isTrue);
+      expect(server.activeOf('IRBF')!.conflict, isFalse);
+    });
+
+    test('divergence: nothing is sent nor overwritten until the user chooses', () async {
+      h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
+      await h.engine.prepare(h.entry(), chipSize: null);
+      final other = server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2))); // other device
+      h.writeLocal(save(3), h.now.subtract(const Duration(hours: 1))); // played here without syncing
+      final requests = server.uploadRequests;
+
+      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(r.needsChoice, isTrue);
+      expect(r.divergence!.server.id, other.id);
+      expect(r.uploaded || r.downloaded, isFalse);
+      expect(server.uploadRequests, requests);
+      expect(h.queue.isEmpty, isTrue);
+      expect(h.readLocal(), save(3));
+      // Asked again next time (no answer).
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isTrue);
+    });
+
+    test('choice "local": sent and active, even when older than the server', () async {
       h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
       await h.engine.prepare(h.entry(), chipSize: null);
       final v1 = server.activeOf('IRBF')!;
-      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2))); // other device, older
-      h.writeLocal(save(3), h.now.subtract(const Duration(hours: 1))); // offline game here, newer
+      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(minutes: 5))); // other device, newer
+      h.writeLocal(save(3), h.now.subtract(const Duration(hours: 1)));
 
-      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      final r = await h.engine.prepare(h.entry(), chipSize: null, choice: DivergenceChoice.local);
       expect(r.uploaded, isTrue);
       expect(r.downloaded, isFalse);
       final mine = server.activeOf('IRBF')!;
       expect(mine.data, save(3));
       expect(mine.base, v1.id);
-      expect(mine.conflict, isTrue, reason: 'diverged from the other device');
+      expect(mine.conflict, isTrue);
       expect(h.readLocal(), save(3));
+      expect(h.states[h.savePath]!.lastSyncedVersionId, mine.id);
     });
 
-    test('local save changed outside a sync but older: sent, then the newer server save is downloaded', () async {
+    test('choice "server": local archived as an inactive version, then download with a .backup copy', () async {
       h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
       await h.engine.prepare(h.entry(), chipSize: null);
-      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(minutes: 5))); // other device, newer
+      final other = server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2))); // other device, older
       h.writeLocal(save(3), h.now.subtract(const Duration(hours: 1)));
 
-      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      final r = await h.engine.prepare(h.entry(), chipSize: null, choice: DivergenceChoice.server);
       expect(r.uploaded, isTrue);
       expect(r.downloaded, isTrue);
+      expect(server.activeOf('IRBF')!.id, other.id, reason: 'the archived save does not win although newer');
+      final archived = server.versions.firstWhere((v) => v.sha == sha(save(3)));
+      expect(server.active['IRBF'], isNot(archived.id));
       expect(h.readLocal(), save(2));
       expect(File(r.backupPath!).readAsBytesSync(), save(3));
-      expect(
-        server.versions.where((v) => v.code == 'IRBF').map((v) => v.sha),
-        contains(sha(save(3))),
-        reason: 'the older save stays in the history',
-      );
+      expect(h.states[h.savePath]!.lastSyncedVersionId, other.id);
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isFalse);
+    });
+
+    test('first sync of a device whose save differs from the server: divergence', () async {
+      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
+      h.writeLocal(save(3), h.now);
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isTrue);
+      expect(server.uploadRequests, 0);
+    });
+
+    test('an upload right after a download is never divergent', () async {
+      server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).downloaded, isTrue);
+      h.writeLocal(save(3), h.now);
+      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(r.needsChoice, isFalse);
+      expect(r.uploaded, isTrue);
+      expect(server.activeOf('IRBF')!.data, save(3));
+      expect(server.activeOf('IRBF')!.conflict, isFalse);
+    });
+
+    test('a save padded with zeros, same content as the active one: no divergence', () async {
+      final v = server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
+      h.writeLocal([...save(2), ...List.filled(512, 0)], h.now); // TWiLight Menu++ pads with 0x00
+      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(r.needsChoice || r.uploaded || r.downloaded, isFalse);
+      expect(server.uploadRequests, 0);
+      expect(h.states[h.savePath]!.lastSyncedVersionId, v.id);
+      // Padded with data instead: a real difference.
+      h.writeLocal([...save(2), ...List.filled(512, 7)], h.now);
+      server.addVersion('IRBF', save(4), h.now);
+      expect((await h.engine.prepare(h.entry(), chipSize: null)).needsChoice, isTrue);
+    });
+
+    test('a smaller save whose active version only adds padding (FRAM 32 KiB seen as 64 KiB): no divergence', () async {
+      final v = server.addVersion('IRBF', [
+        ...save(2),
+        ...List.filled(512, 0xFF),
+      ], h.now.subtract(const Duration(hours: 2)));
+      h.writeLocal(save(2), h.now);
+      final r = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(r.needsChoice || r.uploaded || r.downloaded, isFalse);
+      expect(h.states[h.savePath]!.lastSyncedVersionId, v.id);
     });
 
     test('offline: launch with a warning, upload queued and sent on reconnection with the same id', () async {
@@ -237,6 +308,58 @@ void main() {
       expect(h.queue.isEmpty, isTrue);
       expect(Directory(p.join(h.queue.dir, 'failed')).listSync(), hasLength(1));
       expect(h.events.last.kind, SyncEventKind.failed);
+    });
+  });
+
+  group('automatic uploads (background, during a game)', () {
+    test('a divergent upload is held in the queue, then the choice applies to it', () async {
+      h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
+      await h.engine.prepare(h.entry(), chipSize: null);
+      final other = server.addVersion('IRBF', save(2), h.now.subtract(const Duration(hours: 2)));
+      h.writeLocal(save(3), h.now);
+      final requests = server.uploadRequests;
+
+      await h.engine.sendIfChanged(h.entry(), h.engine.stateOf(h.entry())?.lastSyncedHash);
+      expect(server.uploadRequests, requests, reason: 'never sent automatically');
+      expect(h.queue.items.single.held, isTrue);
+      expect(h.events.where((e) => e.kind == SyncEventKind.needsChoice), hasLength(1));
+      expect(server.activeOf('IRBF')!.id, other.id);
+
+      // Later flushes keep it and do not announce it again.
+      final flush = await h.engine.flushQueue();
+      expect(flush.held.single.gameId, 'IRBF');
+      expect(h.events.where((e) => e.kind == SyncEventKind.needsChoice), hasLength(1));
+      expect(
+        computeStatus(
+          needsChoice: false,
+          localHash: 'x',
+          state: null,
+          remote: null,
+          queued: 1,
+          online: true,
+          held: true,
+        ).status,
+        SaveStatus.diverged,
+      );
+
+      // The held upload survives a restart; the choice applies to it.
+      await h.open();
+      final asked = await h.engine.prepare(h.entry(), chipSize: null);
+      expect(asked.needsChoice, isTrue);
+      final r = await h.engine.prepare(h.entry(), chipSize: null, choice: DivergenceChoice.local);
+      expect(r.uploaded, isTrue);
+      expect(h.queue.isEmpty, isTrue);
+      expect(server.activeOf('IRBF')!.data, save(3));
+      expect(server.versions.where((v) => v.sha == sha(save(3))), hasLength(1), reason: 'sent once');
+    });
+
+    test('an automatic upload on the active base is sent as before', () async {
+      h.writeLocal(save(1), h.now.subtract(const Duration(hours: 3)));
+      await h.engine.prepare(h.entry(), chipSize: null);
+      h.writeLocal(save(2), h.now);
+      await h.engine.sendIfChanged(h.entry(), h.engine.stateOf(h.entry())?.lastSyncedHash);
+      expect(h.queue.isEmpty, isTrue);
+      expect(server.activeOf('IRBF')!.data, save(2));
     });
   });
 
