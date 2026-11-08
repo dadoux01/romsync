@@ -21,3 +21,6 @@ node_modules/
 .idea/
 .vscode/
 .DS_Store
+
+# 3DS homebrew
+/3ds/tests/build/

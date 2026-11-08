@@ -1,0 +1,15 @@
+{
+  "id": "twilight",
+  "name": "TWiLight Menu++ / nds-bootstrap (3DS)",
+  "status": "to_verify",
+  "extension": ".sav",
+  "location": "<ROM folder>/saves/ by default; next to the ROM or sd:/_nds/TWiLightMenu/saves/ depending on SAVE_LOCATION in sd:/_nds/TWiLightMenu/settings.ini; .sav1 to .sav9 for the per-game save slot (SAVE_NUMBER)",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "Raw save data. At launch TWiLight Menu++ (title/arm9/source/main.cpp) creates the file or grows it to the size of its own ROM list (512 KiB for unknown games), filling with 0x00, and never shrinks it: the save is written at its real size and TWiLight Menu++ pads it. nds-bootstrap then writes the save sectors in place (retail/common/source/my_fat.c, fileWrite) without updating the FAT directory entry, so the file's modification date does not change while playing. Stays to_verify until a real round trip on a 3DS."
+}

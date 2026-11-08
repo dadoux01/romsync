@@ -6,7 +6,7 @@ GO ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: all build web embed server test test-go test-web check lint dev-server dev-web clean \
-	client-profiles client-test client-e2e client-build
+	client-profiles client-test client-e2e client-build 3ds-test
 
 all: build
 
@@ -53,6 +53,11 @@ client-test:
 
 client-e2e:
 	cd client/packages/romsync_core && dart test -t e2e
+
+# 3DS homebrew: tests of the portable C core on Linux (needs a C compiler
+# and libcurl's development files).
+3ds-test:
+	$(MAKE) -C 3ds/tests
 
 client-build: client-profiles
 	cd client/app && flutter build linux --release
