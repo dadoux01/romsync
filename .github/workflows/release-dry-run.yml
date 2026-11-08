@@ -1,0 +1,92 @@
+# Rehearses a release without publishing anything: builds the clients and
+# the 3DS homebrew with a release version, checks that the version is built
+# in, and signs SHA256SUMS with a throwaway key through the same script as
+# release.yml (.github/scripts/sign.sh). The real key is only used by
+# release.yml, through the "release" environment (v* tags only).
+name: Release dry run
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to build in (e.g. 0.5.0)
+        required: true
+        default: 0.5.0
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::invalid version: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  client:
+    name: Clients
+    needs: version
+    uses: ./.github/workflows/build-client.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  homebrew-3ds:
+    name: 3DS homebrew
+    needs: version
+    uses: ./.github/workflows/build-3ds.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  check:
+    name: Check and sign (throwaway key)
+    needs: [version, client, homebrew-3ds]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: romsync-*
+          path: dist
+          merge-multiple: true
+      - name: Files and built-in version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ls -la dist
+          # The names the server's relay expects (server/internal/updates).
+          for f in linux-x64.tar.gz linux-arm64.tar.gz macos.zip windows-x64.zip 3ds.cia 3ds.3dsx; do
+            test -f "dist/romsync-$VERSION-$f" || { echo "::error::missing romsync-$VERSION-$f"; exit 1; }
+          done
+          work=$(mktemp -d)
+          tar -xzf "dist/romsync-$VERSION-linux-x64.tar.gz" -C "$work"
+          grep -a -q -F "$VERSION" "$work/romsync-$VERSION-linux-x64/lib/libapp.so" \
+            || { echo "::error::version not built into the Linux app"; exit 1; }
+          unzip -q "dist/romsync-$VERSION-windows-x64.zip" -d "$work/win"
+          test -f "$work/win/romsync-$VERSION-windows-x64/romsync-updater.exe" \
+            || { echo "::error::romsync-updater.exe missing from the Windows archive"; exit 1; }
+          grep -a -q -F "$VERSION" "$work/win/romsync-$VERSION-windows-x64/data/app.so" \
+            || { echo "::error::version not built into the Windows app"; exit 1; }
+          unzip -q "dist/romsync-$VERSION-macos.zip" -d "$work/mac"
+          test -x "$work/mac/RomSync.app/Contents/MacOS/RomSync" || { echo "::error::RomSync.app missing"; exit 1; }
+          grep -a -q -x -F "$VERSION" <(strings "dist/romsync-$VERSION-3ds.3dsx") \
+            || { echo "::error::version not built into the 3DS homebrew"; exit 1; }
+          echo "version $VERSION found in the Linux, Windows and 3DS builds"
+      - name: Sign and verify with a throwaway key
+        run: |
+          umask 077
+          openssl genpkey -algorithm ed25519 -out "$RUNNER_TEMP/key.pem"
+          openssl pkey -in "$RUNNER_TEMP/key.pem" -pubout -outform DER | tail -c 32 | base64 > "$RUNNER_TEMP/pub"
+          .github/scripts/sign.sh dist "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/pub"
+          cat dist/SHA256SUMS.sig

@@ -53,9 +53,9 @@ jobs:
           out server '^(server|api)/'
           out web '^web/'
           # The client's and the 3DS core's end-to-end tests run the server.
-          out client '^(client|profiles|server)/'
+          out client '^(client|profiles|server|testdata)/'
           out client_build '^(client|profiles)/'
-          out core_3ds '^(3ds|profiles|server)/'
+          out core_3ds '^(3ds|profiles|server|testdata)/'
           out build_3ds '^(3ds|profiles)/'
           out openapi '^api/'
           out docker '^(server|web|deploy)/'

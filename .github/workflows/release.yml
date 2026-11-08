@@ -98,15 +98,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          sparse-checkout: keys
+          sparse-checkout: |
+            keys
+            .github/scripts
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: romsync-*
           path: dist
           merge-multiple: true
-      - name: Checksums
-        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
-      - name: Sign
+      - name: Sign and verify
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
@@ -114,23 +114,7 @@ jobs:
           key="$RUNNER_TEMP/release.pem"
           trap 'rm -f "$key"' EXIT
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
-          # The key must match the public key built into the apps.
-          actual=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | base64)
-          expected=$(tr -d '[:space:]' < keys/release-ed25519.pub)
-          if [ "$actual" != "$expected" ]; then
-            echo "::error::RELEASE_SIGNING_KEY does not match keys/release-ed25519.pub"
-            exit 1
-          fi
-          openssl pkeyutl -sign -inkey "$key" -rawin -in dist/SHA256SUMS -out "$RUNNER_TEMP/sig.bin"
-          base64 -w0 "$RUNNER_TEMP/sig.bin" > dist/SHA256SUMS.sig
-          echo >> dist/SHA256SUMS.sig
-      - name: Verify with the public key
-        run: |
-          # SubjectPublicKeyInfo of an Ed25519 key: fixed prefix + 32 bytes.
-          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d keys/release-ed25519.pub; } > "$RUNNER_TEMP/pub.der"
-          openssl pkey -pubin -inform DER -in "$RUNNER_TEMP/pub.der" -out "$RUNNER_TEMP/pub.pem"
-          base64 -d dist/SHA256SUMS.sig > "$RUNNER_TEMP/sig.bin"
-          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/pub.pem" -rawin -in dist/SHA256SUMS -sigfile "$RUNNER_TEMP/sig.bin"
+          .github/scripts/sign.sh dist "$key" keys/release-ed25519.pub
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signature

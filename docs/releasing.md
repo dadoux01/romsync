@@ -87,7 +87,13 @@ l'ancienne une version plus tard.
 
 ## Publier
 
-1. CI verte sur `main`.
+1. CI verte sur `main`, puis *Actions → Release dry run → Run workflow* avec
+   la version : il construit les clients et le homebrew 3DS avec cette
+   version, vérifie qu'elle est bien intégrée, et signe `SHA256SUMS` avec une
+   clé jetable par le même script que la vraie release
+   (`.github/scripts/sign.sh`). Seule la vraie clé n'est pas testée : le job
+   `sign` du tag vérifie qu'elle correspond à `keys/release-ed25519.pub`
+   avant de signer.
 2. `git tag -a vX.Y.Z -m "RomSync X.Y.Z"` puis `git push origin vX.Y.Z`.
 3. `release.yml` construit les clients, le homebrew 3DS et l'image, signe
    `SHA256SUMS`, puis publie la release. Un suffixe (`-rc1`) en fait une
