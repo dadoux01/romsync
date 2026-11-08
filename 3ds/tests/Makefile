@@ -37,6 +37,14 @@ CJSON_OBJ := $(BUILD)/vendor/cJSON.o
 test: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
 
+# The end-to-end test links the core with the libcurl transport, not the
+# fake server.
+e2e: $(BUILD)/e2e
+	./e2e.sh $(BUILD)/e2e
+
+$(BUILD)/e2e: $(CORE_OBJ) $(BUILD)/tests/e2e.o $(BUILD)/tests/platform_linux.o $(CJSON_OBJ)
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURL_LIBS)
+
 $(BUILD)/run_tests: $(CORE_OBJ) $(TEST_OBJ) $(CJSON_OBJ)
 	$(CC) $(LDFLAGS) -o $@ $^ $(CURL_LIBS)
 
@@ -46,7 +54,7 @@ $(BUILD)/core/%.o: ../core/%.c ../core/*.h
 
 $(BUILD)/tests/%.o: %.c *.h ../core/*.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(CURL_CFLAGS) -c -o $@ $<
 
 # Third-party code: same sanitizers, without -Werror.
 $(CJSON_OBJ): ../vendor/cjson/cJSON.c

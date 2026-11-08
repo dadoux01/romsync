@@ -6,7 +6,7 @@ GO ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: all build web embed server test test-go test-web check lint dev-server dev-web clean \
-	client-profiles client-test client-e2e client-build 3ds-test
+	client-profiles client-test client-e2e client-build 3ds-test 3ds-e2e
 
 all: build
 
@@ -58,6 +58,10 @@ client-e2e:
 # and libcurl's development files).
 3ds-test:
 	$(MAKE) -C 3ds/tests
+
+# End-to-end test of the C core against the real server (also needs Go).
+3ds-e2e:
+	$(MAKE) -C 3ds/tests e2e
 
 client-build: client-profiles
 	cd client/app && flutter build linux --release
