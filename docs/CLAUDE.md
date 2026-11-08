@@ -2,7 +2,7 @@
 
 Synchronisation auto-hébergée des saves Nintendo DS : un serveur Go, un site
 Svelte embarqué dans le binaire, un client Flutter (Linux, macOS, Windows),
-puis un homebrew 3DS. Les phases 1 à 3 de la roadmap sont livrées.
+et un homebrew 3DS (C). Les phases 1 à 4 de la roadmap sont livrées.
 
 ## Référence
 
@@ -39,11 +39,15 @@ server/                  Go : API (internal/api), règles de synchro et de taill
 web/                     Svelte 5 + Vite, compilé puis embarqué (go:embed)
 client/packages/romsync_core/   Dart pur : toute la logique du client
 client/app/              Flutter : interface seulement (Linux, macOS, Windows)
+3ds/core/                C99 portable (sans libctru) : toute la logique du
+                         homebrew 3DS, testée sous Linux (3ds/tests)
+3ds/app/                 couche 3DS (libctru) : écrans, clavier, réseau, lancement
 profiles/*.json          profils de conversion partagés (copiés dans l'appli
                          par client/tool/sync_profiles.sh)
 api/openapi.yaml         spécification de l'API
 deploy/                  Dockerfile (compilation croisée amd64/arm64), compose
-.github/workflows/       ci.yml, build-client.yml (réutilisable), release.yml
+.github/workflows/       ci.yml, build-client.yml et build-3ds.yml (réutilisables),
+                         release.yml
 ```
 
 ## Environnement local
@@ -69,7 +73,14 @@ make build         # server/bin/romsync avec le site embarqué
 make client-test   # flutter analyze + tests romsync_core + tests de l'appli
 make client-e2e    # bout en bout du client contre le vrai serveur Go
 make client-build  # build Linux du client (copie les profils avant)
+make 3ds-test      # tests du cœur C du homebrew 3DS (gcc, libcurl-devel)
+make 3ds-e2e       # bout en bout du cœur C contre le vrai serveur Go
 ```
+
+Build 3DS (devkitPro n'est pas installé) :
+`podman run --rm -v "$PWD":/src:Z -w /src/3ds docker.io/devkitpro/devkitarm make`.
+`make cia` demande makerom et bannertool : seulement en CI (ne pas exécuter
+en local des binaires téléchargés).
 
 Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 
@@ -109,12 +120,24 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
   l'utilise directement (pas l'API `legacy.dart`). Sous Linux, aucune
   dépendance AppIndicator/libnotify, mais les en-têtes GTK 3, X11 et Xi sont
   nécessaires même pour `flutter test`.
+- Homebrew 3DS : le cœur (`3ds/core`) suit `romsync_core` méthode par
+  méthode ; toute décision de synchro modifiée d'un côté l'est de l'autre,
+  avec le même cas de test (`sync_test.dart` / `3ds/tests/test_sync.c`).
+- 3DS : la console de libctru affiche en CP437 (passer par `ui_print`) ; la
+  carte SD refuse un `rename` vers un fichier existant ; la date des saves
+  n'est pas fiable (nds-bootstrap ne met pas à jour l'entrée FAT).
+- Les dates envoyées sont à la seconde et le serveur garde la version active
+  en cas d'égalité : dans les tests de bout en bout, attendre une seconde
+  entre deux saves qui doivent se succéder.
 - Les fichiers de test réels (pieds de `.dsv`) ne contiennent que des tailles
   et le cookie : ne jamais versionner de save de jeu commercial.
 
 ## En attente
 
 - Profil flashcard : `to_verify` jusqu'au test sur DSTT.
-- Phases suivantes : 4 (homebrew 3DS), 5 (Android, en attente d'un testeur :
+- Profil `twilight` (3DS) : `to_verify` jusqu'aux tests manuels de
+  l'utilisateur sur sa 2DS (`docs/tests-manuels-3ds.md`) ; la couche 3DS et
+  le `.cia` n'ont encore jamais tourné sur une console.
+- Phases suivantes : 5 (Android, en attente d'un testeur :
   l'utilisateur n'a pas de téléphone Android, recherches dans
   `docs/research/android.md`), 6 (iOS, à étudier, rien n'est codé).

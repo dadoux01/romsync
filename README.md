@@ -8,10 +8,11 @@ so you can start a game on a PC emulator, continue it on an Android phone or a
 3DS, and come back to the PC without copying files around. Every previous save
 stays in the history and can be restored, within a retention policy you choose.
 
-> **Status:** phase 3 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
-> the server, the web interface and the **desktop client** for Linux (x86-64
+> **Status:** phase 4 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
+> the server, the web interface, the **desktop client** for Linux (x86-64
 > and ARM64), macOS and Windows, with melonDS, DeSmuME and RetroArch
-> (melonDS DS), are usable. The 3DS homebrew comes next; Android waits for a tester
+> (melonDS DS), and the **3DS homebrew** (TWiLight Menu++ and nds-bootstrap,
+> see [`3ds/README.md`](3ds/README.md)) are usable. Android waits for a tester
 > (see `docs/research/android.md`) and iOS is still being studied.
 
 ## Features
@@ -110,6 +111,10 @@ website (*Appareils → Ajouter un appareil*). See
   run `romsync.exe`. SmartScreen may warn about an unknown publisher: *More
   info* → *Run anyway*. The device token is stored in the Credential Manager
   (*Windows Credentials*, generic credential named `RomSync`).
+
+- **3DS** (`romsync-<version>-3ds.cia`, or `.3dsx` for the Homebrew
+  Launcher): install the CIA with FBI. The server must be reachable on the
+  local network. See [`3ds/README.md`](3ds/README.md).
 
 **System tray.** Closing the window keeps RomSync in the system tray (this
 can be turned off in the settings): saves of games launched without RomSync
@@ -236,7 +241,7 @@ your local network (`http://<lan-address>:8080`), so keep the port published.
 server/    Go server: API, storage, retention, single binary
 web/       web interface (Svelte 5 + Vite), compiled then embedded in server/
 client/    Flutter desktop client: Linux, macOS, Windows (see client/README.md)
-3ds/       3DS homebrew in C (devkitPro) — coming soon
+3ds/       3DS homebrew in C (devkitPro), see 3ds/README.md
 profiles/  declarative save conversion profiles, shared by the clients
 api/       OpenAPI specification of the REST API
 deploy/    Dockerfile and docker-compose.yml
@@ -255,6 +260,7 @@ and Flutter 3.47+:
 ```sh
 make test         # Go tests, svelte-check, web tests and client tests
 make build        # server/bin/romsync with the web interface embedded
+make 3ds-test     # tests of the 3DS homebrew's C core (needs libcurl headers)
 make dev-server   # API on :8080 (data in ./data)
 make dev-web      # web interface with hot reload on :5173
 ```

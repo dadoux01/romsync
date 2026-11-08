@@ -22,7 +22,7 @@ RomSync garde une seule save à jour par jeu et par compte, sur un serveur auto-
 **Limites connues**
 
 - DS Lite + DSTT : aucune synchronisation automatique possible (Wi-Fi WEP uniquement, pas d'appli réseau sur flashcard). La save passe par la page d'import/export du site.
-- 3DS : l'appli lance le jeu DS via nds-bootstrap et se ferme ; l'envoi de la save se fait donc au prochain démarrage de l'appli, pas à la fin de la partie.
+- 3DS : l'appli ne tourne pas pendant le jeu DS (lancé depuis TWiLight Menu++, ou depuis RomSync par un forwarder YANBF, qui quitte alors l'appli) ; l'envoi de la save se fait donc au prochain démarrage de l'appli, pas à la fin de la partie.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ Les trois applis appellent l'API directement ; le navigateur passe par le site, 
 | Serveur | Go, SQLite, stockage fichiers | API, comptes, appareils, versions de saves, rétention |
 | Interface web | SPA compilée et embarquée dans le binaire Go | Comptes, invitations, appairage, historique, restauration, import/export manuel |
 | Client | Flutter (Linux, macOS, Windows, Android) | Scan des ROMs, lanceur d'émulateurs, conversion et synchro des saves |
-| Homebrew 3DS | C, devkitPro (libctru) | Scan de la SD, synchro des saves, lancement via nds-bootstrap |
+| Homebrew 3DS | C, devkitPro (libctru), libcurl | Scan de la SD, synchro des saves, lancement facultatif via YANBF et nds-bootstrap |
 
 **Déploiement**
 
@@ -142,7 +142,7 @@ Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa ta
 | DeSmuME | `<rom>.dsv` dans son dossier Battery (détail ci-dessous) | Retirer ou ajouter le pied de fichier DeSmuME (122 octets, commence par `\|<--Snip above here`, détail ci-dessous) | Confirmé |
 | melonDS DS (RetroArch) | `<rom>.srm` dans le dossier des saves de RetroArch (détail ci-dessous) | Aucune : tampon SRAM brut (`retro_get_memory_data`, `src/libretro/sram.cpp` de melonds-ds) | Confirmé par un aller-retour réel sous Windows (progression identique dans melonDS) |
 | DraStic (Android) | `<rom>.dsv` dans `DraStic/backup/` | Brut, ou brut suivi du pied DeSmuME (sources contradictoires, voir `docs/research/android.md`) | À vérifier |
-| nds-bootstrap / TWiLight Menu++ (3DS) | `.sav` dans le sous-dossier `saves/` de la ROM | Brut, taille stricte | À vérifier |
+| nds-bootstrap / TWiLight Menu++ (3DS) | `<rom>.sav` (`.sav1` à `.sav9` selon l'emplacement de save du jeu) dans le sous-dossier `saves/` du dossier de la ROM, à côté de la ROM ou dans `sd:/_nds/TWiLightMenu/saves/` selon `SAVE_LOCATION` (détail ci-dessous) | Brut (profil `twilight`) ; TWiLight Menu++ complète lui-même le fichier avec des 0x00 jusqu'à la taille de sa base au lancement, sans jamais le couper | À vérifier par un aller-retour réel |
 | Flashcard (DSTT, R4…) | `.sav` à côté de la ROM | Brut, complété avec 0xFF jusqu'à max(512 Kio, `chip_size`), jamais coupé (profil `flashcard`) | À vérifier par modèle |
 
 Chaque profil est un petit fichier déclaratif en JSON (`profiles/<id>.json` : chemin, extension, en-tête/pied, règle de taille ; le JSON reste simple à lire en C sur 3DS), partagé entre le client Flutter et le homebrew 3DS, pour qu'un contributeur puisse ajouter un émulateur sans toucher au code. Les profils marqués « à vérifier » doivent être validés par des tests aller-retour avant la v1.
@@ -164,6 +164,14 @@ Côté serveur, les conversions nécessaires à l'import/export du site (brut, D
 - Nom : nom de la ROM sans son extension, suivi de `.srm`.
 - La taille du `.srm` vient de la base de ROMs de melonDS (pas de 32 Kio : 64 Kio pour les jeux à FRAM 32 Kio) ; les règles de taille du serveur l'absorbent.
 - Lancement : `retroarch -L <cœur> <rom>` (cœur `melondsds_libretro.so`, `.dll` ou `.dylib` dans `libretro_directory`, sinon le dossier `cores` de RetroArch).
+
+**Saves de TWiLight Menu++ et nds-bootstrap (3DS)** (vérifié sur `title/arm9/source/main.cpp`, `twlmenusettings.cpp` et `pergamesettings.cpp` de TWiLight Menu++, `my_fat.c` de nds-bootstrap)
+
+- Dossier : `[SRLOADER] SAVE_LOCATION` de `sd:/_nds/TWiLightMenu/settings.ini` : `0` (défaut) sous-dossier `saves/` du dossier de la ROM, `1` à côté de la ROM, `2` `sd:/_nds/TWiLightMenu/saves/`.
+- Nom : nom du fichier ROM avec son extension remplacée par `.sav`, ou `.sav1` à `.sav9` selon `[GAMESETTINGS] SAVE_NUMBER` de `sd:/_nds/TWiLightMenu/gamesettings/<fichier ROM>.ini` (ignoré avec `SAVE_LOCATION=1`). Seul l'emplacement actif est synchronisé ; un changement d'emplacement est traité comme un changement de fichier de save (même avertissement qu'un changement d'émulateur sur PC).
+- Taille : au lancement, TWiLight Menu++ crée la save ou l'agrandit jusqu'à la taille de sa propre base de ROMs (512 Kio pour un jeu inconnu), avec des 0x00. Le client écrit la save à sa taille réelle ; le remplissage ajouté ensuite est coupé par le serveur (même contenu que la version active : aucune version créée).
+- Date : nds-bootstrap écrit les secteurs de la save directement sur la carte SD sans mettre à jour l'entrée de répertoire FAT : la date de modification du fichier ne change pas pendant la partie et n'est pas utilisée (voir « 3DS » dans le protocole).
+- Le forwarder NTR (utilisé par YANBF) applique les mêmes règles avec ses propres réglages : `[NTR-FORWARDER] SAVE_LOCATION` de `sd:/_nds/ntr_forwarder.ini` et `sd:/_nds/ntr-forwarder/gamesettings/`. Les saves DSiWare (`.pub`, `.prv`) ne sont pas synchronisées.
 
 **Pied de fichier DeSmuME** (vérifié sur `desmume/src/mc.cpp` et sur des fichiers `.dsv` réels)
 
@@ -220,6 +228,7 @@ L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent parta
 - Horloges décalées : le serveur compare `saved_at` à son heure de réception.
   - Si `saved_at` dépasse l'heure de réception de plus de 5 minutes, il est ramené à l'heure de réception ; la valeur d'origine est conservée dans `saved_at_reported`, et `devices.clock_skew_at` est renseigné. Sans cette correction, une save datée dans le futur resterait active et bloquerait toutes les saves suivantes.
   - Si `saved_at` est antérieur à l'heure de réception de plus de 5 minutes, ce n'est pas forcément une erreur (envoi différé depuis la file d'attente, 3DS) : la valeur est conservée telle quelle.
+  - Une horloge en retard ne peut donc pas être corrigée par le serveur : c'est au client de le faire. Le homebrew 3DS, dont l'horloge est souvent mal réglée, corrige lui-même `saved_at` avec l'en-tête `Date` du serveur (voir « 3DS »). Les dates sont à la seconde : deux envois de la même seconde sont à égalité, et la version active reste en place.
 
 **Hors ligne**
 
@@ -234,7 +243,9 @@ L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent parta
 
 **3DS**
 
-- L'appli se ferme au lancement du jeu par nds-bootstrap ; au démarrage suivant, elle compare chaque save à `last_synced_hash` et envoie celles qui ont changé.
+- L'appli ne tourne pas pendant le jeu ; à chaque démarrage, elle vide sa file d'attente, puis applique « Avant le lancement » (étapes 1 à 4) à chaque jeu : envoi des saves dont le hash diffère de `last_synced_hash`, puis téléchargement des versions plus récentes (avec copie `.backup`).
+- Un changement se détecte uniquement par le hash, la date du fichier n'étant pas fiable. `saved_at` est l'heure à laquelle l'appli voit le nouveau contenu pour la première fois, corrigée de l'écart entre l'horloge de la console et l'en-tête `Date` des réponses du serveur (mesuré à chaque réponse, gardé dans l'état local pour les envois hors ligne). Il faut donc ouvrir l'appli juste après avoir joué.
+- Dès qu'un jeu trouve le serveur injoignable, les jeux suivants du même passage sont seulement mis en file d'attente, sans attendre un délai réseau par jeu ; sans Wi-Fi, aucun appel réseau n'est tenté.
 
 ## Authentification
 
@@ -262,7 +273,7 @@ Les humains se connectent au site avec identifiant et mot de passe ; les apparei
 - Sur Windows, le jeton est rangé dans le Gestionnaire d'identifiants (identifiant générique « RomSync », écrit par `CredWriteW`). Sur macOS, dans le trousseau « login » (l'appli n'est pas signée : macOS redemande l'accès au trousseau après chaque mise à jour, et l'appli est distribuée sans App Sandbox pour pouvoir lancer les émulateurs et lire les dossiers de ROMs). Sous Linux, le jeton est rangé dans le trousseau du système (API Secret Service via libsecret : GNOME Keyring, KWallet, KeePassXC…). Si aucun trousseau ne répond (session Hyprland sans Secret Service, par exemple), l'appairage est refusé par défaut avec un message clair ; l'utilisateur peut choisir explicitement de stocker le jeton dans un fichier (permissions 0600, avertissement affiché dans l'appli). Le jeton n'est jamais stocké en clair sans ce choix.
 - Limitation de débit sur la connexion, l'appairage, le premier démarrage et l'acceptation d'invitation (5 essais par minute et par IP).
 - Adresse IP du client : par défaut, l'adresse de la connexion TCP. `X-Forwarded-For` n'est lu que si la connexion vient d'une adresse listée dans `ROMSYNC_TRUSTED_PROXIES` (vide par défaut ; ex. `127.0.0.1` derrière `tailscale serve`).
-- Sur 3DS, le jeton est stocké en clair sur la carte SD : c'est documenté, et un jeton volé se révoque sans changer de mot de passe.
+- Sur 3DS, le jeton est stocké en clair sur la carte SD (`sd:/3ds/romsync/token.txt`) : c'est documenté, et un jeton volé se révoque sans changer de mot de passe.
 
 ## API REST
 
@@ -353,10 +364,13 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 
 **Homebrew 3DS (C, devkitPro)**
 
-- Interface simple sur les deux écrans : liste des jeux DS trouvés sur la SD, état de chaque save, bouton de synchro.
-- Au démarrage : envoi des saves modifiées depuis la dernière synchro, puis téléchargement des versions plus récentes.
-- Lancement d'un jeu : écriture de la configuration de nds-bootstrap (chemin de la ROM et de la save) puis redémarrage dans nds-bootstrap, comme le fait TWiLight Menu++.
-- Réseau via les services HTTP de la 3DS (`httpc`) ou libcurl ; le serveur doit être joignable par la 3DS, donc sur le réseau local (Tailscale n'existe pas sur 3DS).
+- Architecture : un cœur en C99 portable (`3ds/core` : client API, JSON avec cJSON, SHA-1/SHA-256, en-tête NDS, profils, état local, file d'attente, décisions de synchro, réglages de TWiLight Menu++), sans libctru, compilé et testé sous Linux, y compris en bout en bout contre le vrai serveur ; ses décisions et ses cas de test reprennent ceux de `romsync_core`. Une fine couche 3DS (`3ds/app`, libctru) gère les écrans, le clavier, le réseau et le lancement. Distribué en `.cia` et `.3dsx` (détail dans `3ds/README.md`).
+- Premier lancement : adresse du serveur, code d'appairage et nom de l'appareil saisis avec le clavier système (`platform=3ds`) ; puis choix d'un ou plusieurs dossiers de ROMs avec un petit navigateur de la carte SD (`sd:/roms/nds/` proposé s'il existe ; sous-dossiers inclus ou non, par dossier ; modifiables dans les réglages). Un dossier sans `.nds` est signalé. Les fichiers de l'appli sont dans `sd:/3ds/romsync/`.
+- Interface en console texte sur les deux écrans : liste des jeux et état de leur save (avec la mention « conflit résolu automatiquement »), détails du jeu (identifiant, fichier et emplacement de save, dernière synchro, envois en attente), synchro d'un jeu ou de tous, choix « partager » ou « séparer » pour les ROMs qui partagent un identifiant.
+- Au démarrage : envoi des saves modifiées depuis la dernière synchro, puis téléchargement des versions plus récentes (voir « 3DS » dans le protocole).
+- Profils de conversion intégrés à l'appli (romfs), remplaçables par ceux de `sd:/3ds/romsync/profiles/`.
+- Lancement d'un jeu (facultatif) : l'appli synchronise le jeu, écrit le chemin de la ROM dans `sd:/_nds/ntr-forwarder/path.txt`, puis saute vers le titre DSi `bootstrap.cia` de YANBF (`0004800546574452`), qui démarre le forwarder NTR puis nds-bootstrap, comme les forwarders de YANBF. Il faut installer `bootstrap.cia` et le pack de forwarders NTR ; sans eux, l'appli ne fait que la synchro et explique quoi installer. Le lancement est bloqué, avec la marche à suivre, si les réglages de save du forwarder (`SAVE_LOCATION`, emplacement du jeu) ne désignent pas le même fichier que ceux de TWiLight Menu++. À la fin de la partie, la console revient au menu HOME.
+- Réseau via libcurl (portlib `3ds-curl` de devkitPro, le même code que celui testé sous Linux) ; le serveur doit être joignable par la 3DS, donc sur le réseau local (Tailscale n'existe pas sur 3DS).
 
 **Import/export sur le site (DS + flashcard, dépannage)**
 
@@ -389,7 +403,7 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
 1. Serveur + site : comptes, invitations, versions, rétention, import/export manuel. Utilisable seul avec la DSTT.
 2. Appli Flutter sur Linux : bibliothèque, lanceur melonDS, synchro complète. Premier usage réel sur Fedora.
 3. Profils DeSmuME et melonDS DS ; builds macOS (Asahi : Linux ARM64) et Windows ; icône de barre système ; publication des versions (GitHub Releases, image `ghcr.io`).
-4. Homebrew 3DS : synchro au démarrage, puis lancement via nds-bootstrap.
+4. Homebrew 3DS : synchro au démarrage, puis lancement via YANBF et nds-bootstrap (facultatif).
 5. Android (en attente d'un testeur) : DraStic, melonDS Android, RetroArch avec melonDS DS, accès aux dossiers via le sélecteur système. Recherches déjà faites (ce qui est vérifié, ce qui reste incertain, sources) : `docs/research/android.md`.
 6. iOS (à étudier, rien n'est codé) :
    - RetroArch iOS : son dossier est visible dans l'appli Fichiers ; à vérifier : emplacement des `.srm` et accès depuis une autre appli.

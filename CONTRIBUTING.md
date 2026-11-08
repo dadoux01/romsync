@@ -17,6 +17,9 @@ You need:
 - Go 1.27 or later
 - Node.js 24 and npm
 - Flutter 3.47 or later for the client (see [`client/README.md`](client/README.md))
+- for the 3DS homebrew: a C compiler and libcurl's development files (tests of
+  the core), and devkitPro or its Docker image (build), see
+  [`3ds/README.md`](3ds/README.md)
 - optionally golangci-lint v2 and Docker or Podman
 
 ```sh
@@ -52,6 +55,9 @@ docker build -f deploy/Dockerfile -t romsync .
 | `web/src` | Svelte interface (`pages/`, `components/`, `lib/`) |
 | `client/packages/romsync_core` | Client logic in pure Dart (sync engine, API client, profiles…) |
 | `client/app` | Flutter interface of the client |
+| `3ds/core` | Portable C core of the 3DS homebrew (same decisions as `romsync_core`) |
+| `3ds/app` | 3DS layer (libctru): screens, keyboard, network, launch |
+| `3ds/tests` | Unit and end-to-end tests of the C core, on Linux |
 | `profiles/` | Declarative conversion profiles |
 | `api/openapi.yaml` | API specification |
 
@@ -71,6 +77,8 @@ docker build -f deploy/Dockerfile -t romsync .
 - **No new heavy dependency** without discussion: the server is a single
   static binary, the web interface has no runtime dependency besides Svelte.
 - Run `gofmt`/`goimports`; the web code is type-checked with `svelte-check`.
+- **Sync decisions** live in two places, `romsync_core` (Dart) and `3ds/core`
+  (C): change both, with the same test case on each side.
 
 ## Adding an emulator profile
 
@@ -78,7 +86,8 @@ A profile describes how an emulator stores a DS save compared to the raw
 content of the save chip (see [`profiles/README.md`](profiles/README.md)):
 
 1. Add `profiles/<id>.json` with `"status": "to_verify"`, then run
-   `client/tool/sync_profiles.sh` so that the client bundles it.
+   `client/tool/sync_profiles.sh` so that the client bundles it (the 3DS
+   build copies the profiles into its romfs by itself).
 2. If the server must offer it for import/export, implement it in
    `server/internal/convert` and register it; `TestProfilesMatchCode` checks
    that the JSON and the code agree.
