@@ -264,6 +264,7 @@ class AppController extends ChangeNotifier {
     unauthorizedMessage = null;
     _connect(res.token);
     await rescan();
+    unawaited(updates.checkIfDue());
   }
 
   Future<void> unpair() async {

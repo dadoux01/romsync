@@ -72,11 +72,13 @@ void main() {
   late List<String> notices;
   String? blocked;
 
+  var paired = true;
+
   UpdateManager manager({String version = '0.5.0', DateTime? now}) => UpdateManager(
     paths: ClientPaths(configDir: p.join(tmp.path, 'cfg'), dataDir: p.join(tmp.path, 'data')),
     config: () => config,
     saveConfig: () async {},
-    api: api,
+    api: () => paired ? api() : null,
     blockedReason: () => blocked,
     restart: (t, s) async => restarts.add((t, s)),
     onNotice: (t, b) => notices.add(t),
@@ -98,6 +100,7 @@ void main() {
     restarts = [];
     notices = [];
     blocked = null;
+    paired = true;
     config = ClientConfig();
     await release();
   });
@@ -186,6 +189,18 @@ void main() {
     await u.start();
     expect(requests, 1);
     expect(config.lastUpdateCheck, now);
+    u.dispose();
+  });
+
+  test('right after pairing, the check that the start could not do happens', () async {
+    paired = false;
+    final u = manager();
+    await u.start();
+    expect(requests, 0, reason: 'no server at start');
+    paired = true;
+    await u.checkIfDue();
+    expect(requests, 1);
+    expect(u.phase, UpdatePhase.available);
     u.dispose();
   });
 }

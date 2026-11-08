@@ -105,6 +105,11 @@ class UpdateManager extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Checks now when an automatic check is due: enabled, paired, and none
+  /// in the last 24 hours. Called after pairing, since the check at start
+  /// had no server to ask.
+  Future<void> checkIfDue() => _autoCheck();
+
   Future<void> _autoCheck() async {
     if (!config().autoUpdateCheck || isDevBuild || api() == null) return;
     if (phase != UpdatePhase.idle && phase != UpdatePhase.failed) return;
