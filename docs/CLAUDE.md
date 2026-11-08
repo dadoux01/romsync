@@ -126,6 +126,11 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 - 3DS : la console de libctru affiche en CP437 (passer par `ui_print`) ; la
   carte SD refuse un `rename` vers un fichier existant ; la date des saves
   n'est pas fiable (nds-bootstrap ne met pas à jour l'entrée FAT).
+- Divergence (deux appareils ont joué sans se synchroniser) : jamais d'envoi
+  ni d'écrasement sans le choix de l'utilisateur (`X-Activate`). La
+  comparaison passe par les règles de taille du serveur : `size_rule.dart` et
+  `3ds/core/size_rule.c` doivent rester identiques à
+  `server/internal/syncrule/size.go`.
 - Les dates envoyées sont à la seconde et le serveur garde la version active
   en cas d'égalité : dans les tests de bout en bout, attendre une seconde
   entre deux saves qui doivent se succéder.

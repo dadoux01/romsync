@@ -19,9 +19,14 @@ stays in the history and can be restored, within a retention policy you choose.
 
 - **One binary, one volume**: a Go server with SQLite and file storage, the web
   interface embedded in the binary, no external database or cache.
-- **Most recent save wins**: when two devices diverge, the save made last
-  becomes active and the other one stays in the history, flagged as a conflict.
-  A device whose clock runs in the future is detected and its dates corrected.
+- **No silent overwrite**: when two devices played without syncing, nothing
+  is sent or overwritten until you choose which save to keep (yours, or the
+  server's while yours stays in the history and in `.backup`). Otherwise the
+  most recent save wins. Padding added by an emulator or a flashcard is not a
+  difference. A device whose clock runs in the future is detected and its
+  dates corrected.
+- **History you can tidy up**: old versions can be deleted from the web
+  interface (never the active or a pinned one).
 - **Full history**: restore, pin and annotate any version; retention policies
   (`all`, last N, last N days, or *smart*: everything for 7 days, one per day
   for 30 days, then one per week), per account and per game.

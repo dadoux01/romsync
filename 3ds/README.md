@@ -56,8 +56,8 @@ page:
 ## Using the app
 
 Top screen: the games and the state of their save (*à jour*, *à envoyer*,
-*hors ligne*, *pas de save*, *choix requis*, *erreur*; `*` marks a
-"conflit résolu automatiquement" on the server). Bottom screen: details of
+*hors ligne*, *pas de save*, *choix requis*, *choix à faire*, *erreur*; `*`
+marks a divergence recorded on the server). Bottom screen: details of
 the selected game and the keys.
 
 | Key | Action |
@@ -80,7 +80,17 @@ another one's save.
 shown in the details of the game. When the slot changes and the new slot
 already holds a file that RomSync never synced for this game, RomSync asks
 before sending it: it is probably an old save. You can set it aside in
-`.backup` (the server's save is then downloaded into the slot) or send it.
+`.backup` (the server's save is then downloaded into the slot) or send it:
+it then becomes the active save.
+
+**Two devices played without syncing** (for example, you played on the PC,
+then on the console without opening RomSync in between): RomSync sends
+nothing and overwrites nothing, and asks. *A* sends the console's save (it
+becomes the active one), *Y* takes the server's (the console's save stays in
+the history on the website and in `.backup`), *B* postpones: the question
+comes back at the next start, and a game launched with *X* does not start.
+The comparison ignores the zeros TWiLight Menu++ adds at the end of the file
+(`core/size_rule.c` applies the server's size rules).
 
 **Offline.** Without Wi-Fi or server, RomSync keeps the changed saves in a
 queue (`sd:/3ds/romsync/queue/`) and sends them at the next start where the
@@ -88,15 +98,16 @@ server answers. A retry never creates a duplicate version.
 
 ## Dates
 
-The server keeps the most recent save active (`saved_at`). On the 3DS two
-things make dates unreliable:
+Without a divergence, the server keeps the most recent save active
+(`saved_at`). On the 3DS two things make dates unreliable:
 
 1. **The file date does not change while playing.** nds-bootstrap writes the
    save sectors directly on the SD card (`retail/common/source/my_fat.c`,
    `fileWrite`), without updating the file's directory entry. RomSync
    therefore detects a change by its content (SHA-256), and dates it **when
    RomSync first sees it**. Hence the advice to open RomSync right after
-   playing.
+   playing. A save seen late cannot win silently against a newer save of
+   another device, though: that is a divergence, and RomSync asks.
 2. **The console clock is often wrong**, and the 3DS has no time zone. Each
    answer of the server carries a `Date` header: RomSync measures the gap
    between that date and the console clock, and adds it to the dates it

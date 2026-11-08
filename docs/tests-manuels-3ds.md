@@ -32,14 +32,25 @@ l'heure du PC et celle de la console.
 | 2.3 | Ouvrir le jeu A dans melonDS sur le PC | La progression faite sur la console est là |
 | 2.4 | Sauvegarder plus loin sur le PC, puis ouvrir RomSync sur la console | Save téléchargée ; une copie de l'ancienne save est dans `saves/.backup/` ; en jeu, la progression du PC est là |
 | 2.5 | Lancer le jeu B dans TWiLight Menu++ (qui crée une save vide de 512 Kio), puis rouvrir RomSync | Pas d'erreur ; le jeu B apparaît sur le site (première save) ou reste « pas de save » si rien n'a été écrit |
-| 2.6 | Après le test 2.4, relancer le jeu A dans TWiLight Menu++ sans sauvegarder, puis rouvrir RomSync | Aucune nouvelle version sur le site (le remplissage de TWiLight Menu++ est coupé par le serveur) |
+| 2.6 | Après le test 2.4, relancer le jeu A dans TWiLight Menu++ sans sauvegarder, puis rouvrir RomSync | Aucun envoi ni question, aucune nouvelle version sur le site (le remplissage de TWiLight Menu++ n'est pas une différence) |
 | 2.7 | Ouvrir RomSync deux fois de suite sans jouer | Aucun envoi la seconde fois ; tous les jeux « à jour » |
+
+### Divergence (deux appareils ont joué sans se synchroniser)
+
+| # | Action | Résultat attendu |
+| --- | --- | --- |
+| 2.8 | Console et PC à jour. Sauvegarder sur le PC (melonDS). Sans ouvrir RomSync, jouer au jeu A dans TWiLight Menu++ et sauvegarder, puis ouvrir RomSync | Écran « Choix à faire » avec la date et l'appareil de la save du serveur ; sur le site, aucune nouvelle version |
+| 2.9 | Répondre *B* (plus tard) | Jeu A « choix à faire » en rouge ; rien d'envoyé ni d'écrasé ; la question revient au démarrage suivant (ou avec *A* sur le jeu) |
+| 2.10 | Lancer le jeu A avec *X* et répondre *B* | Le jeu ne se lance pas |
+| 2.11 | Recommencer et répondre *A* (envoyer ma save locale) | Sur le site, la save de la 2DS est active et marquée « divergente », avec « partait de la version du … » ; la save du PC reste dans l'historique |
+| 2.12 | Refaire 2.8 et répondre *Y* (prendre celle du serveur) | La save du PC est téléchargée (progression du PC en jeu) ; la save de la console est dans `saves/.backup/` et, sur le site, dans l'historique comme version non active |
+| 2.13 | Sur le PC, jouer au jeu A depuis le menu de l'émulateur (RomSync en barre système) alors que la 2DS a envoyé une save entre-temps | Notification « Choix à faire pour … » sur le PC, rien n'est envoyé ; un clic ouvre la boîte de dialogue |
 
 ## 3. Horloge
 
 | # | Action | Résultat attendu |
 | --- | --- | --- |
-| 3.1 | Régler l'horloge de la console 3 heures en retard ; sauvegarder sur le PC ; puis jouer et sauvegarder sur la console ; ouvrir RomSync | La save de la console devient active ; sur le site, sa date est l'heure réelle d'ouverture de RomSync (pas 3 h plus tôt) |
+| 3.1 | Régler l'horloge de la console 3 heures en retard ; sauvegarder sur le PC ; ouvrir RomSync sur la console (téléchargement), puis jouer et sauvegarder sur la console ; rouvrir RomSync | La save de la console devient active ; sur le site, sa date est l'heure réelle d'ouverture de RomSync (pas 3 h plus tôt) |
 | 3.2 | Couper le Wi-Fi, jouer, ouvrir RomSync, puis rallumer le Wi-Fi et rouvrir RomSync | La version envoyée garde l'heure corrigée du premier passage (hors ligne) |
 | 3.3 | Remettre l'horloge à l'heure | Rien à signaler |
 
@@ -66,7 +77,7 @@ l'heure du PC et celle de la console.
 | --- | --- | --- |
 | 6.1 | Dans TWiLight Menu++, réglages du jeu A → numéro de save 1 ; jouer et sauvegarder ; rouvrir RomSync | Détails : « Emplacement de save : 1 », fichier `.sav1` ; la save est envoyée |
 | 6.2 | Copier une vieille save dans `<nom>.sav2`, régler le jeu A sur l'emplacement 2, rouvrir RomSync | Question « Emplacement de save changé » ; *Mettre de côté* : le fichier part dans `.backup` et la save du serveur est téléchargée dans `.sav2` |
-| 6.3 | Refaire 6.2 en choisissant *Envoyer* | La vieille save est envoyée ; sur le site elle apparaît (conflit possible), l'autre version reste dans l'historique |
+| 6.3 | Refaire 6.2 en choisissant *Envoyer* | Pas d'écran « Choix à faire » ; la vieille save est envoyée et devient active (divergente sur le site), l'autre version reste dans l'historique |
 | 6.4 | Revenir à l'emplacement 0 | La save `.sav` est synchronisée normalement |
 
 ## 7. Emplacement des saves de TWiLight Menu++

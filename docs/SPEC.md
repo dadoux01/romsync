@@ -192,7 +192,7 @@ Côté serveur, les conversions nécessaires à l'import/export du site (brut, D
 
 ## Protocole de synchronisation
 
-Le client tire la save active avant de lancer le jeu, envoie chaque nouvelle save pendant la partie, puis fait un dernier envoi à la fermeture ; en cas de divergence, la save faite le plus récemment devient active et l'autre reste dans l'historique.
+Le client tire la save active avant de lancer le jeu, envoie chaque nouvelle save pendant la partie, puis fait un dernier envoi à la fermeture. Quand deux appareils ont joué sans se synchroniser (divergence), rien n'est envoyé ni écrasé avant que l'utilisateur ait choisi la save à garder ; l'autre reste dans l'historique.
 
 **État local par fichier de save** (stocké par le client)
 
@@ -203,13 +203,17 @@ L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent parta
 - File d'attente des envois en attente, persistée sur disque, avec une copie de chaque contenu en attente (la save peut encore changer avant l'envoi). Tout envoi passe par cette file : l'`upload_id` (UUID) est généré une fois, à la mise en file, et conservé jusqu'à l'acceptation, même après un redémarrage.
 - À l'envoi d'un élément de la file, `X-Base-Version` est le `last_synced_version_id` courant de ce fichier de save : des envois mis en file hors ligne s'enchaînent donc sans créer de fausse divergence.
 - Un envoi refusé définitivement par le serveur (ex. `409 size_mismatch`) est retiré de la file, et son contenu est conservé dans un dossier `failed` du client.
+- Chaque élément de la file porte un mode : `auto` (envoi automatique), `local` ou `archive` (choix de l'utilisateur après une divergence, voir « Divergence »), et un indicateur `held` (envoi automatique retenu par une divergence). Le choix est donc conservé après un redémarrage ou une coupure.
 
 **Avant le lancement**
 
 1. Le client vide d'abord sa file d'attente si le serveur est joignable.
 2. Il demande la version active du jeu (`GET /games/{code}/active`).
 3. Si la save locale n'a pas changé depuis la dernière synchro et que le serveur a une version plus récente : il la télécharge, la convertit et l'écrit (l'ancienne copie locale est gardée dans un dossier `.backup` à côté de la save ; les N dernières copies sont gardées par save, 10 par défaut, nombre réglable).
-4. Si la save locale a changé hors synchro (partie hors ligne) : il l'envoie d'abord, et la règle « la plus récente gagne » s'applique côté serveur avant le téléchargement.
+4. Si la save locale a changé hors synchro (partie hors ligne) :
+   - si son contenu est celui de la version active (après les règles de taille, voir « Divergence »), rien n'est envoyé et l'état local passe sur cette version ;
+   - si la version active est celle de la dernière synchro de ce fichier : il l'envoie d'abord, puis télécharge la version active si elle a changé ;
+   - sinon, c'est une divergence : il demande à l'utilisateur quelle save garder avant tout envoi ou téléchargement.
 5. Il lance l'émulateur.
 
 **Pendant la partie**
@@ -224,8 +228,21 @@ L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent parta
 **Règle « la plus récente gagne »**
 
 - Chaque envoi porte `saved_at` (date de modification du fichier sur l'appareil) et `base_version_id`.
-- Le serveur crée toujours une nouvelle version ; il la rend active si son `saved_at` est strictement postérieur à celui de la version active (en cas d'égalité, la version active reste en place). La première save d'un jeu devient toujours active.
-- Si `base_version_id` n'est pas la version active, il y a eu divergence : le serveur l'enregistre (`conflict = true` sur la nouvelle version) et l'interface web affiche « conflit résolu automatiquement », avec un bouton pour activer l'autre version. Un `X-Base-Version` vide alors que le jeu a déjà une version active compte aussi comme une divergence.
+- Sans en-tête `X-Activate`, le serveur crée toujours une nouvelle version ; il la rend active si son `saved_at` est strictement postérieur à celui de la version active (en cas d'égalité, la version active reste en place). La première save d'un jeu devient toujours active.
+- Si `base_version_id` n'est pas la version active, il y a eu divergence : le serveur l'enregistre (`conflict = true` sur la nouvelle version). L'historique du site affiche, sur chaque version divergente, la version dont elle partait (ou « aucune »), et une bannière sur la page du jeu propose d'activer l'autre version. Un `X-Base-Version` vide alors que le jeu a déjà une version active compte aussi comme une divergence.
+- Les clients à jour n'envoient plus une divergence sans le choix de l'utilisateur (voir « Divergence ») ; la règle s'applique donc aux envois sans divergence, aux envois des anciens clients, à l'import du site, et à un autre appareil qui envoie entre la vérification et l'envoi.
+
+**Divergence**
+
+- Définition, côté client : la save locale a changé depuis la dernière synchro, le serveur a une version active, celle-ci n'est pas `last_synced_version_id` de ce fichier (ou le fichier n'a jamais été synchronisé, par exemple sur un nouvel appareil), et son contenu est différent.
+- Comparaison du contenu : avec les mêmes règles de taille que le serveur (« Taille réelle »), avec la taille de puce donnée par `GET /games/{code}/active` : une save plus grande que la taille de puce et dont l'excédent n'est que du remplissage est comparée une fois coupée (TWiLight Menu++ complète avec des 0x00, une flashcard avec des 0xFF) ; une save plus petite est identique à une version active dont l'excédent n'est que du remplissage (FRAM de 32 Kio vue à 64 Kio), ce qui demande de télécharger la version active, seulement dans ce cas. Les deux clients appliquent la même règle (`size_rule.dart`, `3ds/core/size_rule.c`).
+- Tant que l'utilisateur n'a pas choisi, rien n'est envoyé ni écrasé ; il peut reporter (« Plus tard ») et la question revient à la synchro suivante.
+- Choix :
+  - « Envoyer ma save locale » : envoi avec `X-Activate: true`, la save devient active quelle que soit sa date ;
+  - « Prendre celle du serveur » : la save locale est envoyée avec `X-Activate: false` (version non active, visible et restaurable sur le site), puis la version active est téléchargée ; la save locale est aussi copiée dans `.backup`.
+- Au lancement d'un jeu (PC et 3DS), la question est posée avant le lancement ; « Plus tard » annule le lancement.
+- Envois automatiques (PC : arrière-plan et pendant une partie ; 3DS : file d'attente remplie hors ligne) : avant chaque envoi en mode `auto`, le client vérifie la version active ; un envoi divergent n'est pas envoyé mais retenu dans la file (`held`), avec ceux qui le suivent pour la même save. Sur PC, l'état du jeu devient « choix à faire », une bannière propose le choix et une notification « Choix à faire pour <jeu> » est affichée une fois ; un clic dessus ouvre la boîte de dialogue. « Prendre celle du serveur » est refusé tant que ce jeu tourne depuis RomSync.
+- Un envoi fait juste après un téléchargement part de la version active et n'est jamais divergent (tests de bout en bout des deux clients).
 - Horloges décalées : le serveur compare `saved_at` à son heure de réception.
   - Si `saved_at` dépasse l'heure de réception de plus de 5 minutes, il est ramené à l'heure de réception ; la valeur d'origine est conservée dans `saved_at_reported`, et `devices.clock_skew_at` est renseigné. Sans cette correction, une save datée dans le futur resterait active et bloquerait toutes les saves suivantes.
   - Si `saved_at` est antérieur à l'heure de réception de plus de 5 minutes, ce n'est pas forcément une erreur (envoi différé depuis la file d'attente, 3DS) : la valeur est conservée telle quelle.
@@ -245,6 +262,7 @@ L'état est tenu par fichier de save, pas par jeu : plusieurs ROMs peuvent parta
 **3DS**
 
 - L'appli ne tourne pas pendant le jeu ; à chaque démarrage, elle vide sa file d'attente, puis applique « Avant le lancement » (étapes 1 à 4) à chaque jeu : envoi des saves dont le hash diffère de `last_synced_hash`, puis téléchargement des versions plus récentes (avec copie `.backup`).
+- Une divergence ouvre un écran de choix : A envoie la save locale, Y prend celle du serveur, B reporte (rien n'est envoyé ni écrasé, la question revient au prochain démarrage, et le jeu ne se lance pas). Après un changement d'emplacement `.savN`, « l'envoyer quand même » vaut le choix de la save locale et n'est pas redemandé.
 - Un changement se détecte uniquement par le hash, la date du fichier n'étant pas fiable. `saved_at` est l'heure à laquelle l'appli voit le nouveau contenu pour la première fois, corrigée de l'écart entre l'horloge de la console et l'en-tête `Date` des réponses du serveur (mesuré à chaque réponse, gardé dans l'état local pour les envois hors ligne). Il faut donc ouvrir l'appli juste après avoir joué.
 - Dès qu'un jeu trouve le serveur injoignable, les jeux suivants du même passage sont seulement mis en file d'attente, sans attendre un délai réseau par jeu ; sans Wi-Fi, aucun appel réseau n'est tenté.
 
@@ -353,7 +371,7 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 
 **Appli Flutter (Linux, macOS, Windows, Android)**
 
-- Bibliothèque : l'utilisateur ajoute un ou plusieurs dossiers de ROMs ; l'appli lit l'en-tête de chaque `.nds` (y compris dans un `.zip`, lu directement, ou un `.7z`, lu avec le programme 7-Zip `7z`, `7zz` ou `7za` ; sans lui, l'appli affiche « installer 7zip ») et affiche les jeux avec l'état de leur save : à jour, à envoyer, à télécharger, hors ligne, choix requis (ROMs partageant un identifiant), plus la mention « conflit résolu automatiquement ».
+- Bibliothèque : l'utilisateur ajoute un ou plusieurs dossiers de ROMs ; l'appli lit l'en-tête de chaque `.nds` (y compris dans un `.zip`, lu directement, ou un `.7z`, lu avec le programme 7-Zip `7z`, `7zz` ou `7za` ; sans lui, l'appli affiche « installer 7zip ») et affiche les jeux avec l'état de leur save : à jour, à envoyer, à télécharger, hors ligne, choix requis (ROMs partageant un identifiant), choix à faire (divergence, voir le protocole), plus la mention « conflit résolu automatiquement ».
 - Le client ne coupe jamais une save : il retire seulement l'en-tête ou le pied du profil de conversion, puis envoie le brut ; la normalisation de taille est faite par le serveur.
 - Architecture : toute la logique hors interface (client API, en-têtes NDS, profils de conversion, état local, file d'attente, moteur de synchro, profils d'émulateurs) est dans un package Dart pur, `client/packages/romsync_core`, testable sans Flutter ; l'appli Flutter n'est qu'une interface. Les profils de conversion sont les fichiers `profiles/*.json`, copiés dans les ressources de l'appli au build (un test vérifie que les copies sont identiques).
 - melonDS (phase 2) : installé en binaire ou en Flatpak (`net.kuribo64.melonDS`, lancé par `flatpak run`). Le dossier des saves est lu dans sa configuration (`SaveFilePath` de `melonDS.toml`, ou de l'ancien `melonDS.ini`, y compris sous `~/.var/app/net.kuribo64.melonDS/config/melonDS/` pour le Flatpak) : vide, la save est à côté de la ROM (à côté de l'archive pour une ROM dans un `.zip`/`.7z`), nommée comme la ROM avec l'extension `.sav`. L'utilisateur peut imposer un autre dossier. Pour le Flatpak, l'appli lit ses droits (`flatpak info --show-permissions`) et, si un dossier de ROMs ou de saves est hors d'atteinte, affiche la commande `flatpak override --user --filesystem=<dossier> net.kuribo64.melonDS`.
@@ -363,7 +381,7 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 - Lancement sur PC : processus enfant suivi jusqu'à sa fin. Sur macOS, une `.app` est lancée par son exécutable interne (`Contents/MacOS`), sauf DeSmuME (appli Cocoa qui ignore les arguments) lancé par `open -W -n -a`. Sur Android : lancement par intent, puis détection du retour dans l'appli et scrutation du fichier.
 - Lecture des saves : un fichier n'est lu que complet et stable (taille et date identiques avant, après et peu après la lecture) ; les erreurs de partage des émulateurs qui gardent la save ouverte (Windows) sont retentées. Un fichier lu à moitié n'est jamais envoyé. Surveillance par inotify (Linux), FSEvents (macOS) et ReadDirectoryChangesW (Windows).
 - Android : accès aux dossiers des émulateurs via le sélecteur de dossiers du système (Storage Access Framework) ; les dossiers privés d'une appli ne sont pas accessibles et doivent être déplacés par l'utilisateur dans l'émulateur.
-- Icône de barre système sur PC pour la surveillance des saves quand le jeu est lancé sans passer par l'appli : fermer la fenêtre garde l'appli dans la barre (réglable). En arrière-plan, l'appli ne fait qu'envoyer : chaque save modifiée est envoyée après 5 s sans écriture. Elle ne télécharge jamais, car l'émulateur peut avoir la save ouverte ; une notification signale une save plus récente sur le serveur, avec le nom du jeu et l'appareil d'où elle vient (une fois par version), et elle sera téléchargée au prochain lancement depuis l'appli. Sous Linux, l'icône utilise StatusNotifierItem : KDE l'affiche, GNOME demande l'extension AppIndicator, Hyprland une barre compatible (waybar).
+- Icône de barre système sur PC pour la surveillance des saves quand le jeu est lancé sans passer par l'appli : fermer la fenêtre garde l'appli dans la barre (réglable). En arrière-plan, l'appli ne fait qu'envoyer : chaque save modifiée est envoyée après 5 s sans écriture, sauf une save divergente, retenue jusqu'au choix de l'utilisateur (notification « Choix à faire pour <jeu> »). Elle ne télécharge jamais, car l'émulateur peut avoir la save ouverte ; une notification signale une save plus récente sur le serveur, avec le nom du jeu et l'appareil d'où elle vient (une fois par version), et elle sera téléchargée au prochain lancement depuis l'appli. Sous Linux, l'icône utilise StatusNotifierItem : KDE l'affiche, GNOME demande l'extension AppIndicator, Hyprland une barre compatible (waybar).
 
 **Homebrew 3DS (C, devkitPro)**
 
