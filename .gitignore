@@ -24,3 +24,9 @@ node_modules/
 
 # 3DS homebrew
 /3ds/tests/build/
+/3ds/build/
+/3ds/romfs/
+/3ds/romsync.3dsx
+/3ds/romsync.smdh
+/3ds/romsync.elf
+/3ds/romsync.cia

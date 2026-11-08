@@ -282,6 +282,20 @@ done:
     return st;
 }
 
+rs_status rs_engine_offline_pass(rs_engine *e, const rs_entry *entry, rs_prepare_result *out, rs_error *err)
+{
+    memset(out, 0, sizeof *out);
+    if (entry->unavailable[0] || entry->needs_choice)
+        return rs_fail(err, RS_ERR_REFUSED, "%s",
+                       entry->unavailable[0] ? entry->unavailable : "Choix requis avant la synchronisation.");
+    rs_local_save local;
+    rs_status st = rs_read_local_save(entry, &local, err);
+    if (st == RS_OK)
+        st = go_offline(e, entry, &local, out, err);
+    rs_local_save_free(&local);
+    return st;
+}
+
 /* ---- Status ------------------------------------------------------------ */
 
 rs_save_status rs_compute_status(bool needs_choice, bool unavailable, const char *local_hash,

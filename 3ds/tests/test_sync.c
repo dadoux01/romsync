@@ -396,6 +396,24 @@ static void keeps_the_configured_number_of_backup_copies(void)
     h_free(h);
 }
 
+static void the_offline_pass_queues_changes_without_the_network(void)
+{
+    harness *h = h_new();
+    write_local(h, save(1));
+    prepare(h, "IRBF", RS_OK);
+    h->now += MINUTE;
+    write_local(h, save(2));
+    h->server.online = false;
+    rs_entry e = h_entry(h, "IRBF");
+    rs_prepare_result r;
+    CHECK_INT(rs_engine_offline_pass(&h->engine, &e, &r, NULL), RS_OK);
+    CHECK(r.offline);
+    CHECK_INT(h->queue.count, 1);
+    CHECK_INT(rs_engine_offline_pass(&h->engine, &e, &r, NULL), RS_OK);
+    CHECK_INT(h->queue.count, 1); /* same content: queued once */
+    h_free(h);
+}
+
 /* ---- Shared identifiers ------------------------------------------------ */
 
 static void a_rom_waiting_for_a_choice_is_not_synced(void)
@@ -540,6 +558,7 @@ void run_sync_tests(void)
     RUN(the_same_content_is_queued_once);
     RUN(an_upload_refused_by_the_server_is_kept_aside);
     RUN(keeps_the_configured_number_of_backup_copies);
+    RUN(the_offline_pass_queues_changes_without_the_network);
     RUN(a_rom_waiting_for_a_choice_is_not_synced);
     RUN(a_state_recorded_under_another_identifier_is_ignored);
     RUN(compute_status_covers_every_state_of_the_game_list);

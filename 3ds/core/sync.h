@@ -99,6 +99,11 @@ rs_status rs_engine_enqueue(rs_engine *e, const rs_entry *entry, const rs_local_
 rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_size, rs_prepare_result *out,
                             rs_error *err);
 
+/* The server is known to be unreachable (an earlier game of the same
+ * startup pass found it so): only queues a local change of entry, without
+ * waiting for a network timeout on every game. */
+rs_status rs_engine_offline_pass(rs_engine *e, const rs_entry *entry, rs_prepare_result *out, rs_error *err);
+
 /* ---- Status shown in the game list ------------------------------------- */
 
 typedef enum {
