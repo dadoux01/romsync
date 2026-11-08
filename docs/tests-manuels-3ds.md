@@ -81,13 +81,14 @@ l'heure du PC et celle de la console.
 
 | # | Action | Résultat attendu |
 | --- | --- | --- |
-| 8.1 | Sans `bootstrap.cia` : *X* sur un jeu | Message expliquant quoi installer (YANBF, pack NTR_Forwarder) ; rien n'est lancé |
+| 8.1 | Sans `sd:/_nds/ntr-forwarder/sdcard.nds` : *X* sur un jeu (version `.cia`) | Message « sdcard.nds est introuvable », avec où copier le pack ; rien n'est lancé |
+| 8.1b | Avec `sdcard.nds` mais sans `bootstrap.cia` : *X* (version `.cia`) | Message « bootstrap.cia de YANBF n'est pas installé » |
 | 8.2 | Installer `bootstrap.cia` et le pack de forwarders ; *X* sur le jeu A | Synchro, message « Démarrage du jeu », puis le jeu démarre par nds-bootstrap avec la bonne save |
 | 8.3 | Sauvegarder en jeu, revenir au menu HOME, rouvrir RomSync | Save envoyée |
 | 8.4 | Mettre `SAVE_LOCATION = 1` dans `[NTR-FORWARDER]` de `sd:/_nds/ntr_forwarder.ini` (TWiLight Menu++ restant sur « dossier saves ») ; *X* | Lancement bloqué, avec l'explication et la valeur à mettre |
 | 8.5 | Régler un numéro de save différent pour le jeu dans le forwarder (maintenir Y au lancement d'un forwarder) ; *X* dans RomSync | Lancement bloqué : « Emplacement de save différent pour ce jeu » |
 | 8.6 | Wi-Fi coupé, *X* | Avertissement « Serveur injoignable », puis le jeu se lance |
-| 8.7 | Lancer le `.3dsx` depuis le Homebrew Launcher et faire *X* | Le jeu démarre, ou un message dit d'installer RomSync en `.cia` |
+| 8.7 | Lancer le `.3dsx` depuis le Homebrew Launcher et faire *X* | La liste des titres n'est pas lisible depuis le Homebrew Launcher : RomSync tente le saut ; le jeu démarre, ou un message avec le code d'erreur dit de vérifier `bootstrap.cia` et d'installer RomSync en `.cia` |
 
 ## 9. Divers
 
