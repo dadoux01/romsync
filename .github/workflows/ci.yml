@@ -109,7 +109,7 @@ jobs:
     with:
       version: ci
 
-  3ds-core:
+  core-3ds:
     name: 3DS core (unit and end-to-end tests)
     runs-on: ubuntu-latest
     steps:
@@ -126,9 +126,9 @@ jobs:
       - name: End-to-end tests against the real server
         run: make 3ds-e2e
 
-  3ds-build:
+  build-3ds:
     name: 3DS builds
-    needs: 3ds-core
+    needs: core-3ds
     uses: ./.github/workflows/build-3ds.yml
     with:
       version: ci

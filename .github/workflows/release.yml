@@ -33,7 +33,7 @@ jobs:
     with:
       version: ${{ needs.version.outputs.version }}
 
-  3ds:
+  homebrew-3ds:
     name: 3DS homebrew
     needs: version
     uses: ./.github/workflows/build-3ds.yml
@@ -79,7 +79,7 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: [version, client, 3ds, image]
+    needs: [version, client, homebrew-3ds, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
