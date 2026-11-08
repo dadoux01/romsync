@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "../core/sha.h"
+#include "../core/size_rule.h"
 
 void fake_init(fake_server *s)
 {
@@ -28,6 +29,25 @@ static void set_active(fake_server *s, const char *code, int64_t id)
         }
     rs_strlcpy(s->active[s->active_count].code, code, RS_GAME_ID_MAX);
     s->active[s->active_count++].id = id;
+}
+
+static size_t *chip_of(fake_server *s, const char *code)
+{
+    for (int i = 0; i < s->chip_count; i++)
+        if (strcmp(s->chips[i].code, code) == 0)
+            return &s->chips[i].size;
+    return NULL;
+}
+
+static void set_chip(fake_server *s, const char *code, size_t size)
+{
+    size_t *c = chip_of(s, code);
+    if (c) {
+        *c = size;
+        return;
+    }
+    rs_strlcpy(s->chips[s->chip_count].code, code, RS_GAME_ID_MAX);
+    s->chips[s->chip_count++].size = size;
 }
 
 static fake_version *by_id(fake_server *s, int64_t id)
@@ -66,6 +86,8 @@ const fake_version *fake_add_version(fake_server *s, const char *code, const uin
 {
     fake_version *v = add(s, code, data, len, saved_at, 0, false);
     set_active(s, code, v->id);
+    if (!chip_of(s, code))
+        set_chip(s, code, len);
     return v;
 }
 
@@ -146,6 +168,23 @@ static void upload(fake_server *s, const char *code, const rs_http_request *req,
         return;
     }
     const fake_version *cur = fake_active(s, code);
+    /* Size rules: padding cut down to the chip size, chip size shrunk when
+     * the active version's excess is only padding. */
+    size_t len = req->body_len, *chip = chip_of(s, code);
+    if (chip && len != *chip) {
+        if (len > *chip && rs_is_padding(req->body + *chip, len - *chip)) {
+            len = *chip;
+            rs_sha256_hex(req->body, len, sha);
+        } else if (len < *chip && cur && cur->data.len > len &&
+                   rs_is_padding(cur->data.data + len, cur->data.len - len)) {
+            *chip = len;
+        } else {
+            reply_error(res, 409, "size_mismatch");
+            return;
+        }
+    }
+    if (!chip)
+        set_chip(s, code, len);
     if (cur && strcmp(cur->sha, sha) == 0) {
         version_json(s, cur, vj, sizeof vj);
         snprintf(json, sizeof json, "{\"version\":%s,\"created\":false,\"active\":true,\"conflict\":false}", vj);
@@ -157,8 +196,9 @@ static void upload(fake_server *s, const char *code, const rs_http_request *req,
     rs_time saved_at = 0;
     rs_time_parse_iso(header(req, "X-Saved-At"), &saved_at);
     bool conflict = cur && base != cur->id;
-    bool activate = !cur || saved_at > cur->saved_at;
-    fake_version *v = add(s, code, req->body, req->body_len, saved_at, base, conflict);
+    const char *activate_header = header(req, "X-Activate");
+    bool activate = !cur || (activate_header ? strcmp(activate_header, "true") == 0 : saved_at > cur->saved_at);
+    fake_version *v = add(s, code, req->body, len, saved_at, base, conflict);
     rs_strlcpy(s->upload_ids[s->upload_id_count].upload_id, upload_id, 40);
     s->upload_ids[s->upload_id_count++].id = v->id;
     if (activate)
@@ -224,7 +264,8 @@ rs_status fake_send(void *ctx, const rs_http_request *req, rs_http_response *res
         } else {
             char vj[512], json[600];
             version_json(s, v, vj, sizeof vj);
-            snprintf(json, sizeof json, "{\"version\":%s}", vj);
+            size_t *chip = chip_of(s, code);
+            snprintf(json, sizeof json, "{\"version\":%s,\"chip_size\":%zu}", vj, chip ? *chip : 0);
             reply(res, 200, json);
         }
     } else if (strcmp(req->method, "POST") == 0 && strncmp(path, "/games/", 7) == 0 && n > 16 &&

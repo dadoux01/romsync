@@ -203,7 +203,11 @@ static void dialog(const char *title, const char *text, const char *footer)
     ui_print(UI_CYAN "%s" UI_RESET "\n\n", title);
     ui_print_wrapped(text, UI_BOTTOM_COLS);
     if (footer) {
-        ui_move(UI_ROWS - 2, 0);
+        /* At the bottom, raised by its extra lines. */
+        int lines = 0;
+        for (const char *c = footer; *c; c++)
+            lines += *c == '\n';
+        ui_move(UI_ROWS - 2 - lines, 0);
         ui_print("%s", footer);
     }
 }
@@ -241,6 +245,25 @@ bool ui_confirm(const char *title, const char *text, const char *yes, const char
         ui_frame();
     }
     return false;
+}
+
+char ui_choose(const char *title, const char *text, const char *a, const char *y, const char *b)
+{
+    char footer[120];
+    snprintf(footer, sizeof footer, "A : %s\nY : %s\nB : %s", a, y, b);
+    dialog(title, text, footer);
+    while (aptMainLoop()) {
+        hidScanInput();
+        u32 k = hidKeysDown();
+        if (k & KEY_A)
+            return 'A';
+        if (k & KEY_Y)
+            return 'Y';
+        if (k & KEY_B)
+            return 'B';
+        ui_frame();
+    }
+    return 'B';
 }
 
 void ui_progress(const char *title, const char *text)

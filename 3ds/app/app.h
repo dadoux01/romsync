@@ -27,6 +27,9 @@ typedef struct {
     bool synced;        /* a sync ran for this game since the start */
     bool error;         /* the last sync failed: see message */
     bool conflict;      /* "conflit résolu automatiquement" on the server */
+    /* Two devices played without syncing and the user answered "Plus tard":
+     * nothing was sent nor overwritten. */
+    bool choice_pending;
     char message[160];
 } game_view;
 

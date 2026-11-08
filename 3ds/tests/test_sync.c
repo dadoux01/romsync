@@ -141,16 +141,32 @@ static bool active_is(harness *h, const char *code, const uint8_t *data)
     return v && v->data.len == 512 && memcmp(v->data.data, data, 512) == 0;
 }
 
-static rs_prepare_result prepare(harness *h, const char *game_id, rs_status expected)
+static rs_prepare_result prepare_choice(harness *h, const char *game_id, rs_choice choice, rs_status expected)
 {
     rs_entry e = h_entry(h, game_id);
     rs_prepare_result r;
     rs_error err = {0};
-    rs_status st = rs_engine_prepare(&h->engine, &e, 0, &r, &err);
+    rs_status st = rs_engine_prepare(&h->engine, &e, 0, choice, &r, &err);
     CHECK_INT(st, expected);
     if (st != expected)
         fprintf(stderr, "    %s\n", err.message);
     return r;
+}
+
+static rs_prepare_result prepare(harness *h, const char *game_id, rs_status expected)
+{
+    return prepare_choice(h, game_id, RS_CHOICE_NONE, expected);
+}
+
+/* Whether a version of the fake server holds data (512 bytes). */
+static const fake_version *version_with(harness *h, const uint8_t *data)
+{
+    char sha[65];
+    rs_sha256_hex(data, 512, sha);
+    for (int i = 0; i < h->server.version_count; i++)
+        if (strcmp(h->server.versions[i].sha, sha) == 0)
+            return &h->server.versions[i];
+    return NULL;
 }
 
 /* ---- prepare (at startup) ---------------------------------------------- */
@@ -226,30 +242,149 @@ static void up_to_date_does_nothing(void)
     h_free(h);
 }
 
-static void local_change_newer_than_the_server_is_sent_first_without_download(void)
+static void local_change_with_the_server_unchanged_is_sent_without_question(void)
+{
+    harness *h = h_new();
+    write_local(h, save(1));
+    prepare(h, "IRBF", RS_OK);
+    h->now += HOUR;
+    write_local(h, save(2));
+    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    CHECK(!r.needs_choice && r.uploaded);
+    CHECK(active_is(h, "IRBF", save(2)));
+    CHECK(!fake_active(&h->server, "IRBF")->conflict);
+    h_free(h);
+}
+
+static void divergence_sends_and_overwrites_nothing_until_the_user_chooses(void)
+{
+    harness *h = h_new();
+    write_local(h, save(1));
+    prepare(h, "IRBF", RS_OK);
+    h->now += 3 * HOUR;
+    const fake_version *other = fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    write_local(h, save(3)); /* played here without syncing */
+    int requests = h->server.upload_requests;
+
+    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    CHECK(r.needs_choice);
+    CHECK_INT(r.divergence.server.id, other->id);
+    CHECK(!r.uploaded && !r.downloaded);
+    CHECK_INT(h->server.upload_requests, requests);
+    CHECK_INT(h->queue.count, 0);
+    CHECK(local_is(h, save(3)));
+    /* Asked again next time (no answer). */
+    CHECK(prepare(h, "IRBF", RS_OK).needs_choice);
+    h_free(h);
+}
+
+static void choice_local_is_sent_and_active_even_when_older(void)
 {
     harness *h = h_new();
     write_local(h, save(1));
     prepare(h, "IRBF", RS_OK);
     int64_t v1 = fake_active(&h->server, "IRBF")->id;
     h->now += 3 * HOUR;
-    fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR); /* other device, older */
-    write_local(h, save(3));                                              /* played here since */
+    fake_add_version(&h->server, "IRBF", save(2), 512, h->now + HOUR); /* other device, dated later */
+    write_local(h, save(3));
 
-    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    rs_prepare_result r = prepare_choice(h, "IRBF", RS_CHOICE_LOCAL, RS_OK);
     CHECK(r.uploaded && !r.downloaded);
     const fake_version *mine = fake_active(&h->server, "IRBF");
     CHECK(active_is(h, "IRBF", save(3)));
     CHECK_INT(mine->base, v1);
-    CHECK(mine->conflict); /* diverged from the other device */
+    CHECK(mine->conflict);
     CHECK(local_is(h, save(3)));
+    CHECK_INT(rs_state_get(&h->states, h->save_path)->version_id, mine->id);
     h_free(h);
 }
 
-/* PC version: "local save changed outside a sync but older". On the 3DS the
- * date is the one at which RomSync saw the change: here it was seen
- * offline, and another device saved after that. */
-static void change_seen_offline_then_newer_save_elsewhere_is_sent_then_downloaded(void)
+static void choice_server_archives_the_local_save_then_downloads_with_backup(void)
+{
+    harness *h = h_new();
+    write_local(h, save(1));
+    prepare(h, "IRBF", RS_OK);
+    h->now += 3 * HOUR;
+    const fake_version *other = fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    int64_t other_id = other->id;
+    write_local(h, save(3)); /* seen now: more recent than the other device's */
+
+    rs_prepare_result r = prepare_choice(h, "IRBF", RS_CHOICE_SERVER, RS_OK);
+    CHECK(r.uploaded && r.downloaded);
+    CHECK_INT(fake_active(&h->server, "IRBF")->id, other_id); /* the archive does not win */
+    const fake_version *archived = version_with(h, save(3));
+    CHECK(archived && archived->id != other_id);
+    CHECK(local_is(h, save(2)));
+    CHECK(file_is(r.backup_path, save(3)));
+    CHECK_INT(rs_state_get(&h->states, h->save_path)->version_id, other_id);
+    CHECK(!prepare(h, "IRBF", RS_OK).needs_choice);
+    h_free(h);
+}
+
+static void first_sync_of_a_console_whose_save_differs_from_the_server_is_a_divergence(void)
+{
+    harness *h = h_new();
+    fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    write_local(h, save(3));
+    CHECK(prepare(h, "IRBF", RS_OK).needs_choice);
+    CHECK_INT(h->server.upload_requests, 0);
+    h_free(h);
+}
+
+static void an_upload_right_after_a_download_is_never_divergent(void)
+{
+    harness *h = h_new();
+    fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    CHECK(prepare(h, "IRBF", RS_OK).downloaded);
+    h->now += MINUTE;
+    write_local(h, save(3));
+    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    CHECK(!r.needs_choice && r.uploaded);
+    CHECK(active_is(h, "IRBF", save(3)));
+    CHECK(!fake_active(&h->server, "IRBF")->conflict);
+    h_free(h);
+}
+
+static void a_save_padded_with_zeros_with_the_active_content_is_no_divergence(void)
+{
+    harness *h = h_new();
+    const fake_version *v = fake_add_version(&h->server, "IRBF", save(2), 512, h->now - 2 * HOUR);
+    int64_t id = v->id;
+    uint8_t padded[1024];
+    memcpy(padded, save(2), 512);
+    memset(padded + 512, 0, 512); /* TWiLight Menu++ pads with 0x00 */
+    t_write(h->save_path, padded, sizeof padded);
+    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    CHECK(!r.needs_choice && !r.uploaded && !r.downloaded);
+    CHECK_INT(h->server.upload_requests, 0);
+    CHECK_INT(rs_state_get(&h->states, h->save_path)->version_id, id);
+    /* Padded with data instead: a real difference. */
+    memset(padded + 512, 7, 512);
+    t_write(h->save_path, padded, sizeof padded);
+    fake_add_version(&h->server, "IRBF", save(4), 512, h->now);
+    CHECK(prepare(h, "IRBF", RS_OK).needs_choice);
+    h_free(h);
+}
+
+static void a_smaller_save_whose_active_version_only_adds_padding_is_no_divergence(void)
+{
+    harness *h = h_new();
+    uint8_t big[1024];
+    memcpy(big, save(2), 512);
+    memset(big + 512, 0xFF, 512); /* FRAM 32 KiB seen as 64 KiB */
+    const fake_version *v = fake_add_version(&h->server, "IRBF", big, sizeof big, h->now - 2 * HOUR);
+    int64_t id = v->id;
+    write_local(h, save(2));
+    rs_prepare_result r = prepare(h, "IRBF", RS_OK);
+    CHECK(!r.needs_choice && !r.uploaded && !r.downloaded);
+    CHECK_INT(rs_state_get(&h->states, h->save_path)->version_id, id);
+    h_free(h);
+}
+
+/* PC version: an automatic upload in the background. On the 3DS: a change
+ * queued offline, then another device saved before the console came back
+ * online. The queued upload is held, then the choice applies to it. */
+static void a_divergent_queued_upload_is_held_then_the_choice_applies_to_it(void)
 {
     harness *h = h_new();
     write_local(h, save(1));
@@ -257,25 +392,41 @@ static void change_seen_offline_then_newer_save_elsewhere_is_sent_then_downloade
     h->now += HOUR;
     write_local(h, save(3));
     h->server.online = false;
-    rs_prepare_result r = prepare(h, "IRBF", RS_OK); /* seen and queued, offline */
-    CHECK(r.offline);
+    CHECK(prepare(h, "IRBF", RS_OK).offline); /* seen and queued, offline */
     h->server.online = true;
-    fake_add_version(&h->server, "IRBF", save(2), 512, h->now + 30 * MINUTE); /* other device, later */
-    h->now += HOUR;
+    fake_add_version(&h->server, "IRBF", save(2), 512, h->now + 30 * MINUTE); /* other device */
+    int requests = h->server.upload_requests;
 
-    /* The queued upload leaves first (flush at the start of prepare), then
-     * the newer save of the other device is downloaded. */
-    r = prepare(h, "IRBF", RS_OK);
-    CHECK(r.downloaded);
+    rs_flush_result f;
+    CHECK_INT(rs_engine_flush(&h->engine, &f, NULL), RS_OK);
+    CHECK_INT(h->server.upload_requests, requests); /* never sent automatically */
+    CHECK_INT(f.held, 1);
+    CHECK_STR(f.first_held.game_id, "IRBF");
+    CHECK(h->queue.items[0].held);
+    CHECK_INT(h->last_event, RS_EVENT_NEEDS_CHOICE);
+    CHECK_INT(rs_compute_status(false, false, "x", NULL, NULL, 1, true, rs_queue_held_for(&h->queue, h->save_path)),
+              RS_STATUS_DIVERGED);
+
+    /* Later flushes keep it without announcing it again. */
+    h->last_event = RS_EVENT_UP_TO_DATE;
+    CHECK_INT(rs_engine_flush(&h->engine, &f, NULL), RS_OK);
+    CHECK_INT(f.held, 1);
+    CHECK_INT(h->last_event, RS_EVENT_UP_TO_DATE);
+
+    /* The held upload survives a restart; the choice applies to it. */
+    h_open(h);
+    CHECK(h->queue.items[0].held);
+    CHECK(prepare(h, "IRBF", RS_OK).needs_choice);
+    rs_prepare_result r = prepare_choice(h, "IRBF", RS_CHOICE_LOCAL, RS_OK);
+    CHECK(r.uploaded);
     CHECK_INT(h->queue.count, 0);
-    CHECK(local_is(h, save(2)));
-    CHECK(file_is(r.backup_path, save(3)));
-    bool kept = false; /* the older save stays in the history */
+    CHECK(active_is(h, "IRBF", save(3)));
+    int copies = 0;
     char sha[65];
     rs_sha256_hex(save(3), 512, sha);
     for (int i = 0; i < h->server.version_count; i++)
-        kept = kept || strcmp(h->server.versions[i].sha, sha) == 0;
-    CHECK(kept);
+        copies += strcmp(h->server.versions[i].sha, sha) == 0;
+    CHECK_INT(copies, 1); /* sent once */
     h_free(h);
 }
 
@@ -424,10 +575,10 @@ static void a_rom_waiting_for_a_choice_is_not_synced(void)
     e.needs_choice = true;
     rs_prepare_result r;
     rs_error err;
-    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, &r, &err), RS_ERR_REFUSED);
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_NONE, &r, &err), RS_ERR_REFUSED);
     CHECK(strstr(err.message, "partager ou séparer") != NULL);
     CHECK_INT(h->server.upload_requests, 0);
-    CHECK_INT(rs_compute_status(true, false, "x", NULL, NULL, 0, true), RS_STATUS_NEEDS_CHOICE);
+    CHECK_INT(rs_compute_status(true, false, "x", NULL, NULL, 0, true, false), RS_STATUS_NEEDS_CHOICE);
     h_free(h);
 }
 
@@ -452,33 +603,34 @@ static void compute_status_covers_every_state_of_the_game_list(void)
     rs_save_state older = {.version_id = 4};
     rs_strlcpy(older.hash, "h", sizeof older.hash);
 
-    CHECK_INT(rs_compute_status(false, false, "h", &synced, &game, 0, true), RS_STATUS_UP_TO_DATE);
-    CHECK_INT(rs_compute_status(false, false, "other", &synced, &game, 0, true), RS_STATUS_TO_UPLOAD);
-    CHECK_INT(rs_compute_status(false, false, "h", &synced, &game, 1, true), RS_STATUS_TO_UPLOAD);
-    CHECK_INT(rs_compute_status(false, false, "h", &older, &game, 0, true), RS_STATUS_TO_DOWNLOAD);
-    CHECK_INT(rs_compute_status(false, false, NULL, NULL, &game, 0, true), RS_STATUS_TO_DOWNLOAD);
-    CHECK_INT(rs_compute_status(false, false, "h", NULL, NULL, 0, true), RS_STATUS_TO_UPLOAD);
-    CHECK_INT(rs_compute_status(false, false, "h", NULL, &unknown, 0, true), RS_STATUS_TO_UPLOAD);
-    CHECK_INT(rs_compute_status(false, false, NULL, NULL, NULL, 0, true), RS_STATUS_NO_SAVE);
-    CHECK_INT(rs_compute_status(false, false, "h", &synced, NULL, 0, false), RS_STATUS_OFFLINE);
-    CHECK_INT(rs_compute_status(false, false, "other", &synced, NULL, 0, false), RS_STATUS_TO_UPLOAD);
-    CHECK_INT(rs_compute_status(false, true, "h", NULL, NULL, 0, true), RS_STATUS_UNAVAILABLE);
+    CHECK_INT(rs_compute_status(false, false, "h", &synced, &game, 0, true, false), RS_STATUS_UP_TO_DATE);
+    CHECK_INT(rs_compute_status(false, false, "other", &synced, &game, 0, true, false), RS_STATUS_TO_UPLOAD);
+    CHECK_INT(rs_compute_status(false, false, "h", &synced, &game, 1, true, false), RS_STATUS_TO_UPLOAD);
+    CHECK_INT(rs_compute_status(false, false, "h", &older, &game, 0, true, false), RS_STATUS_TO_DOWNLOAD);
+    CHECK_INT(rs_compute_status(false, false, NULL, NULL, &game, 0, true, false), RS_STATUS_TO_DOWNLOAD);
+    CHECK_INT(rs_compute_status(false, false, "h", NULL, NULL, 0, true, false), RS_STATUS_TO_UPLOAD);
+    CHECK_INT(rs_compute_status(false, false, "h", NULL, &unknown, 0, true, false), RS_STATUS_TO_UPLOAD);
+    CHECK_INT(rs_compute_status(false, false, NULL, NULL, NULL, 0, true, false), RS_STATUS_NO_SAVE);
+    CHECK_INT(rs_compute_status(false, false, "h", &synced, NULL, 0, false, false), RS_STATUS_OFFLINE);
+    CHECK_INT(rs_compute_status(false, false, "other", &synced, NULL, 0, false, false), RS_STATUS_TO_UPLOAD);
+    CHECK_INT(rs_compute_status(false, true, "h", NULL, NULL, 0, true, false), RS_STATUS_UNAVAILABLE);
+    CHECK_INT(rs_compute_status(false, false, "h", &synced, &game, 1, true, true), RS_STATUS_DIVERGED);
 }
 
 /* ---- 3DS: clock ------------------------------------------------------- */
 
-/* The console clock is 2 hours late. Another device saved 5 minutes ago;
- * the 3DS game was just played. Without the correction, the 3DS save would
- * be dated 2 hours ago and lose against the other device's. */
+/* The console clock is 2 hours late. Another device saved 5 minutes ago,
+ * the 3DS downloaded that save and the game was just played. Without the
+ * correction, the 3DS save would be dated 2 hours ago and lose against the
+ * other device's. */
 static void a_late_console_clock_is_corrected_from_the_server_date(void)
 {
     harness *h = h_new();
     rs_time real = h->now;
     h->server.server_now = real;
-    write_local(h, save(1));
-    prepare(h, "IRBF", RS_OK);
     fake_add_version(&h->server, "IRBF", save(2), 512, real - 5 * MINUTE); /* other device */
     h->now = real - 2 * HOUR;                                               /* late console */
+    CHECK(prepare(h, "IRBF", RS_OK).downloaded);
     write_local(h, save(3));
 
     rs_prepare_result r = prepare(h, "IRBF", RS_OK);
@@ -537,7 +689,7 @@ static void a_new_save_slot_with_an_old_file_is_flagged_and_can_be_set_aside(voi
     /* The new slot then follows the normal rule: the active version is
      * downloaded into it. */
     rs_prepare_result r;
-    CHECK_INT(rs_engine_prepare(&h->engine, &slot1, 0, &r, NULL), RS_OK);
+    CHECK_INT(rs_engine_prepare(&h->engine, &slot1, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
     CHECK(r.downloaded);
     CHECK(file_is(slot1.save_path, save(1)));
     h_free(h);
@@ -550,8 +702,15 @@ void run_sync_tests(void)
     RUN(no_local_save_downloads_the_server_version);
     RUN(local_save_identical_to_the_server_means_no_transfer);
     RUN(up_to_date_does_nothing);
-    RUN(local_change_newer_than_the_server_is_sent_first_without_download);
-    RUN(change_seen_offline_then_newer_save_elsewhere_is_sent_then_downloaded);
+    RUN(local_change_with_the_server_unchanged_is_sent_without_question);
+    RUN(divergence_sends_and_overwrites_nothing_until_the_user_chooses);
+    RUN(choice_local_is_sent_and_active_even_when_older);
+    RUN(choice_server_archives_the_local_save_then_downloads_with_backup);
+    RUN(first_sync_of_a_console_whose_save_differs_from_the_server_is_a_divergence);
+    RUN(an_upload_right_after_a_download_is_never_divergent);
+    RUN(a_save_padded_with_zeros_with_the_active_content_is_no_divergence);
+    RUN(a_smaller_save_whose_active_version_only_adds_padding_is_no_divergence);
+    RUN(a_divergent_queued_upload_is_held_then_the_choice_applies_to_it);
     RUN(offline_queues_and_sends_on_reconnection_with_the_same_id);
     RUN(a_retry_after_a_lost_response_creates_no_duplicate);
     RUN(uploads_queued_offline_chain_their_base_versions);

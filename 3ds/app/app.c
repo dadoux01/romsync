@@ -208,26 +208,57 @@ void app_rescan(app *a)
 
 /* ---- Sync -------------------------------------------------------------- */
 
-/* Asks what to do with an old save file found in a new save slot. */
-static void handle_slot_change(app *a, rs_game *g)
+/* Asks what to do with an old save file found in a new save slot. Returns
+ * the choice that applies to the sync: "send it anyway" is the user's
+ * choice of the local save, not asked again as a divergence. */
+static rs_choice handle_slot_change(app *a, rs_game *g)
 {
     if (!g->stale_after_slot_change)
-        return;
+        return RS_CHOICE_NONE;
+    rs_choice choice = RS_CHOICE_LOCAL;
     char text[600];
     snprintf(text, sizeof text,
              "%s utilise maintenant l'emplacement de save %d (%s). Ce fichier existe mais n'a jamais été "
              "synchronisé pour ce jeu : c'est sans doute une ancienne save.\n\n"
              "A : la mettre de côté dans .backup (la save du serveur sera téléchargée)\n"
-             "B : l'envoyer quand même (elle restera dans l'historique)",
+             "B : l'envoyer quand même : elle deviendra la save active (l'autre reste dans l'historique)",
              g->entry.title, g->slot, rs_basename(g->entry.save_path));
     if (ui_confirm("Emplacement de save changé", text, "Mettre de côté", "Envoyer")) {
         char copy[RS_PATH_MAX];
         rs_error err;
+        choice = RS_CHOICE_NONE;
         if (rs_set_aside(g->entry.save_path, rs_engine_now(&a->engine), a->config.keep_backups, copy, sizeof copy,
                          &err) != RS_OK)
             ui_message("Erreur", err.message);
     }
     g->stale_after_slot_change = false;
+    return choice;
+}
+
+/* Two devices played without syncing: asks which save to keep. */
+static rs_choice ask_divergence(app *a, const rs_game *g, const rs_divergence *d)
+{
+    /* The server's date in the console's time (the measured gap). */
+    rs_time t = d->server.saved_at - (a->states.clock.known ? a->states.clock.offset : 0);
+    char at[32], text[600];
+    rs_time_format_iso(t, at, sizeof at);
+    snprintf(text, sizeof text,
+             "%s\n\n"
+             "Deux appareils ont joué sans se synchroniser.\n"
+             "- Serveur : save du %.10s à %.5s (%s).\n"
+             "- Console : save modifiée depuis la dernière synchro, qui ne part pas de celle du serveur.\n\n"
+             "Envoyer la tienne : elle devient la save active.\n"
+             "Prendre celle du serveur : la tienne reste dans l'historique du site et dans .backup.\n"
+             "Plus tard : rien n'est envoyé ni écrasé.",
+             g->entry.title, at, at + 11, d->server.device_name[0] ? d->server.device_name : "site web");
+    switch (ui_choose("Choix à faire", text, "envoyer ma save locale", "prendre celle du serveur", "plus tard")) {
+    case 'A':
+        return RS_CHOICE_LOCAL;
+    case 'Y':
+        return RS_CHOICE_SERVER;
+    default:
+        return RS_CHOICE_NONE;
+    }
 }
 
 /* Syncs one game; *offline becomes true when the server cannot be reached
@@ -242,12 +273,30 @@ static void sync_game(app *a, int i, bool *offline)
         v->status = RS_STATUS_NEEDS_CHOICE;
         return;
     }
-    handle_slot_change(a, g);
+    v->choice_pending = false;
+    rs_choice choice = handle_slot_change(a, g);
 
     rs_prepare_result r;
     rs_error err = {0};
     rs_status st = *offline ? rs_engine_offline_pass(&a->engine, &g->entry, &r, &err)
-                            : rs_engine_prepare(&a->engine, &g->entry, 0, &r, &err);
+                            : rs_engine_prepare(&a->engine, &g->entry, 0, choice, &r, &err);
+    if (st == RS_OK && r.needs_choice) {
+        choice = ask_divergence(a, g, &r.divergence);
+        if (choice == RS_CHOICE_NONE) {
+            /* "Plus tard": asked again at the next start. */
+            v->choice_pending = true;
+            v->status = RS_STATUS_DIVERGED;
+            rs_strlcpy(v->message, "Choix reporté : rien n'a été envoyé ni écrasé.", sizeof v->message);
+            return;
+        }
+        st = rs_engine_prepare(&a->engine, &g->entry, 0, choice, &r, &err);
+        if (st == RS_OK && r.needs_choice) { /* another device uploaded meanwhile */
+            v->choice_pending = true;
+            v->status = RS_STATUS_DIVERGED;
+            rs_strlcpy(v->message, "Une autre save vient d'arriver : relance la synchronisation.", sizeof v->message);
+            return;
+        }
+    }
     if (st != RS_OK) {
         v->error = true;
         v->status = g->entry.unavailable[0] ? RS_STATUS_UNAVAILABLE : RS_STATUS_TO_UPLOAD;
@@ -365,6 +414,8 @@ bool app_launch(app *a, int index)
     sync_game(a, index, &offline);
     finish_sync(a, offline);
     game_view *v = &a->views[index];
+    if (v->choice_pending)
+        return false; /* "Plus tard": the game does not start */
     if (v->error && !ui_confirm("Synchronisation", v->message, "Lancer quand même", "Annuler"))
         return false;
     if (offline && !v->error)

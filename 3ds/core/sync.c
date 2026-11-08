@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "sha.h"
+#include "size_rule.h"
 
 static void emit(const rs_engine *e, rs_event_kind kind, const char *game_id, const char *message)
 {
@@ -54,23 +55,118 @@ void rs_local_save_free(rs_local_save *s)
 
 /* ---- Upload queue ------------------------------------------------------ */
 
+/* Downloads a version for rs_same_content_as_active. */
+typedef struct {
+    rs_api *api;
+    int64_t id;
+} fetch_ctx;
+
+static rs_status fetch_version(void *ctx, rs_buf *out, rs_error *err)
+{
+    fetch_ctx *f = ctx;
+    return rs_api_download(f->api, f->id, out, err);
+}
+
+/* Whether path is in the list of n held save paths. */
+static bool in_list(char (*list)[RS_PATH_MAX], int n, const char *path)
+{
+    for (int i = 0; i < n; i++)
+        if (strcmp(list[i], path) == 0)
+            return true;
+    return false;
+}
+
+/* Whether an error of the server means "try again later". */
+static bool transient(rs_status st, const rs_error *err)
+{
+    return st == RS_ERR_OFFLINE || (st == RS_ERR_API && (err->http_status >= 500 || err->http_status == 429));
+}
+
+/* Checks an automatic upload against the active version. *diverges is
+ * true when it would diverge: the active version is not its base and not
+ * the same content. */
+static rs_status check_divergence(rs_engine *e, const rs_upload *u, const rs_buf *data, int64_t base,
+                                  bool *diverges, rs_version *active, rs_error *err)
+{
+    bool exists;
+    int64_t chip;
+    *diverges = false;
+    rs_status st = rs_api_active(e->api, u->game_id, active, &exists, &chip, err);
+    if (st != RS_OK || !exists || active->id == base)
+        return st;
+    bool same;
+    fetch_ctx fc = {e->api, active->id};
+    st = rs_same_content_as_active(data->data, data->len, u->sha256, active, chip, fetch_version, &fc, &same, err);
+    *diverges = st == RS_OK && !same;
+    return st;
+}
+
 rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
 {
     memset(res, 0, sizeof *res);
+    /* Save paths whose uploads are held during this flush: the uploads after
+     * a held one wait too, the queue keeps its order. */
+    char (*held)[RS_PATH_MAX] = NULL;
+    int n_held = 0;
+    rs_status ret = RS_OK;
     int i = 0;
     while (i < e->queue->count) {
         rs_upload u = e->queue->items[i]; /* a copy: removing shifts the array */
+        if (in_list(held, n_held, u.save_path)) {
+            i++;
+            continue;
+        }
         rs_buf data = {0};
         rs_status st = rs_queue_content(e->queue, &u, &data, err);
-        if (st != RS_OK)
-            return st;
+        if (st != RS_OK) {
+            ret = st;
+            break;
+        }
         const rs_save_state *s = rs_state_for(e->states, u.save_path, u.game_id);
         int64_t base = s ? s->version_id : 0;
+        rs_error up_err = {0};
+
+        if (u.mode == RS_UPLOAD_AUTO) {
+            bool diverges;
+            rs_version active;
+            st = check_divergence(e, &u, &data, base, &diverges, &active, &up_err);
+            if (st == RS_OK && diverges) {
+                /* Divergence: never sent automatically (docs/SPEC.md). */
+                rs_buf_free(&data);
+                char(*grown)[RS_PATH_MAX] = realloc(held, (size_t)(n_held + 1) * sizeof *held);
+                if (!grown) {
+                    ret = rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+                    break;
+                }
+                held = grown;
+                rs_strlcpy(held[n_held++], u.save_path, RS_PATH_MAX);
+                if (res->held++ == 0) {
+                    rs_strlcpy(res->first_held.game_id, u.game_id, sizeof res->first_held.game_id);
+                    rs_strlcpy(res->first_held.save_path, u.save_path, sizeof res->first_held.save_path);
+                    res->first_held.server = active;
+                }
+                if (!u.held) {
+                    st = rs_queue_mark_held(e->queue, u.save_path, err);
+                    if (st != RS_OK) {
+                        ret = st;
+                        break;
+                    }
+                    emit(e, RS_EVENT_NEEDS_CHOICE, u.game_id,
+                         "Deux appareils ont joué sans se synchroniser : choix à faire");
+                }
+                i++;
+                continue;
+            }
+        }
 
         rs_upload_result r;
-        rs_error up_err = {0};
-        st = rs_api_upload(e->api, u.game_id, data.data, data.len, u.saved_at, u.upload_id, base, u.emulator,
-                           u.title, &r, &up_err);
+        if (st == RS_OK)
+            st = rs_api_upload(e->api, u.game_id, data.data, data.len, u.saved_at, u.upload_id, base, u.emulator,
+                               u.title,
+                               u.mode == RS_UPLOAD_LOCAL     ? RS_ACTIVATE_ALWAYS
+                               : u.mode == RS_UPLOAD_ARCHIVE ? RS_ACTIVATE_NEVER
+                                                             : RS_ACTIVATE_AUTO,
+                               &r, &up_err);
         if (st == RS_OK) {
             rs_buf_free(&data);
             /* The local hash is kept: the server may have cut padding, so
@@ -78,17 +174,20 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
             st = rs_state_record(e->states, u.save_path, u.game_id, r.version.id, u.sha256, rs_engine_now(e), err);
             if (st == RS_OK)
                 st = rs_queue_remove(e->queue, u.upload_id, err);
-            if (st != RS_OK)
-                return st;
+            if (st != RS_OK) {
+                ret = st;
+                break;
+            }
             res->sent++;
             emit(e, RS_EVENT_UPLOADED, u.game_id,
-                 !r.created  ? "Save identique à la version active"
-                 : r.active  ? (r.conflict ? "Save envoyée (divergence : la plus récente gagne)" : "Save envoyée")
-                             : "Save envoyée, mais une version plus récente reste active");
+                 !r.created                     ? "Save identique à la version active"
+                 : u.mode == RS_UPLOAD_ARCHIVE  ? "Save locale archivée sur le serveur"
+                 : r.active                     ? (r.conflict ? "Save envoyée (divergence)" : "Save envoyée")
+                                                : "Save envoyée, mais une version plus récente reste active");
             continue;
         }
-        if (st == RS_ERR_OFFLINE || (st == RS_ERR_API && (up_err.http_status >= 500 || up_err.http_status == 429))) {
-            rs_buf_free(&data);
+        rs_buf_free(&data);
+        if (transient(st, &up_err)) {
             res->offline = true;
             char msg[96];
             snprintf(msg, sizeof msg, "Serveur injoignable : %d envoi(s) en attente", e->queue->count);
@@ -96,39 +195,46 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
             break;
         }
         if (st == RS_ERR_API && up_err.http_status == 401) {
-            rs_buf_free(&data);
             res->unauthorized = true;
             emit(e, RS_EVENT_FAILED, u.game_id, "Appareil non autorisé : appaire-le à nouveau");
             break;
         }
         if (st != RS_ERR_API) {
-            rs_buf_free(&data);
             if (err)
                 *err = up_err;
-            return st;
+            ret = st;
+            break;
         }
         /* Refused for good (size mismatch...): keep the content aside in
          * <queue>/failed/<upload id>.bin and drop it from the queue. */
+        rs_buf content = {0};
         char name[64], failed_dir[RS_PATH_MAX], failed[RS_PATH_MAX];
         rs_path_join(failed_dir, sizeof failed_dir, e->queue->dir, "failed");
         snprintf(name, sizeof name, "%s.bin", u.upload_id);
         rs_path_join(failed, sizeof failed, failed_dir, name);
-        st = rs_write_file_atomic(failed, data.data, data.len, err);
-        rs_buf_free(&data);
+        st = rs_queue_content(e->queue, &u, &content, err);
+        if (st == RS_OK)
+            st = rs_write_file_atomic(failed, content.data, content.len, err);
+        rs_buf_free(&content);
         if (st == RS_OK)
             st = rs_queue_remove(e->queue, u.upload_id, err);
-        if (st != RS_OK)
-            return st;
+        if (st != RS_OK) {
+            ret = st;
+            break;
+        }
         res->failures++;
         snprintf(res->failure_message, sizeof res->failure_message,
                  "Envoi refusé (%s) : %s. Copie conservée : %s", up_err.code, up_err.message, failed);
         emit(e, RS_EVENT_FAILED, u.game_id, res->failure_message);
     }
-    return RS_OK;
+    free(held);
+    return ret;
 }
 
-rs_status rs_engine_enqueue(rs_engine *e, const rs_entry *entry, const rs_local_save *save, bool *queued,
-                            rs_error *err)
+/* Queues save for entry with mode, unless the same content is already
+ * queued (its mode is then the one set by rs_queue_set_mode). */
+static rs_status enqueue_mode(rs_engine *e, const rs_entry *entry, const rs_local_save *save,
+                              rs_upload_mode mode, bool *queued, rs_error *err)
 {
     if (queued)
         *queued = false;
@@ -137,12 +243,20 @@ rs_status rs_engine_enqueue(rs_engine *e, const rs_entry *entry, const rs_local_
     rs_time now = rs_engine_now(e);
     rs_status st = rs_queue_add(e->queue, entry->game_id, entry->save_path, save->raw.data, save->raw.len,
                                 save->hash, now, entry->emulator, entry->title, now, NULL, err);
+    if (st == RS_OK && mode != RS_UPLOAD_AUTO)
+        st = rs_queue_set_mode(e->queue, entry->save_path, entry->game_id, mode, err);
     if (st != RS_OK)
         return st;
     if (queued)
         *queued = true;
     emit(e, RS_EVENT_QUEUED, entry->game_id, "Save mise en file d'attente");
     return RS_OK;
+}
+
+rs_status rs_engine_enqueue(rs_engine *e, const rs_entry *entry, const rs_local_save *save, bool *queued,
+                            rs_error *err)
+{
+    return enqueue_mode(e, entry, save, RS_UPLOAD_AUTO, queued, err);
 }
 
 /* ---- Before launch ----------------------------------------------------- */
@@ -190,8 +304,26 @@ static rs_status download(rs_engine *e, const rs_entry *entry, const rs_version 
     return st;
 }
 
-rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_size, rs_prepare_result *out,
-                            rs_error *err)
+/* Whether uploads of entry are still queued (once the server answered:
+ * held back by a divergence). */
+static bool queued_for(const rs_queue *q, const rs_entry *entry)
+{
+    for (int i = 0; i < q->count; i++)
+        if (strcmp(q->items[i].save_path, entry->save_path) == 0 && strcmp(q->items[i].game_id, entry->game_id) == 0)
+            return true;
+    return false;
+}
+
+static void set_divergence(rs_prepare_result *out, const rs_entry *entry, const rs_version *server)
+{
+    out->needs_choice = true;
+    rs_strlcpy(out->divergence.game_id, entry->game_id, sizeof out->divergence.game_id);
+    rs_strlcpy(out->divergence.save_path, entry->save_path, sizeof out->divergence.save_path);
+    out->divergence.server = *server;
+}
+
+rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_size, rs_choice choice,
+                            rs_prepare_result *out, rs_error *err)
 {
     memset(out, 0, sizeof *out);
     if (entry->unavailable[0])
@@ -222,28 +354,56 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
     /* 2. Active version of the game. */
     rs_version active;
     bool has_active;
-    st = rs_api_active(e->api, entry->game_id, &active, &has_active, err);
+    int64_t chip;
+    st = rs_api_active(e->api, entry->game_id, &active, &has_active, &chip, err);
     if (st == RS_ERR_OFFLINE) {
         st = go_offline(e, entry, &local, out, err);
         goto done;
     }
     if (st != RS_OK)
         goto done;
+    if (!chip)
+        chip = (int64_t)chip_size;
 
     const rs_save_state *s = rs_state_for(e->states, entry->save_path, entry->game_id);
+    bool held = queued_for(e->queue, entry);
     bool local_changed = local.exists && (!s || strcmp(local.hash, s->hash) != 0);
-    if (local_changed) {
-        if (has_active && strcmp(local.hash, active.sha256) == 0) {
-            /* Same content as the server: nothing to send. */
+    if (local_changed || held) {
+        bool same = false;
+        if (has_active && local.exists) {
+            fetch_ctx fc = {e->api, active.id};
+            st = rs_same_content_as_active(local.raw.data, local.raw.len, local.hash, &active, chip, fetch_version,
+                                           &fc, &same, err);
+            if (st == RS_ERR_OFFLINE) {
+                st = go_offline(e, entry, &local, out, err);
+                goto done;
+            }
+            if (st != RS_OK)
+                goto done;
+        }
+        if (!held && same) {
+            /* Same content as the server (once padding is removed): nothing
+             * to send. */
             st = rs_state_record(e->states, entry->save_path, entry->game_id, active.id, local.hash,
                                  rs_engine_now(e), err);
             if (st != RS_OK)
                 goto done;
         } else {
-            /* 4. Changed outside a sync (game played since the last start):
-             * send it first; the server applies "most recent wins" before
-             * the download. */
-            st = rs_engine_enqueue(e, entry, &local, NULL, err);
+            /* 4. Changed outside a sync (game played since the last start).
+             * It diverges when the server's active version is not the one
+             * this console last synced. */
+            bool diverged = has_active && (held || ((!s || active.id != s->version_id) && !same));
+            if (diverged && choice == RS_CHOICE_NONE) {
+                set_divergence(out, entry, &active);
+                goto done;
+            }
+            rs_upload_mode mode = !diverged                    ? RS_UPLOAD_AUTO
+                                  : choice == RS_CHOICE_LOCAL ? RS_UPLOAD_LOCAL
+                                                              : RS_UPLOAD_ARCHIVE;
+            if (diverged)
+                st = rs_queue_set_mode(e->queue, entry->save_path, entry->game_id, mode, err);
+            if (st == RS_OK && local.exists)
+                st = enqueue_mode(e, entry, &local, mode, NULL, err);
             if (st == RS_OK)
                 st = rs_engine_flush(e, &flush, err);
             if (st != RS_OK)
@@ -256,21 +416,29 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
                 st = rs_fail(err, RS_ERR_REFUSED, "%s", flush.failure_message);
                 goto done;
             }
-            out->uploaded = true;
-            st = rs_api_active(e->api, entry->game_id, &active, &has_active, err);
+            st = rs_api_active(e->api, entry->game_id, &active, &has_active, &chip, err);
             if (st == RS_ERR_OFFLINE) {
                 st = go_offline(e, entry, &local, out, err);
                 goto done;
             }
             if (st != RS_OK)
                 goto done;
+            /* Another device uploaded in the meantime: ask again. */
+            if (queued_for(e->queue, entry)) {
+                set_divergence(out, entry, &active);
+                goto done;
+            }
+            out->uploaded = true;
+            if (!chip)
+                chip = (int64_t)chip_size;
         }
         s = rs_state_for(e->states, entry->save_path, entry->game_id);
     }
 
-    /* 3. Unchanged local save and a newer version on the server: download. */
+    /* 3. Unchanged local save and a newer version on the server (or the
+     * user chose it): download. */
     if (has_active && (!s || active.id != s->version_id)) {
-        st = download(e, entry, &active, chip_size, out, err);
+        st = download(e, entry, &active, (size_t)chip, out, err);
         if (st == RS_ERR_OFFLINE)
             st = go_offline(e, entry, &local, out, err);
         goto done;
@@ -300,12 +468,14 @@ rs_status rs_engine_offline_pass(rs_engine *e, const rs_entry *entry, rs_prepare
 
 rs_save_status rs_compute_status(bool needs_choice, bool unavailable, const char *local_hash,
                                  const rs_save_state *state, const rs_remote_game *remote, int queued,
-                                 bool online)
+                                 bool online, bool held)
 {
     if (needs_choice)
         return RS_STATUS_NEEDS_CHOICE;
     if (unavailable)
         return RS_STATUS_UNAVAILABLE;
+    if (held)
+        return RS_STATUS_DIVERGED;
     bool local_changed = local_hash && (!state || strcmp(local_hash, state->hash) != 0);
     if (!online)
         return local_changed || queued > 0 ? RS_STATUS_TO_UPLOAD : RS_STATUS_OFFLINE;
@@ -335,6 +505,8 @@ const char *rs_status_label(rs_save_status s)
         return "indisponible";
     case RS_STATUS_NO_SAVE:
         return "pas de save";
+    case RS_STATUS_DIVERGED:
+        return "choix à faire";
     }
     return "?";
 }

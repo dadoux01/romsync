@@ -113,22 +113,27 @@ static void next_second(void)
     sleep(1);
 }
 
-static rs_prepare_result prepare(device *d)
+static rs_prepare_result prepare_choice(device *d, rs_choice choice)
 {
     rs_prepare_result r;
     rs_error err = {0};
-    rs_status st = rs_engine_prepare(&d->engine, &d->entry, 0, &r, &err);
+    rs_status st = rs_engine_prepare(&d->engine, &d->entry, 0, choice, &r, &err);
     CHECK_INT(st, RS_OK);
     if (st != RS_OK)
         fprintf(stderr, "    %s: %s\n", d->name, err.message);
     return r;
 }
 
+static rs_prepare_result prepare(device *d)
+{
+    return prepare_choice(d, RS_CHOICE_NONE);
+}
+
 static rs_version active(device *d)
 {
     rs_version v = {0};
     bool exists = false;
-    CHECK_INT(rs_api_active(&d->api, GAME, &v, &exists, NULL), RS_OK);
+    CHECK_INT(rs_api_active(&d->api, GAME, &v, &exists, NULL, NULL), RS_OK);
     CHECK(exists);
     return v;
 }
@@ -207,7 +212,8 @@ static void offline_play_is_queued_and_sent_with_the_same_id(void)
 
     /* Sending the same upload id again returns the same version. */
     rs_upload_result again;
-    CHECK_INT(rs_api_upload(&ds.api, GAME, save(3), SAVE_SIZE, time(NULL), id, 0, "twilight", NULL, &again, NULL),
+    CHECK_INT(rs_api_upload(&ds.api, GAME, save(3), SAVE_SIZE, time(NULL), id, 0, "twilight", NULL, RS_ACTIVATE_AUTO,
+                            &again, NULL),
               RS_OK);
     CHECK_INT(again.version.id, v.id);
 }
@@ -236,6 +242,84 @@ static void a_late_3ds_clock_does_not_lose_the_3ds_save(void)
     CHECK(v.saved_at >= now - 60 && v.saved_at <= now + 5);
 }
 
+static bool active_holds(device *d, const uint8_t *data)
+{
+    char sha[65];
+    rs_sha256_hex(data, SAVE_SIZE, sha);
+    return strcmp(active(d).sha256, sha) == 0;
+}
+
+/* Both devices are in sync, then: the PC uploads, the 3DS downloads it at
+ * startup, the game is played and the next startup sends it. */
+static void an_upload_right_after_a_download_is_never_divergent(void)
+{
+    CHECK(prepare(&pc).downloaded);
+    next_second();
+    write_save(&pc, save(6), SAVE_SIZE);
+    CHECK(prepare(&pc).uploaded);
+    CHECK(prepare(&ds).downloaded);
+    next_second();
+    write_save(&ds, save(7), SAVE_SIZE);
+    rs_prepare_result r = prepare(&ds);
+    CHECK(!r.needs_choice && r.uploaded);
+    CHECK(active_holds(&ds, save(7)));
+    CHECK(!active(&ds).conflict);
+}
+
+/* The PC is behind (its last sync is save 6) and its file holds the active
+ * progression padded with zeros, as TWiLight Menu++ does: no divergence,
+ * nothing sent. */
+static void a_save_padded_with_zeros_with_the_active_content_is_no_divergence(void)
+{
+    rs_version before = active(&pc);
+    uint8_t *padded = calloc(1, 4 * SAVE_SIZE);
+    memcpy(padded, save(7), SAVE_SIZE);
+    write_save(&pc, padded, 4 * SAVE_SIZE);
+    free(padded);
+    rs_prepare_result r = prepare(&pc);
+    CHECK(!r.needs_choice && !r.uploaded && !r.downloaded);
+    CHECK_INT(active(&pc).id, before.id);
+    CHECK_INT(rs_state_get(&pc.states, pc.entry.save_path)->version_id, before.id);
+}
+
+/* Both play without syncing. The 3DS is asked first and keeps its save;
+ * the PC is asked next and takes the server's (the 3DS's). */
+static void a_divergence_waits_for_the_choice_then_applies_it(void)
+{
+    next_second();
+    write_save(&pc, save(8), SAVE_SIZE);
+    CHECK(prepare(&pc).uploaded);
+    rs_version pc_version = active(&pc);
+    next_second();
+    write_save(&ds, save(9), SAVE_SIZE); /* the 3DS did not sync since save 7 */
+
+    rs_prepare_result r = prepare(&ds);
+    CHECK(r.needs_choice);
+    CHECK_STR(r.divergence.server.device_name, "PC");
+    CHECK_INT(active(&ds).id, pc_version.id); /* nothing sent */
+    CHECK(save_is(&ds, save(9)));             /* nothing overwritten */
+
+    r = prepare_choice(&ds, RS_CHOICE_LOCAL); /* "Envoyer ma save locale" */
+    CHECK(r.uploaded && !r.downloaded);
+    rs_version mine = active(&ds);
+    CHECK(active_holds(&ds, save(9)));
+    CHECK(mine.conflict);
+
+    next_second();
+    write_save(&pc, save(10), SAVE_SIZE); /* the PC played on save 8 meanwhile */
+    CHECK(prepare(&pc).needs_choice);
+    r = prepare_choice(&pc, RS_CHOICE_SERVER); /* "Prendre celle du serveur" */
+    CHECK(r.uploaded && r.downloaded);
+    CHECK_INT(active(&pc).id, mine.id); /* the archive did not win although newer */
+    CHECK(save_is(&pc, save(9)));
+    rs_buf copy = {0};
+    CHECK(rs_read_file(r.backup_path, &copy, NULL) == RS_OK && copy.len == SAVE_SIZE &&
+          memcmp(copy.data, save(10), SAVE_SIZE) == 0);
+    rs_buf_free(&copy);
+    CHECK(!prepare(&pc).needs_choice);
+    CHECK(!prepare(&ds).needs_choice);
+}
+
 static void the_game_list_shows_the_game(void)
 {
     rs_remote_game *games;
@@ -260,7 +344,7 @@ static void a_revoked_or_wrong_token_is_refused(void)
     rs_version v;
     bool exists;
     rs_error err = {0};
-    CHECK_INT(rs_api_active(&bad, GAME, &v, &exists, &err), RS_ERR_API);
+    CHECK_INT(rs_api_active(&bad, GAME, &v, &exists, NULL, &err), RS_ERR_API);
     CHECK_INT(err.http_status, 401);
     CHECK_STR(err.code, "unauthorized");
 }
@@ -281,6 +365,9 @@ int main(int argc, char **argv)
         RUN(padding_added_by_twilight_menu_creates_no_version);
         RUN(offline_play_is_queued_and_sent_with_the_same_id);
         RUN(a_late_3ds_clock_does_not_lose_the_3ds_save);
+        RUN(an_upload_right_after_a_download_is_never_divergent);
+        RUN(a_save_padded_with_zeros_with_the_active_content_is_no_divergence);
+        RUN(a_divergence_waits_for_the_choice_then_applies_it);
         RUN(the_game_list_shows_the_game);
         RUN(a_revoked_or_wrong_token_is_refused);
     }

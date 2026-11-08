@@ -3,7 +3,8 @@
  *
  * queue.json: { "version": 1, "uploads": [ { "upload_id", "game_id",
  *   "save_path", "sha256", "size", "saved_at", "created_at", "emulator",
- *   "title" }, ... ] }, the same shape as the Flutter client's.
+ *   "title", "mode", "held" }, ... ] }, the same shape as the Flutter
+ *   client's ("mode": "auto", "local" or "archive").
  */
 #include "queue.h"
 
@@ -13,6 +14,8 @@
 
 #include "json_file.h"
 #include "platform.h"
+
+static const char *mode_names[] = {"auto", "local", "archive"};
 
 static void queue_file(const rs_queue *q, char *out, size_t size)
 {
@@ -49,6 +52,8 @@ static rs_status persist(const rs_queue *q, rs_error *err)
             cJSON_AddStringToObject(e, "title", u->title);
         else
             cJSON_AddNullToObject(e, "title");
+        cJSON_AddStringToObject(e, "mode", mode_names[u->mode]);
+        cJSON_AddBoolToObject(e, "held", u->held);
         cJSON_AddItemToArray(list, e);
     }
     char path[RS_PATH_MAX];
@@ -91,6 +96,11 @@ rs_status rs_queue_open(rs_queue *q, const char *dir, rs_error *err)
         rs_time_parse_iso(rs_json_str(e, "created_at", ""), &u.created_at);
         rs_strlcpy(u.emulator, rs_json_str(e, "emulator", ""), sizeof u.emulator);
         rs_strlcpy(u.title, rs_json_str(e, "title", ""), sizeof u.title);
+        const char *mode = rs_json_str(e, "mode", "auto");
+        for (int m = 0; m < 3; m++)
+            if (strcmp(mode, mode_names[m]) == 0)
+                u.mode = (rs_upload_mode)m;
+        u.held = rs_json_bool(e, "held", false);
         /* Drop entries whose content file is missing: they cannot be sent. */
         char content[RS_PATH_MAX];
         content_file(q, u.upload_id, content, sizeof content);
@@ -162,6 +172,35 @@ rs_status rs_queue_remove(rs_queue *q, const char *upload_id, rs_error *err)
         return st;
     }
     return RS_OK;
+}
+
+rs_status rs_queue_set_mode(rs_queue *q, const char *save_path, const char *game_id, rs_upload_mode mode,
+                            rs_error *err)
+{
+    for (int i = 0; i < q->count; i++) {
+        rs_upload *u = &q->items[i];
+        if (strcmp(u->save_path, save_path) == 0 && strcmp(u->game_id, game_id) == 0) {
+            u->mode = mode;
+            u->held = false;
+        }
+    }
+    return persist(q, err);
+}
+
+rs_status rs_queue_mark_held(rs_queue *q, const char *save_path, rs_error *err)
+{
+    for (int i = 0; i < q->count; i++)
+        if (strcmp(q->items[i].save_path, save_path) == 0 && q->items[i].mode == RS_UPLOAD_AUTO)
+            q->items[i].held = true;
+    return persist(q, err);
+}
+
+bool rs_queue_held_for(const rs_queue *q, const char *save_path)
+{
+    for (int i = 0; i < q->count; i++)
+        if (strcmp(q->items[i].save_path, save_path) == 0 && q->items[i].held)
+            return true;
+    return false;
 }
 
 int rs_queue_count_for(const rs_queue *q, const char *save_path)

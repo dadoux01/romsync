@@ -23,6 +23,13 @@ typedef struct {
     bool conflict;
 } rs_version;
 
+/* The user's choice sent with an upload (X-Activate). */
+typedef enum {
+    RS_ACTIVATE_AUTO,   /* no header: most recent wins */
+    RS_ACTIVATE_ALWAYS, /* "true": the upload becomes active */
+    RS_ACTIVATE_NEVER,  /* "false": kept as an inactive version */
+} rs_activation;
+
 typedef struct {
     rs_version version;
     bool created; /* false: same content as the active version */
@@ -59,12 +66,14 @@ bool rs_api_normalize_url(const char *in, char *out, size_t size);
 rs_status rs_api_pair(rs_api *api, const char *code, const char *name, const char *platform, char *token,
                       size_t token_size, rs_error *err);
 /* GET /games/{id}/active. *exists is false when the game or its active
- * version does not exist yet (404). */
-rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool *exists, rs_error *err);
+ * version does not exist yet (404). chip_size (may be NULL) receives the
+ * game's chip size, 0 when unknown. */
+rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool *exists, int64_t *chip_size,
+                        rs_error *err);
 /* POST /games/{id}/versions with the raw save. base_version 0 = none. */
 rs_status rs_api_upload(rs_api *api, const char *game_id, const uint8_t *data, size_t len, rs_time saved_at,
                         const char *upload_id, int64_t base_version, const char *emulator, const char *title,
-                        rs_upload_result *out, rs_error *err);
+                        rs_activation activate, rs_upload_result *out, rs_error *err);
 /* GET /versions/{id}/content, checked against X-Content-SHA256. */
 rs_status rs_api_download(rs_api *api, int64_t version_id, rs_buf *out, rs_error *err);
 /* GET /games. *games is malloc'ed (free it). */

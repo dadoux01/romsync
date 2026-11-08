@@ -45,6 +45,7 @@ static const char *status_color(rs_save_status s, bool error)
         return UI_YELLOW;
     case RS_STATUS_NEEDS_CHOICE:
     case RS_STATUS_UNAVAILABLE:
+    case RS_STATUS_DIVERGED:
         return UI_RED;
     default:
         return UI_WHITE;
@@ -104,8 +105,10 @@ static void draw_details(const app *a, int sel)
         int pending = rs_queue_count_for(&a->queue, g->entry.save_path);
         if (pending)
             ui_print(UI_YELLOW "%d envoi(s) en attente" UI_RESET "\n", pending);
-        if (v->conflict)
-            ui_print(UI_YELLOW "Conflit résolu automatiquement :\nvoir l'historique sur le site." UI_RESET "\n");
+        if (v->choice_pending)
+            ui_print(UI_RED "Choix à faire : deux appareils ont\njoué sans se synchroniser (A)." UI_RESET "\n");
+        else if (v->conflict)
+            ui_print(UI_YELLOW "Divergence : voir l'historique\nsur le site." UI_RESET "\n");
         if (g->shared_count)
             ui_print("Partage l'identifiant %s\navec %d autre(s) ROM(s).\n", g->detected_id, g->shared_count);
         if (v->message[0]) {

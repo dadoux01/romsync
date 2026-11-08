@@ -162,8 +162,11 @@ rs_status rs_api_pair(rs_api *api, const char *code, const char *name, const cha
     return st;
 }
 
-rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool *exists, rs_error *err)
+rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool *exists, int64_t *chip_size,
+                        rs_error *err)
 {
+    if (chip_size)
+        *chip_size = 0;
     char id[RS_GAME_ID_MAX * 3], path[200], url[512];
     rs_url_encode(game_id, id, sizeof id);
     snprintf(path, sizeof path, "/games/%s/active", id);
@@ -186,6 +189,8 @@ rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool 
     if (st == RS_OK) {
         parse_version(cJSON_GetObjectItemCaseSensitive(j, "version"), out);
         *exists = true;
+        if (chip_size)
+            *chip_size = (int64_t)rs_json_num(j, "chip_size", 0);
     }
     cJSON_Delete(j);
     rs_http_response_free(&res);
@@ -194,7 +199,7 @@ rs_status rs_api_active(rs_api *api, const char *game_id, rs_version *out, bool 
 
 rs_status rs_api_upload(rs_api *api, const char *game_id, const uint8_t *data, size_t len, rs_time saved_at,
                         const char *upload_id, int64_t base_version, const char *emulator, const char *title,
-                        rs_upload_result *out, rs_error *err)
+                        rs_activation activate, rs_upload_result *out, rs_error *err)
 {
     char id[RS_GAME_ID_MAX * 3], path[200], url[512];
     rs_url_encode(game_id, id, sizeof id);
@@ -219,6 +224,9 @@ rs_status rs_api_upload(rs_api *api, const char *game_id, const uint8_t *data, s
         rs_url_encode(title, encoded_title, sizeof encoded_title);
         rs_http_add_header(&req, "X-Game-Title", encoded_title);
     }
+    /* The user's choice after a divergence; absent: most recent wins. */
+    if (activate != RS_ACTIVATE_AUTO)
+        rs_http_add_header(&req, "X-Activate", activate == RS_ACTIVATE_ALWAYS ? "true" : "false");
     rs_http_response res;
     rs_status st = api_send(api, &req, &res, err);
     cJSON *j = NULL;

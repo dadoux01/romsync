@@ -49,6 +49,8 @@ void ui_print_wrapped(const char *text, int width);
 void ui_message(const char *title, const char *text);
 /* Asks a question on the bottom screen: returns true for A, false for B. */
 bool ui_confirm(const char *title, const char *text, const char *yes, const char *no);
+/* Asks a question with three answers: returns 'A', 'Y' or 'B'. */
+char ui_choose(const char *title, const char *text, const char *a, const char *y, const char *b);
 /* Shows "Patiente..." style progress on the bottom screen, without waiting. */
 void ui_progress(const char *title, const char *text);
 /* Refreshes the screens (swaps the buffers) and waits for the next frame. */

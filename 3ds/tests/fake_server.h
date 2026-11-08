@@ -37,6 +37,13 @@ typedef struct {
         int64_t id;
     } upload_ids[FAKE_MAX];
     int upload_id_count;
+    /* Chip size of each game: set by its first save (size rules of
+     * server/internal/syncrule/size.go). */
+    struct {
+        char code[RS_GAME_ID_MAX];
+        size_t size;
+    } chips[FAKE_MAX];
+    int chip_count;
 
     bool online;
     bool drop_next_upload_response; /* process the upload, lose the answer */
