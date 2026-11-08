@@ -18,7 +18,9 @@ REPO    := $(abspath ../..)
 SANITIZE ?= $(shell echo 'int main(void){return 0;}' | \
               $(CC) -fsanitize=address,undefined -x c - -o /dev/null 2>/dev/null && \
               echo -fsanitize=address,undefined -fno-omit-frame-pointer)
-CFLAGS  := -std=c99 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -O1 $(SANITIZE) \
+# -Wno-format-truncation: messages and paths are cut on purpose by
+# snprintf when they are too long for their buffer.
+CFLAGS  := -std=c99 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -Wno-format-truncation -g -O1 $(SANITIZE) \
            -DREPO_ROOT='"$(REPO)"'
 LDFLAGS := $(SANITIZE)
 CURL_CFLAGS := $(shell pkg-config --cflags libcurl)

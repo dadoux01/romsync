@@ -5,5 +5,7 @@
 void run_hash_tests(void);
 void run_nds_tests(void);
 void run_profile_tests(void);
+void run_state_tests(void);
+void run_sync_tests(void);
 
 #endif

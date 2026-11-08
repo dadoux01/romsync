@@ -73,6 +73,8 @@ int main(void)
     run_hash_tests();
     run_nds_tests();
     run_profile_tests();
+    run_state_tests();
+    run_sync_tests();
     printf("%d checks, %d failures\n", t_checks, t_failures);
     return t_failures ? 1 : 0;
 }
