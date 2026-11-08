@@ -325,6 +325,10 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | PATCH | `/versions/{id}` | session | Épingle ou annote une version |
 | DELETE | `/versions/{id}` | session | Supprime une version de l'historique (refusé, 409 `conflict`, pour la version active ou une version épinglée) |
 | GET | `/versions/{id}/export?profile=desmume` | session | Export converti, pour l'import/export manuel |
+| GET | `/server` | aucune | Version du serveur, `api_level` et `min_client_version` (voir « Compatibilité ») |
+| GET | `/updates` | session ou jeton | Dernière release connue du relais (bannière du site) |
+| GET | `/updates/{platform}` | session ou jeton | Dernier client d'une plateforme (`linux-x64`, `linux-arm64`, `macos`, `windows-x64`, `3ds`) avec `SHA256SUMS` et sa signature |
+| GET | `/updates/files/{version}/{name}` | session ou jeton | Un fichier de la dernière release, depuis le cache du serveur |
 
 **Envoi d'une save** — `POST /games/{code}/versions`
 
@@ -364,6 +368,44 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | `ROMSYNC_MAX_UPLOAD` | `16777216` | Taille maximale d'un envoi, en octets (16 Mio) |
 | `ROMSYNC_TRUSTED_PROXIES` | vide | Adresses ou réseaux CIDR dont on accepte `X-Forwarded-For`, séparés par des virgules |
 | `ROMSYNC_RETENTION_INTERVAL` | `1h` | Intervalle de la tâche de rétention (durée Go) |
+| `ROMSYNC_UPDATES` | `on` | Relais des mises à jour vers les applis (`off` le désactive : pas de mise à jour des applis, pas de bannière sur le site) |
+| `ROMSYNC_UPDATE_REPO` | `dadoux01/romsync` | Dépôt GitHub dont les releases sont relayées (un fork distribue les siennes, signées avec sa propre clé intégrée à ses applis) |
+| `ROMSYNC_GITHUB_TOKEN` | vide | Jeton GitHub en lecture, seulement pour un dépôt privé |
+| `ROMSYNC_UPDATE_INTERVAL` | `6h` | Intervalle de vérification de la dernière release (minimum 10 min) |
+
+## Mises à jour et compatibilité
+
+**Signature des releases**
+
+- Chaque release GitHub contient `SHA256SUMS` (SHA-256 de chaque fichier) et `SHA256SUMS.sig`, signature Ed25519 de `SHA256SUMS` en base64. La clé privée n'est accessible qu'au job `sign` de `release.yml`, par l'environnement GitHub `release` réservé aux tags `v*` ; la clé publique est `keys/release-ed25519.pub`, intégrée aux applis (des tests vérifient que leurs copies sont identiques). Détails : `docs/releasing.md`.
+- Une mise à jour n'est acceptée que si la signature de `SHA256SUMS` est valide pour cette clé, puis si le SHA-256 du fichier téléchargé est celui de `SHA256SUMS`. Sinon elle est refusée et rien n'est installé.
+- Jamais de rétrogradation : seule une version finale (sans suffixe `-rc…`) strictement plus récente est proposée. Une version de développement (`dev`, build local ou de CI) ne propose jamais de mise à jour.
+- Les notes de chaque release commencent par l'ordre de mise à jour : serveur d'abord, puis les clients.
+
+**Relais par le serveur**
+
+- Le serveur ne se met pas à jour lui-même (c'est le rôle de Dockge ou de `docker compose pull`). Il interroge la dernière release finale de `ROMSYNC_UPDATE_REPO` toutes les 6 heures (sans jeton pour un dépôt public) et met ses fichiers en cache dans `/data/updates/` au premier téléchargement ; seuls les fichiers de la dernière release sont servis, et le cache des versions précédentes est supprimé.
+- Les applis ne parlent qu'à leur serveur : `GET /updates/{platform}`, puis les trois fichiers. Le relais n'a pas besoin d'être de confiance, puisque les applis vérifient la signature ; il évite le HTTPS vers GitHub sur 3DS (certificats, mbedtls) et un jeton GitHub dans les applis.
+- Le site affiche à l'administrateur une bannière discrète quand une version plus récente que celle du serveur existe, avec le lien vers ses notes ; elle peut être masquée pour cette version.
+
+**Appli PC**
+
+- Vérification au démarrage puis toutes les 24 heures (réglage pour la désactiver), et bouton « Rechercher une mise à jour » dans les réglages.
+- Une version disponible est annoncée (bannière, notification une fois par version) ; ses notes sont affichées, puis, sur accord, l'archive est téléchargée, vérifiée et extraite à côté de l'installation (`<installation>.new`, même système de fichiers).
+- L'installation et le redémarrage n'ont lieu qu'après l'accord de l'utilisateur, et jamais pendant une partie ni avec des envois en attente (y compris retenus par une divergence) : la mise à jour attend, puis s'installe dès que c'est possible.
+- Installation : l'installation devient `<installation>.old` et la nouvelle version prend sa place ; si la seconde étape échoue, l'ancienne est remise en place et continue de fonctionner. `<installation>.old` est supprimé au démarrage suivant de la nouvelle version. Linux : remplacement du dossier de l'archive ; macOS : remplacement du `.app` (un programme en cours d'exécution peut être renommé) ; Windows : petit programme séparé `romsync-updater.exe` (paquet `client/packages/romsync_updater`), copié hors des dossiers échangés, qui attend la fin de RomSync, échange les dossiers puis relance RomSync.
+- Si le dossier d'installation n'est pas modifiable, l'appli le dit et propose l'installation manuelle.
+
+**Homebrew 3DS**
+
+- Vérification au démarrage (réglage pour la désactiver) et depuis les réglages ; notes de version, puis, sur accord, téléchargement du `.cia` par le relais, vérification de la signature et du hash (Ed25519 de Monocypher), et installation par le service AM, comme Universal-Updater. L'appli se ferme ensuite et se relance depuis le menu HOME.
+
+**Compatibilité**
+
+- `GET /server` (sans authentification) donne `version`, `api_level` et `min_client_version`. Un serveur sans cette route (avant 0.5.0) compte comme niveau 1.
+- Niveaux : 2 = `X-Activate` (choix après une divergence), `chip_size` de `GET /games/{code}/active`, suppression d'une version, relais des mises à jour. Les clients 0.5.0 demandent le niveau 2.
+- Serveur trop ancien : les applis l'affichent clairement (« mets d'abord à jour le serveur »), et le choix en cas de divergence n'est pas envoyé : il dépend de `X-Activate`, qu'un ancien serveur ignorerait en appliquant « la plus récente gagne ». Rien n'est envoyé ni écrasé, et les envois retenus restent en file.
+- Application trop ancienne (version inférieure à `min_client_version`) : message « mets-la à jour ».
 
 ## Clients
 
@@ -431,6 +473,8 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
    - Delta : ses saves ne sont pas accessibles depuis une autre appli ; seulement l'import/export manuel d'une save par jeu, avec le site de RomSync.
    - Automatisation via Raccourcis : lire une save dans Fichiers et l'envoyer à l'API, ou télécharger la version active, sans appli à installer.
    - Installation d'une appli : compte développeur Apple payant, ou AltStore et identifiant Apple gratuit (signature à renouveler tous les 7 jours).
+
+Version 0.5.0 (entre les phases 4 et 5) : choix en cas de divergence, mises à jour automatiques des applis (PC et 3DS) par le relais du serveur, releases signées. C'est la dernière installation manuelle des applis ; le serveur, lui, se met à jour par son image (Dockge).
 
 **Questions ouvertes**
 

@@ -46,6 +46,8 @@ profiles/*.json          profils de conversion partagés (copiés dans l'appli
                          par client/tool/sync_profiles.sh)
 api/openapi.yaml         spécification de l'API
 keys/release-ed25519.pub clé publique de signature des releases (docs/releasing.md)
+client/packages/romsync_updater/   remplacement d'une installation avec retour
+                         arrière (romsync-updater.exe sous Windows)
 deploy/                  Dockerfile (compilation croisée amd64/arm64), compose
 .github/workflows/       ci.yml, build-client.yml et build-3ds.yml (réutilisables),
                          release.yml
@@ -135,6 +137,13 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 - Les dates envoyées sont à la seconde et le serveur garde la version active
   en cas d'égalité : dans les tests de bout en bout, attendre une seconde
   entre deux saves qui doivent se succéder.
+- Mises à jour : la clé publique existe en trois copies (`keys/`,
+  `release.dart`, `core/update.h`), vérifiées par des tests. Un build sans
+  version (`dev`, local ou CI) ne se met jamais à jour. Les serveurs des tests
+  de bout en bout tournent avec `ROMSYNC_UPDATES=off` (pas d'accès à GitHub).
+- Compatibilité : toute fonction nouvelle dont dépend un client augmente
+  `APILevel` (server/internal/api/updates.go) et le niveau demandé par les
+  clients (`requiredServerApiLevel`, `RS_REQUIRED_API_LEVEL`).
 - Les fichiers de test réels (pieds de `.dsv`) ne contiennent que des tailles
   et le cookie : ne jamais versionner de save de jeu commercial.
 

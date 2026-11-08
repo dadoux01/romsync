@@ -121,6 +121,19 @@ website (*Appareils → Ajouter un appareil*). See
   Launcher): install the CIA with FBI. The server must be reachable on the
   local network. See [`3ds/README.md`](3ds/README.md).
 
+**Updates.** From 0.5.0 on, the apps update themselves: they ask your
+RomSync server, which relays the GitHub releases (the server itself is
+updated with its image: `docker compose pull`, Dockge…). The PC app checks at
+start and every 24 hours, the 3DS homebrew at start (both can be turned off,
+and checked by hand in the settings). Nothing is installed without your
+agreement: the release notes are shown, the files are downloaded and
+verified (Ed25519 signature of `SHA256SUMS`, then the SHA-256 of the file;
+any mismatch is refused, and an older version is never offered), then the
+app installs and restarts when you agree, never during a game or with
+uploads pending. If the installation fails, the current version stays and
+keeps working. Update the server first, then the apps: an app tells you
+when its server is too old for it, or the other way round.
+
 **System tray.** Closing the window keeps RomSync in the system tray (this
 can be turned off in the settings): saves of games launched without RomSync
 are then uploaded automatically, and a notification tells when a newer save
@@ -156,6 +169,10 @@ All settings are environment variables:
 | `ROMSYNC_MAX_UPLOAD` | `16777216` | Maximum size of an uploaded save, in bytes |
 | `ROMSYNC_TRUSTED_PROXIES` | *(empty)* | Comma-separated IPs or CIDR networks whose `X-Forwarded-For` header is trusted |
 | `ROMSYNC_RETENTION_INTERVAL` | `1h` | Period of the retention job |
+| `ROMSYNC_UPDATES` | `on` | Relay of the app updates (`off`: no app updates, no banner on the website) |
+| `ROMSYNC_UPDATE_REPO` | `dadoux01/romsync` | GitHub repository whose releases are relayed (a fork distributes its own) |
+| `ROMSYNC_GITHUB_TOKEN` | *(empty)* | Read-only GitHub token, only for a private repository |
+| `ROMSYNC_UPDATE_INTERVAL` | `6h` | Period of the release check |
 
 ### Data and backups
 
@@ -164,6 +181,7 @@ The `/data` volume holds everything:
 ```
 /data/romsync.db                  SQLite database (accounts, devices, games, versions)
 /data/blobs/<ab>/<sha256>         save contents, named by their SHA-256, deduplicated
+/data/updates/<version>/          cache of the relayed release files (can be deleted)
 ```
 
 To back up, copy the volume. For a consistent copy of the database while the
@@ -275,7 +293,13 @@ make dev-web      # web interface with hot reload on :5173
 RomSync is free software under the [GNU Affero General Public License v3.0](LICENSE).
 If you modify it and offer it as a hosted service, you must publish your changes.
 
-### Third-party data
+### Third-party code and data
+
+The 3DS homebrew includes [cJSON](https://github.com/DaveGamble/cJSON) (MIT)
+and [Monocypher](https://monocypher.org) 4.0.2 (CC0 or BSD-2-Clause, Ed25519
+verification of the updates); the PC app uses
+[pinenacl](https://pub.dev/packages/pinenacl) (MIT) for the same purpose.
+
 
 `server/internal/chipdb/chipsizes.txt`, the save size of about 6,700 DS games,
 is extracted from [melonDS](https://github.com/melonDS-emu/melonDS)'s ROM list

@@ -96,6 +96,22 @@ The comparison ignores the zeros TWiLight Menu++ adds at the end of the file
 queue (`sd:/3ds/romsync/queue/`) and sends them at the next start where the
 server answers. A retry never creates a duplicate version.
 
+## Updates
+
+At start (unless turned off in the settings, *SELECT*) and from the settings,
+RomSync asks its server whether a newer version exists. The server relays the
+GitHub releases, so the console only talks HTTP on the local network. With
+your agreement it downloads the `.cia`, `SHA256SUMS` and `SHA256SUMS.sig`,
+checks the Ed25519 signature of `SHA256SUMS` with the key built into the app
+(`core/update.c`, Monocypher) and the SHA-256 of the `.cia`, then installs it
+with the AM service (`app/updater.c`), like Universal-Updater, and exits:
+start RomSync again from the HOME Menu. A file that does not match is
+refused, and an older version is never offered. A build without
+`VERSION=` (`dev`) never updates itself.
+
+The app also tells you when the server is too old for it (before 0.5.0: no
+choice after a divergence) or the other way round.
+
 ## Dates
 
 Without a divergence, the server keeps the most recent save active
@@ -276,6 +292,7 @@ podman run --rm -v "$PWD":/src:Z -w /src/3ds docker.io/devkitpro/devkitarm make
 - Nothing of the 3DS layer could be run on a console or an emulator before
   the first release: see `docs/tests-manuels-3ds.md` for the manual tests.
 - HTTPS servers: curl is built with mbedtls, but no certificate store is set
-  up; use the server's LAN address over HTTP.
+  up; use the server's LAN address over HTTP. Updates do not need HTTPS
+  either: the server relays them and the app verifies their signature.
 - DSiWare saves, ROMs in archives (TWiLight Menu++ does not launch them
   either).

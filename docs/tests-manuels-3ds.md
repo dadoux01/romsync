@@ -101,13 +101,28 @@ l'heure du PC et celle de la console.
 | 8.6 | Wi-Fi coupé, *X* | Avertissement « Serveur injoignable », puis le jeu se lance |
 | 8.7 | Lancer le `.3dsx` depuis le Homebrew Launcher et faire *X* | La liste des titres n'est pas lisible depuis le Homebrew Launcher : RomSync tente le saut ; le jeu démarre, ou un message avec le code d'erreur dit de vérifier `bootstrap.cia` et d'installer RomSync en `.cia` |
 
-## 9. Divers
+## 9. Mises à jour (à partir de la 0.5.0)
+
+Préparation : serveur à jour (0.5.0 ou plus) avec le relais actif, console sous la version précédente installée en `.cia`.
 
 | # | Action | Résultat attendu |
 | --- | --- | --- |
-| 9.1 | Lire les écrans | Les accents s'affichent correctement (é, è, à, ç…), aucun texte ne déborde de l'écran |
-| 9.2 | Plus de 27 jeux dans la liste : Gauche/Droite | Défilement page par page |
-| 9.3 | Réglages → copies `.backup` : 2 ; provoquer trois téléchargements du même jeu | Seules les 2 copies les plus récentes restent dans `.backup` |
-| 9.4 | Bouton HOME pendant la liste, puis retour | L'appli reprend normalement |
-| 9.5 | Un homebrew `.nds` dans le dossier de ROMs | Identifié par `h:<sha1>` ; au démarrage suivant, il n'est pas relu en entier (identifiant en cache, démarrage plus rapide) |
-| 9.6 | Placer un profil `twilight.json` modifié dans `sd:/3ds/romsync/profiles/` | Il remplace celui intégré à l'appli (un profil invalide affiche « Profils de la carte SD ignorés ») |
+| 9.1 | Une release plus récente existe ; ouvrir RomSync | Après la synchro, écran « RomSync X est disponible » avec les notes de version |
+| 9.2 | Répondre *B* (plus tard) | Rien n'est téléchargé ; la question revient au prochain démarrage |
+| 9.3 | Répondre *A*, puis *A* (installer) | Téléchargement, « Vérification de la signature », installation avec progression, puis « relance-le depuis le menu HOME » ; RomSync se ferme |
+| 9.4 | Relancer RomSync depuis le menu HOME | Réglages (*SELECT*) : la nouvelle version est affichée ; saves et appairage conservés |
+| 9.5 | Réglages → « Rechercher une mise à jour maintenant » | « RomSync est à jour. » |
+| 9.6 | Réglages → « Rechercher les mises à jour au démarrage : non », relancer | Pas de recherche au démarrage |
+| 9.7 | Sur le serveur, `ROMSYNC_UPDATES=off`, puis recherche manuelle | « Le serveur ne propose pas de mise à jour… » |
+| 9.8 | Pointer la console vers un serveur 0.4.0, provoquer une divergence (test 2.8) | Au démarrage : « Serveur trop ancien » ; répondre *A* ou *Y* à la divergence : refus clair, rien n'est envoyé ni écrasé |
+
+## 10. Divers
+
+| # | Action | Résultat attendu |
+| --- | --- | --- |
+| 10.1 | Lire les écrans | Les accents s'affichent correctement (é, è, à, ç…), aucun texte ne déborde de l'écran |
+| 10.2 | Plus de 27 jeux dans la liste : Gauche/Droite | Défilement page par page |
+| 10.3 | Réglages → copies `.backup` : 2 ; provoquer trois téléchargements du même jeu | Seules les 2 copies les plus récentes restent dans `.backup` |
+| 10.4 | Bouton HOME pendant la liste, puis retour | L'appli reprend normalement |
+| 10.5 | Un homebrew `.nds` dans le dossier de ROMs | Identifié par `h:<sha1>` ; au démarrage suivant, il n'est pas relu en entier (identifiant en cache, démarrage plus rapide) |
+| 10.6 | Placer un profil `twilight.json` modifié dans `sd:/3ds/romsync/profiles/` | Il remplace celui intégré à l'appli (un profil invalide affiche « Profils de la carte SD ignorés ») |
