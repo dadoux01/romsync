@@ -112,6 +112,19 @@ bool rs_game_id_custom(const char *name, char *out, size_t size)
     return true;
 }
 
+rs_status rs_rom_identify_header(const char *path, rs_nds_header *header, rs_error *err)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
+    uint8_t buf[RS_NDS_HEADER_LEN];
+    size_t n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+    if (!rs_nds_parse(buf, n, header))
+        return rs_fail(err, RS_ERR_FORMAT, "%s : en-tête de ROM trop court", rs_basename(path));
+    return RS_OK;
+}
+
 rs_status rs_rom_identify(const char *path, rs_nds_header *header, char id[RS_GAME_ID_MAX],
                           rs_error *err)
 {

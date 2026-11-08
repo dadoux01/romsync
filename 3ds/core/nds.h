@@ -40,6 +40,9 @@ bool rs_game_id_valid(const char *id);
  * "x:platine-multi"); false when name cannot be made valid. */
 bool rs_game_id_custom(const char *name, char *out, size_t size);
 
+/* Reads only the header of a ROM file. */
+rs_status rs_rom_identify_header(const char *path, rs_nds_header *header, rs_error *err);
+
 /* Identifier of a ROM: its cartridge code, or "h:<sha1 of the ROM>".
  * Reads the ROM file; the SHA-1 is only computed for homebrew. */
 rs_status rs_rom_identify(const char *path, rs_nds_header *header, char id[RS_GAME_ID_MAX],

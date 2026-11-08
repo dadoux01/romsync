@@ -75,6 +75,7 @@ int main(void)
     run_profile_tests();
     run_state_tests();
     run_sync_tests();
+    run_library_tests();
     printf("%d checks, %d failures\n", t_checks, t_failures);
     return t_failures ? 1 : 0;
 }
