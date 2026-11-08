@@ -297,7 +297,7 @@ static void config_round_trips(void)
     CHECK_INT(rs_config_load(&c, sd_path("config.json"), NULL), RS_OK);
     CHECK_INT(c.keep_backups, 10);
     CHECK_STR(c.device_name, "3DS");
-    rs_strlcpy(c.server_url, "http://192.168.1.68:8085", sizeof c.server_url);
+    rs_strlcpy(c.server_url, "http://192.168.1.10:8085", sizeof c.server_url);
     rs_config_add_folder(&c, "sdmc:/roms/nds", true);
     rs_config_add_folder(&c, "sdmc:/roms/hacks", false);
     rs_config_set_slot(&c, "sdmc:/roms/nds/a.nds", 3);
@@ -305,7 +305,7 @@ static void config_round_trips(void)
     rs_config_free(&c);
 
     CHECK_INT(rs_config_load(&c, sd_path("config.json"), NULL), RS_OK);
-    CHECK_STR(c.server_url, "http://192.168.1.68:8085");
+    CHECK_STR(c.server_url, "http://192.168.1.10:8085");
     CHECK_INT(c.folder_count, 2);
     CHECK(c.folders[0].recursive && !c.folders[1].recursive);
     CHECK_INT(rs_config_slot(&c, "sdmc:/roms/nds/a.nds"), 3);

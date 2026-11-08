@@ -47,7 +47,7 @@ typedef struct {
 } rs_remote_game;
 
 typedef struct {
-    char base_url[256]; /* "http://192.168.1.68:8085", no trailing slash */
+    char base_url[256]; /* "http://192.168.1.10:8085", no trailing slash */
     char token[128];    /* device token, "" before pairing */
     rs_http_send_fn send;
     void *send_ctx;

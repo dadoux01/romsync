@@ -95,7 +95,7 @@ bool app_pair(app *a)
     for (;;) {
         ui_progress("Appairage",
                     "Sur le site de RomSync, clique « Ajouter un appareil » pour obtenir un code, puis saisis "
-                    "l'adresse du serveur (ex. http://192.168.1.68:8085), le code et le nom de cette console.\n\n"
+                    "l'adresse du serveur (ex. http://192.168.1.10:8085), le code et le nom de cette console.\n\n"
                     "Tailscale n'existe pas sur 3DS : le serveur doit être joignable sur le réseau local.");
         if (!ui_keyboard("Adresse du serveur", url, sizeof url, false) ||
             !ui_keyboard("Code d'appairage (ex. K7QM-4XPA)", code, sizeof code, false) ||
@@ -106,7 +106,7 @@ bool app_pair(app *a)
         }
         char normalized[256];
         if (!rs_api_normalize_url(url, normalized, sizeof normalized)) {
-            ui_message("Adresse invalide", "Exemple d'adresse valide : http://192.168.1.68:8085");
+            ui_message("Adresse invalide", "Exemple d'adresse valide : http://192.168.1.10:8085");
             continue;
         }
         ui_progress("Appairage", "Connexion au serveur...");

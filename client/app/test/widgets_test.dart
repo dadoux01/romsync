@@ -87,7 +87,7 @@ void main() {
         size: 512,
         savedAt: DateTime.utc(2026, 11, 8, 8, 22),
         uploadedAt: DateTime.utc(2026, 11, 8, 8, 22),
-        deviceName: 'michael-fedora',
+        deviceName: 'pc-bureau',
       ),
       localModified: DateTime.utc(2026, 11, 8, 16, 28),
     );
@@ -111,7 +111,7 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
       expect(find.text('Deux appareils ont joué sans se synchroniser'), findsOneWidget);
-      expect(find.textContaining('michael-fedora'), findsOneWidget);
+      expect(find.textContaining('pc-bureau'), findsOneWidget);
       expect(find.textContaining('le jeu ne se lance pas'), findsOneWidget);
       await tester.tap(find.text(button));
       await tester.pumpAndSettle();

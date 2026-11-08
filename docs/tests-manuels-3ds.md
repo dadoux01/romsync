@@ -15,9 +15,9 @@ l'heure du PC et celle de la console.
 | # | Action | Résultat attendu |
 | --- | --- | --- |
 | 1.1 | Installer `romsync-<version>-3ds.cia` avec FBI, puis lancer RomSync depuis le menu HOME | L'icône et la bannière RomSync apparaissent (avec un court son à la sélection) ; l'appli démarre sur l'écran d'appairage |
-| 1.2 | Sur le site, *Appareils → Ajouter un appareil* ; sur la console, saisir `http://192.168.1.68:8085`, le code, puis le nom « 2DS » | « Appairage réussi » ; sur le site, l'appareil « 2DS » apparaît avec la plateforme 3DS |
+| 1.2 | Sur le site, *Appareils → Ajouter un appareil* ; sur la console, saisir `http://192.168.1.10:8085`, le code, puis le nom « 2DS » | « Appairage réussi » ; sur le site, l'appareil « 2DS » apparaît avec la plateforme 3DS |
 | 1.3 | Recommencer l'appairage avec un code déjà utilisé (réglages → *Appairer de nouveau*) | Message « Code expiré ou déjà utilisé » ; l'ancien appairage reste valable |
-| 1.4 | Saisir une adresse sans `http://` (`192.168.1.68:8085`) | Acceptée (`http://` ajouté) |
+| 1.4 | Saisir une adresse sans `http://` (`192.168.1.10:8085`) | Acceptée (`http://` ajouté) |
 | 1.5 | Vérifier `sd:/3ds/romsync/token.txt` depuis un PC | Le fichier contient le jeton en clair, sur une ligne |
 | 1.6 | Au choix des dossiers, `sd:/roms/nds/` est proposé : répondre *Oui*, puis *Oui* pour les sous-dossiers | La liste des jeux s'affiche après la recherche |
 | 1.7 | Réglages → *Dossiers de ROMs* → *X* : choisir un dossier vide avec le navigateur (A, B, X) | Message « Aucune ROM DS (.nds) trouvée dans … » au lieu d'une liste vide |

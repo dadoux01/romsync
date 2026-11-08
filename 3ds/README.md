@@ -23,7 +23,7 @@ RetroArch on a PC.
   the SD card. RomSync reads its settings to find the saves.
 - The RomSync server reachable **on the local network**: Tailscale does not
   exist on the 3DS. Use the server's LAN address, e.g.
-  `http://192.168.1.68:8085`.
+  `http://192.168.1.10:8085`.
 - Optional, to launch games from RomSync: YANBF's `bootstrap.cia` and the NTR
   forwarder pack (see [Launching a game](#launching-a-game)).
 
