@@ -2,6 +2,8 @@
 # application template of devkitPro, without graphics or shaders.
 #
 #   make          romsync.3dsx (Homebrew Launcher)
+#   make cia      romsync.cia (installed app; needs makerom and bannertool,
+#                 which are not in devkitPro: see 3ds/README.md)
 #   make clean
 #
 # Without devkitPro installed, use its Docker image (see 3ds/README.md):
@@ -28,6 +30,11 @@ APP_TITLE       := RomSync
 APP_DESCRIPTION := Synchronisation des saves DS
 APP_AUTHOR      := RomSync
 ICON            := meta/icon.png
+
+# Version written in the CIA (make VERSION=0.4.0 cia; "-rc1" suffixes are
+# ignored).
+VERSION ?= 0.0.0
+VERSION_PARTS := $(subst ., ,$(firstword $(subst -, ,$(VERSION))))
 
 ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 # -Wno-format-truncation: messages and paths are cut on purpose by snprintf.
@@ -60,7 +67,7 @@ export APP_ICON := $(TOPDIR)/$(ICON)
 export _3DSXDEPS := $(OUTPUT).smdh
 export _3DSXFLAGS += --smdh=$(CURDIR)/$(TARGET).smdh --romfs=$(CURDIR)/$(ROMFS)
 
-.PHONY: all clean profiles
+.PHONY: all cia clean profiles
 
 all: profiles $(BUILD)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
@@ -75,9 +82,20 @@ profiles:
 $(BUILD):
 	@mkdir -p $@
 
+# The CIA reuses the program (romsync.elf) with a banner and an icon for the
+# HOME Menu; makerom builds the romfs from the folder named in the .rsf.
+cia: all
+	bannertool makebanner -i meta/banner.png -a meta/banner.wav -o $(BUILD)/banner.bnr
+	bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" \
+		-i $(ICON) -o $(BUILD)/icon.icn
+	makerom -f cia -o $(TARGET).cia -target t -exefslogo -elf $(TARGET).elf \
+		-rsf meta/romsync.rsf -banner $(BUILD)/banner.bnr -icon $(BUILD)/icon.icn \
+		-major $(word 1,$(VERSION_PARTS)) -minor $(word 2,$(VERSION_PARTS)) \
+		-micro $(word 3,$(VERSION_PARTS))
+
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).smdh $(TARGET).elf $(ROMFS)/profiles
+	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).smdh $(TARGET).elf $(TARGET).cia $(ROMFS)/profiles
 
 else
 #---------------------------------------------------------------------------------

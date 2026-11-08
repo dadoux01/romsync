@@ -1,0 +1,65 @@
+# Builds the 3DS homebrew (.3dsx and .cia) in devkitPro's official image
+# and uploads them as one artifact. Called by ci.yml (version "ci") and
+# release.yml (the tag's version).
+name: Build 3DS
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version written in the file names and in the CIA
+        type: string
+        default: ci
+
+permissions:
+  contents: read
+
+env:
+  # makerom and bannertool are not in devkitPro's image: pinned releases,
+  # checked against their SHA-256.
+  MAKEROM_URL: https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
+  MAKEROM_SHA256: 287b809dec064e0ad597e3d272c49ecb7eed41693d5ee6fef9d8a8aa24c2497e
+  BANNERTOOL_URL: https://github.com/diasurgical/bannertool/releases/download/1.2.0/bannertool.zip
+  BANNERTOOL_SHA256: 69768596f836acb3e3aeaa66e47c6ba560dde813c6dfcd33c8afc25fe29b7524
+
+jobs:
+  build:
+    name: 3DS homebrew
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: makerom and bannertool
+        run: |
+          mkdir -p "$HOME/tools"
+          cd "$HOME/tools"
+          curl -fsSL -o makerom.zip "$MAKEROM_URL"
+          curl -fsSL -o bannertool.zip "$BANNERTOOL_URL"
+          echo "$MAKEROM_SHA256  makerom.zip" | sha256sum -c -
+          echo "$BANNERTOOL_SHA256  bannertool.zip" | sha256sum -c -
+          unzip -q makerom.zip makerom
+          unzip -q -j bannertool.zip linux-x86_64/bannertool
+          chmod +x makerom bannertool
+          echo "$HOME/tools" >> "$GITHUB_PATH"
+
+      - name: Build
+        working-directory: 3ds
+        run: |
+          version="${{ inputs.version }}"
+          [ "$version" = ci ] && version=0.0.0
+          make VERSION="$version" cia
+          ls -la romsync.3dsx romsync.cia
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp 3ds/romsync.3dsx "dist/romsync-${{ inputs.version }}-3ds.3dsx"
+          cp 3ds/romsync.cia "dist/romsync-${{ inputs.version }}-3ds.cia"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: romsync-3ds
+          path: dist/*
+          if-no-files-found: error

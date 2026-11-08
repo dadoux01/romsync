@@ -109,6 +109,30 @@ jobs:
     with:
       version: ci
 
+  3ds-core:
+    name: 3DS core (unit and end-to-end tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: libcurl
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev
+      # With AddressSanitizer and UBSan (available on the runner).
+      - name: Unit tests
+        run: make 3ds-test
+      - name: End-to-end tests against the real server
+        run: make 3ds-e2e
+
+  3ds-build:
+    name: 3DS builds
+    needs: 3ds-core
+    uses: ./.github/workflows/build-3ds.yml
+    with:
+      version: ci
+
   openapi:
     name: OpenAPI lint
     runs-on: ubuntu-latest

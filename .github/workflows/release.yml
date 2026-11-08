@@ -1,6 +1,6 @@
 # Publishes a release when a v* tag is pushed (e.g. v0.3.0):
 # - a GitHub Release with the clients (Linux x64/arm64 tar.gz, macOS zip,
-#   Windows zip);
+#   Windows zip) and the 3DS homebrew (.3dsx and .cia);
 # - the server image on ghcr.io (linux/amd64 and linux/arm64), tagged with
 #   the exact version (0.3.0), the minor version (0.3) and latest.
 name: Release
@@ -30,6 +30,13 @@ jobs:
     name: Clients
     needs: version
     uses: ./.github/workflows/build-client.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
+  3ds:
+    name: 3DS homebrew
+    needs: version
+    uses: ./.github/workflows/build-3ds.yml
     with:
       version: ${{ needs.version.outputs.version }}
 
@@ -72,7 +79,7 @@ jobs:
 
   release:
     name: GitHub Release
-    needs: [version, client, image]
+    needs: [version, client, 3ds, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
