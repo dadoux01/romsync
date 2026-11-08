@@ -16,20 +16,25 @@ func TestDecide(t *testing.T) {
 		active  *Active
 		savedAt time.Time
 		base    *int64
+		mode    Activation
 		want    Decision
 	}{
-		{"first save is active", nil, t0, nil, Decision{Activate: true}},
-		{"first save with a stale base is active, no conflict", nil, t0, ptr(3), Decision{Activate: true}},
-		{"newer save on the active base", active, t0.Add(time.Minute), ptr(10), Decision{Activate: true}},
-		{"older save on the active base", active, t0.Add(-time.Minute), ptr(10), Decision{}},
-		{"tie keeps the active version", active, t0, ptr(10), Decision{}},
-		{"sub-millisecond difference is a tie", active, t0.Add(500 * time.Microsecond), ptr(10), Decision{}},
-		{"newer divergent save wins with conflict", active, t0.Add(time.Hour), ptr(7), Decision{Activate: true, Conflict: true}},
-		{"older divergent save loses with conflict", active, t0.Add(-time.Hour), ptr(7), Decision{Conflict: true}},
-		{"empty base on an existing game is a divergence", active, t0.Add(time.Hour), nil, Decision{Activate: true, Conflict: true}},
+		{"first save is active", nil, t0, nil, ActivateAuto, Decision{Activate: true}},
+		{"first save with a stale base is active, no conflict", nil, t0, ptr(3), ActivateAuto, Decision{Activate: true}},
+		{"newer save on the active base", active, t0.Add(time.Minute), ptr(10), ActivateAuto, Decision{Activate: true}},
+		{"older save on the active base", active, t0.Add(-time.Minute), ptr(10), ActivateAuto, Decision{}},
+		{"tie keeps the active version", active, t0, ptr(10), ActivateAuto, Decision{}},
+		{"sub-millisecond difference is a tie", active, t0.Add(500 * time.Microsecond), ptr(10), ActivateAuto, Decision{}},
+		{"newer divergent save wins with conflict", active, t0.Add(time.Hour), ptr(7), ActivateAuto, Decision{Activate: true, Conflict: true}},
+		{"older divergent save loses with conflict", active, t0.Add(-time.Hour), ptr(7), ActivateAuto, Decision{Conflict: true}},
+		{"empty base on an existing game is a divergence", active, t0.Add(time.Hour), nil, ActivateAuto, Decision{Activate: true, Conflict: true}},
+		{"always: an older divergent save is activated", active, t0.Add(-time.Hour), ptr(7), ActivateAlways, Decision{Activate: true, Conflict: true}},
+		{"never: a newer divergent save is archived", active, t0.Add(time.Hour), ptr(7), ActivateNever, Decision{Conflict: true}},
+		{"never: a newer save on the active base is archived", active, t0.Add(time.Hour), ptr(10), ActivateNever, Decision{}},
+		{"never: the first save is still active", nil, t0, nil, ActivateNever, Decision{Activate: true}},
 	}
 	for _, c := range cases {
-		if got := Decide(c.active, c.savedAt, c.base); got != c.want {
+		if got := Decide(c.active, c.savedAt, c.base, c.mode); got != c.want {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)
 		}
 	}

@@ -299,7 +299,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | DELETE | `/devices/{id}` | session | Révoque un appareil |
 | GET | `/games` | session ou jeton | Liste les jeux et leur version active |
 | PATCH | `/games/{code}` | session | Renomme le jeu, change sa rétention |
-| GET | `/games/{code}/active` | session ou jeton | Métadonnées de la version active (id, hash, taille, saved\_at) |
+| GET | `/games/{code}/active` | session ou jeton | Métadonnées de la version active (id, hash, taille, saved\_at) et `chip_size` du jeu, pour comparer une save locale après les règles de taille |
 | GET | `/games/{code}/versions` | session ou jeton | Historique paginé |
 | POST | `/games/{code}/versions` | session ou jeton | Envoie une save (corps brut + en-têtes) |
 | GET | `/versions/{id}/content` | session ou jeton | Télécharge le contenu brut |
@@ -312,6 +312,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 
 - Corps : contenu brut canonique.
 - En-têtes : `X-Upload-Id`, `X-Saved-At` (ISO 8601), `X-Base-Version` (vide si première save), `X-Emulator`, `X-Content-SHA256`, `X-Game-Title` (optionnel, pour un jeu inconnu ; encodé en pourcentage, car les navigateurs n'envoient que des en-têtes Latin-1).
+- En-tête optionnel `X-Activate` : le choix de l'utilisateur après une divergence (voir « Protocole de synchronisation »). `true` : la version devient active quelle que soit sa date (« Envoyer ma save locale ») ; `false` : elle est seulement archivée, comme version non active (« Prendre celle du serveur ») ; absent ou vide : la plus récente gagne. La première version d'un jeu est toujours active.
 - En-tête optionnel `X-Force-Size: true` : accepte une taille que les règles de « Taille réelle » refusent, et en fait la nouvelle taille de puce du jeu. Accepté seulement avec une session web (refusé avec `403 forbidden` pour un jeton d'appareil).
 - Paramètre optionnel `?profile=desmume` : le corps est un fichier au format du profil (ex. `.dsv`), converti en brut par le serveur avant tout traitement ; `X-Content-SHA256` porte alors sur le fichier envoyé. Sans paramètre, `profile=raw`.
 - Réponse : `{"version": {...}, "created": bool, "active": bool, "conflict": bool}` ; `201` si une version a été créée, `200` sinon.

@@ -104,7 +104,13 @@ func (s *Server) getActive(w http.ResponseWriter, r *http.Request) error {
 	if g.ActiveVersion == nil {
 		return errNotFound("this game has no active version")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"version": g.ActiveVersion})
+	// chip_size lets the clients compare a local save with the active one
+	// after the same size rule as an upload (see syncrule.ResolveSize).
+	var chip any
+	if g.ChipSize != nil {
+		chip = *g.ChipSize
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"version": g.ActiveVersion, "chip_size": chip})
 	return nil
 }
 
@@ -186,6 +192,7 @@ type uploadRequest struct {
 	sha256    string
 	title     string
 	forceSize bool
+	activate  syncrule.Activation
 }
 
 func parseUploadHeaders(r *http.Request) (uploadRequest, error) {
@@ -224,6 +231,16 @@ func parseUploadHeaders(r *http.Request) (uploadRequest, error) {
 		if u.title, err = validTitle(dec); err != nil {
 			return u, err
 		}
+	}
+	switch strings.ToLower(strings.TrimSpace(h.Get("X-Activate"))) {
+	case "":
+		u.activate = syncrule.ActivateAuto
+	case "true":
+		u.activate = syncrule.ActivateAlways
+	case "false":
+		u.activate = syncrule.ActivateNever
+	default:
+		return u, errInvalid("X-Activate must be true, false or empty")
 	}
 	switch strings.ToLower(h.Get("X-Force-Size")) {
 	case "", "false":
@@ -381,7 +398,7 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 				}
 				active = &syncrule.Active{ID: g.ActiveVersion.ID, SavedAt: t}
 			}
-			decision := syncrule.Decide(active, savedAt, req.base)
+			decision := syncrule.Decide(active, savedAt, req.base, req.activate)
 
 			if decision.Activate && active != nil {
 				if _, err := tx.ExecContext(ctx, `UPDATE save_versions SET is_active = 0 WHERE id = ?`, active.ID); err != nil {

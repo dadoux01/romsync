@@ -450,7 +450,16 @@ paths:
           description: Active version
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/VersionEnvelope" }
+              schema:
+                type: object
+                required: [version, chip_size]
+                properties:
+                  version: { $ref: "#/components/schemas/Version" }
+                  chip_size:
+                    type: [integer, "null"]
+                    description: >-
+                      The game's chip size, for comparing a local save with the
+                      active version after the size rules of an upload.
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -493,7 +502,8 @@ paths:
       summary: Upload a save
       description: |
         Creates the game when it does not exist. The new version becomes active
-        when its `saved_at` is strictly after the active version's. A base
+        when its `saved_at` is strictly after the active version's, unless
+        `X-Activate` carries the user's choice after a divergence. A base
         version that is not the active version is a divergence (`conflict`).
         A `X-Saved-At` more than 5 minutes after the reception time is clamped
         to the reception time; the original value is kept in
@@ -543,6 +553,15 @@ paths:
           in: header
           description: Title for a game the server does not know yet, percent-encoded UTF-8.
           schema: { type: string }
+        - name: X-Activate
+          in: header
+          description: >-
+            The user's choice after a divergence. `true`: the version becomes
+            active whatever its date ("send my local save"). `false`: it is
+            stored as an inactive version ("take the server's save"). Absent
+            or empty: most recent wins. The first version of a game is always
+            active.
+          schema: { type: string, enum: ["true", "false", ""] }
         - name: X-Force-Size
           in: header
           description: Accept a size that the size rules refuse, and make it the game's chip size. Web session only.

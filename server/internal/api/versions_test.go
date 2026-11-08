@@ -418,3 +418,50 @@ func TestDeleteVersion(t *testing.T) {
 	other := e.newUser(admin, "bob")
 	expectErr(t, other.delete(path(ids[0])), 404, "not_found")
 }
+
+// X-Activate carries the user's choice after a divergence.
+func TestUploadActivateHeader(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	pc, _ := e.pairDevice(admin, "PC")
+	ds, _ := e.pairDevice(admin, "3DS")
+	t0 := e.clock.Now().Add(-time.Hour)
+
+	// First save: active even with X-Activate: false.
+	first := pc.uploadOK(upload{code: "IRBF", data: save(1), savedAt: t0, headers: map[string]string{"X-Activate": "false"}}, 201)
+	if !first.Active {
+		t.Fatal("the first save of a game must be active")
+	}
+	server := pc.uploadOK(upload{code: "IRBF", data: save(2), savedAt: t0.Add(30 * time.Minute), base: first.Version.ID}, 201)
+
+	// "Take the server's save": a newer divergent save is only archived.
+	archived := ds.uploadOK(upload{code: "IRBF", data: save(3), savedAt: t0.Add(50 * time.Minute), base: first.Version.ID,
+		headers: map[string]string{"X-Activate": "false"}}, 201)
+	if archived.Active || !archived.Conflict {
+		t.Fatalf("archived upload: %+v", archived)
+	}
+	if got := pc.active("IRBF"); got.ID != server.Version.ID {
+		t.Fatalf("active is %d, want %d", got.ID, server.Version.ID)
+	}
+
+	// "Send my local save": an older divergent save becomes active.
+	mine := ds.uploadOK(upload{code: "IRBF", data: save(4), savedAt: t0.Add(10 * time.Minute), base: first.Version.ID,
+		headers: map[string]string{"X-Activate": "true"}}, 201)
+	if !mine.Active || !mine.Conflict {
+		t.Fatalf("forced upload: %+v", mine)
+	}
+	if got := pc.active("IRBF"); got.ID != mine.Version.ID {
+		t.Fatalf("active is %d, want %d", got.ID, mine.Version.ID)
+	}
+
+	expectErr(t, ds.upload(upload{code: "IRBF", data: save(5), savedAt: t0, headers: map[string]string{"X-Activate": "yes"}}), 400, "invalid_request")
+
+	// The active endpoint gives the chip size.
+	var res struct {
+		ChipSize *int64 `json:"chip_size"`
+	}
+	pc.get("/api/v1/games/IRBF/active").json(t, &res)
+	if res.ChipSize == nil || *res.ChipSize != 512 {
+		t.Fatalf("chip_size = %v, want 512", res.ChipSize)
+	}
+}
