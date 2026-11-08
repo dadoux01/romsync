@@ -115,12 +115,10 @@ func validRepoPart(s string) bool {
 	if s == "" || s == "." || s == ".." {
 		return false
 	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
-			return false
-		}
-	}
-	return true
+	return strings.IndexFunc(s, func(r rune) bool {
+		alnum := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
+		return !alnum && r != '-' && r != '_' && r != '.'
+	}) < 0
 }
 
 // ParsePrefixes parses a comma-separated list of IP addresses or CIDR networks.

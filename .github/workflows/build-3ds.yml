@@ -50,19 +50,20 @@ jobs:
       - name: Build
         working-directory: 3ds
         env:
-          VERSION: ${{ inputs.version }}
+          # Not VERSION: the Makefile reads that variable from the environment.
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           # A CI build stays "dev": it never offers updates.
-          if [ "$VERSION" = ci ]; then make cia; else make VERSION="$VERSION" cia; fi
+          if [ "$RELEASE_VERSION" = ci ]; then make cia; else make VERSION="$RELEASE_VERSION" cia; fi
           ls -la romsync.3dsx romsync.cia
 
       - name: Package
         env:
-          VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p dist
-          cp 3ds/romsync.3dsx "dist/romsync-$VERSION-3ds.3dsx"
-          cp 3ds/romsync.cia "dist/romsync-$VERSION-3ds.cia"
+          cp 3ds/romsync.3dsx "dist/romsync-$RELEASE_VERSION-3ds.3dsx"
+          cp 3ds/romsync.cia "dist/romsync-$RELEASE_VERSION-3ds.cia"
           ls -la dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

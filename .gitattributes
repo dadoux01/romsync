@@ -1,0 +1,3 @@
+# Test vectors are compared byte for byte (signatures): no line-ending
+# conversion on Windows.
+testdata/** -text
