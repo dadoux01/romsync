@@ -29,7 +29,8 @@ services:
       ROMSYNC_TRUSTED_PROXIES: ""
       ROMSYNC_RETENTION_INTERVAL: 1h
       # Update relay: the server checks the latest release on GitHub every
-      # 6 hours and serves its signed files to the apps (PC and 3DS).
+      # hour (and when an app asks, if the last check is older than 10
+      # minutes) and serves its signed files to the apps (PC and 3DS).
       # "off" disables it. ROMSYNC_UPDATE_REPO points a fork to its own
       # releases; ROMSYNC_GITHUB_TOKEN is only needed for a private one.
       ROMSYNC_UPDATES: "on"

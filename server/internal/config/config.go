@@ -41,7 +41,7 @@ func Defaults() Config {
 		RetentionInterval: time.Hour,
 		Updates:           true,
 		UpdateRepo:        "dadoux01/romsync",
-		UpdateInterval:    6 * time.Hour,
+		UpdateInterval:    time.Hour,
 	}
 }
 

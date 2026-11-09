@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -36,12 +37,20 @@ func errUpdatesUnavailable(msg string) *Error {
 	return newErr(http.StatusServiceUnavailable, "updates_unavailable", msg)
 }
 
+// UpdateMaxAge is how old the relay's knowledge of the latest release may
+// be when a client asks: older, GitHub is checked again first.
+const UpdateMaxAge = 10 * time.Minute
+
 // latestRelease returns the relayed release, or an error for the client.
-func (s *Server) latestRelease() (*updates.Release, time.Time, error) {
+func (s *Server) latestRelease(ctx context.Context) (*updates.Release, time.Time, error) {
 	if s.updates == nil {
 		return nil, time.Time{}, errUpdatesUnavailable("the update relay is disabled on this server (ROMSYNC_UPDATES=off)")
 	}
-	rel, at, err := s.updates.Latest()
+	// A slow GitHub must not hold the client long: the previous answer is
+	// used when the check does not finish in time.
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	rel, at, err := s.updates.LatestFresh(ctx, UpdateMaxAge)
 	if rel == nil {
 		msg := "no release known yet"
 		if err != nil {
@@ -54,7 +63,7 @@ func (s *Server) latestRelease() (*updates.Release, time.Time, error) {
 
 // GET /updates: the latest release, for the website's banner.
 func (s *Server) getUpdates(w http.ResponseWriter, r *http.Request) error {
-	rel, at, err := s.latestRelease()
+	rel, at, err := s.latestRelease(r.Context())
 	if err != nil {
 		return err
 	}
@@ -82,7 +91,7 @@ func (s *Server) getPlatformUpdate(w http.ResponseWriter, r *http.Request) error
 	if _, ok := updates.Platforms[platform]; !ok {
 		return errNotFound("unknown platform")
 	}
-	rel, _, err := s.latestRelease()
+	rel, _, err := s.latestRelease(r.Context())
 	if err != nil {
 		return err
 	}
@@ -109,7 +118,7 @@ func (s *Server) getPlatformUpdate(w http.ResponseWriter, r *http.Request) error
 // GET /updates/files/{version}/{name}: a file of the latest release, from
 // the server's cache.
 func (s *Server) getUpdateFile(w http.ResponseWriter, r *http.Request) error {
-	if _, _, err := s.latestRelease(); err != nil {
+	if _, _, err := s.latestRelease(r.Context()); err != nil {
 		return err
 	}
 	f, err := s.updates.Open(r.Context(), chi.URLParam(r, "version"), chi.URLParam(r, "name"))

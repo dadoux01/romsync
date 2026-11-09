@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestParseAndCompareVersions(t *testing.T) {
@@ -40,6 +41,7 @@ type fakeGitHub struct {
 	files     map[string]string
 	token     string // required when set
 	downloads atomic.Int32
+	checks    atomic.Int32 // requests of the latest release
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -55,6 +57,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			return
 		}
 		if r.URL.Path == "/repos/dadoux01/romsync/releases/latest" {
+			g.checks.Add(1)
 			if g.release == nil {
 				http.NotFound(w, r)
 				return
@@ -183,5 +186,44 @@ func TestRelayRefusesATruncatedDownloadAndPrunesOldVersions(t *testing.T) {
 	f.Close()
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatal("older versions must be pruned")
+	}
+}
+
+// A release published since the last check is seen as soon as a client
+// asks, once the knowledge is older than maxAge; GitHub is not asked again
+// within maxAge, even when it fails.
+func TestLatestFreshChecksAgainWhenStale(t *testing.T) {
+	g := newFakeGitHub(t)
+	r := newTestRelay(t, g)
+	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
+	r.Now = func() time.Time { return now }
+
+	rel, _, err := r.LatestFresh(context.Background(), 10*time.Minute) // never checked: checks
+	if err != nil || rel.Version != "0.5.0" || g.checks.Load() != 1 {
+		t.Fatalf("first: %v %v, %d checks", rel, err, g.checks.Load())
+	}
+
+	g.release["tag_name"] = "v0.5.1" // published after the check
+	now = now.Add(5 * time.Minute)
+	rel, _, _ = r.LatestFresh(context.Background(), 10*time.Minute)
+	if rel.Version != "0.5.0" || g.checks.Load() != 1 {
+		t.Fatalf("within maxAge: %s, %d checks", rel.Version, g.checks.Load())
+	}
+	now = now.Add(6 * time.Minute)
+	rel, _, _ = r.LatestFresh(context.Background(), 10*time.Minute)
+	if rel.Version != "0.5.1" || g.checks.Load() != 2 {
+		t.Fatalf("stale: %s, %d checks", rel.Version, g.checks.Load())
+	}
+
+	// GitHub fails: the known release stays, and is not asked again at once.
+	g.release = nil
+	now = now.Add(11 * time.Minute)
+	rel, _, err = r.LatestFresh(context.Background(), 10*time.Minute)
+	if rel == nil || rel.Version != "0.5.1" || err == nil || g.checks.Load() != 3 {
+		t.Fatalf("failed check: %v %v, %d checks", rel, err, g.checks.Load())
+	}
+	_, _, _ = r.LatestFresh(context.Background(), 10*time.Minute)
+	if g.checks.Load() != 3 {
+		t.Fatalf("a failed check must count: %d checks", g.checks.Load())
 	}
 }

@@ -88,7 +88,8 @@ type Relay struct {
 	checkedAt time.Time
 	lastErr   error
 
-	dlMu sync.Mutex // one download at a time
+	dlMu      sync.Mutex // one download at a time
+	refreshMu sync.Mutex // one check of GitHub at a time
 }
 
 // NewRelay builds a relay with the defaults.
@@ -147,6 +148,23 @@ func (r *Relay) request(ctx context.Context, url, accept string) (*http.Response
 		req.Header.Set("Authorization", "Bearer "+r.Token)
 	}
 	return r.Client.Do(req)
+}
+
+// LatestFresh is Latest, after checking GitHub again when the last check
+// is older than maxAge: a client asking for updates sees a release
+// published since the last periodic check. Concurrent callers wait for the
+// same check; a failed check also counts, so GitHub is asked at most once
+// per maxAge even when it does not answer.
+func (r *Relay) LatestFresh(ctx context.Context, maxAge time.Duration) (*Release, time.Time, error) {
+	r.refreshMu.Lock()
+	r.mu.Lock()
+	stale := r.checkedAt.IsZero() || r.Now().Sub(r.checkedAt) > maxAge
+	r.mu.Unlock()
+	if stale {
+		_ = r.Refresh(ctx) // the error is kept and returned by Latest
+	}
+	r.refreshMu.Unlock()
+	return r.Latest()
 }
 
 // Refresh reads the latest release from GitHub.

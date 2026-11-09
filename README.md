@@ -172,7 +172,7 @@ All settings are environment variables:
 | `ROMSYNC_UPDATES` | `on` | Relay of the app updates (`off`: no app updates, no banner on the website) |
 | `ROMSYNC_UPDATE_REPO` | `dadoux01/romsync` | GitHub repository whose releases are relayed (a fork distributes its own) |
 | `ROMSYNC_GITHUB_TOKEN` | *(empty)* | Read-only GitHub token, only for a private repository |
-| `ROMSYNC_UPDATE_INTERVAL` | `6h` | Period of the release check |
+| `ROMSYNC_UPDATE_INTERVAL` | `1h` | Period of the release check (a request from an app or the website also checks again when the last check is older than 10 minutes) |
 
 ### Data and backups
 

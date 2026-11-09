@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	if len(c.TrustedProxies) != 0 {
 		t.Fatalf("trusted proxies must be empty by default")
 	}
-	if !c.Updates || c.UpdateRepo != "dadoux01/romsync" || c.GitHubToken != "" || c.UpdateInterval != 6*time.Hour {
+	if !c.Updates || c.UpdateRepo != "dadoux01/romsync" || c.GitHubToken != "" || c.UpdateInterval != time.Hour {
 		t.Fatalf("unexpected update defaults: %+v", c)
 	}
 }

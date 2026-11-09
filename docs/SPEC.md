@@ -371,7 +371,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | `ROMSYNC_UPDATES` | `on` | Relais des mises à jour vers les applis (`off` le désactive : pas de mise à jour des applis, pas de bannière sur le site) |
 | `ROMSYNC_UPDATE_REPO` | `dadoux01/romsync` | Dépôt GitHub dont les releases sont relayées (un fork distribue les siennes, signées avec sa propre clé intégrée à ses applis) |
 | `ROMSYNC_GITHUB_TOKEN` | vide | Jeton GitHub en lecture, seulement pour un dépôt privé |
-| `ROMSYNC_UPDATE_INTERVAL` | `6h` | Intervalle de vérification de la dernière release (minimum 10 min) |
+| `ROMSYNC_UPDATE_INTERVAL` | `1h` | Intervalle de vérification de la dernière release (minimum 10 min) ; une demande d'un appareil ou du site revérifie aussi si la dernière vérification a plus de 10 minutes |
 
 ## Mises à jour et compatibilité
 
@@ -385,7 +385,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 
 **Relais par le serveur**
 
-- Le serveur ne se met pas à jour lui-même (c'est le rôle de Dockge ou de `docker compose pull`). Il interroge la dernière release finale de `ROMSYNC_UPDATE_REPO` toutes les 6 heures (sans jeton pour un dépôt public) et met ses fichiers en cache dans `/data/updates/` au premier téléchargement ; seuls les fichiers de la dernière release sont servis, et le cache des versions précédentes est supprimé.
+- Le serveur ne se met pas à jour lui-même (c'est le rôle de Dockge ou de `docker compose pull`). Il interroge la dernière release finale de `ROMSYNC_UPDATE_REPO` à son démarrage, toutes les heures, et quand un appareil ou le site demande les mises à jour alors que la dernière vérification a plus de 10 minutes (une seule requête à la fois ; un échec compte aussi, pour ne pas interroger GitHub en boucle s'il ne répond pas ; au-delà de 15 secondes, la réponse précédente sert). Une release publiée est donc vue par « Rechercher une mise à jour » en 10 minutes au plus. Sans jeton pour un dépôt public. et met ses fichiers en cache dans `/data/updates/` au premier téléchargement ; seuls les fichiers de la dernière release sont servis, et le cache des versions précédentes est supprimé.
 - Les applis ne parlent qu'à leur serveur : `GET /updates/{platform}`, puis les trois fichiers. Le relais n'a pas besoin d'être de confiance, puisque les applis vérifient la signature ; il évite le HTTPS vers GitHub sur 3DS (certificats, mbedtls) et un jeton GitHub dans les applis.
 - Le site affiche à l'administrateur une bannière discrète quand une version plus récente que celle du serveur existe, avec le lien vers ses notes ; elle peut être masquée pour cette version.
 

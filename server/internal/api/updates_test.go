@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -69,11 +68,7 @@ func TestUpdateRelay(t *testing.T) {
 	relay := updates.NewRelay("dadoux01/romsync", "", t.TempDir())
 	relay.API = gh.URL
 	e.srv.updates = relay
-	// Enabled, not checked yet.
-	expectErr(t, dev.get("/api/v1/updates/3ds"), 503, "updates_unavailable")
-	if err := relay.Refresh(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	// Enabled, not checked yet: the first request checks GitHub.
 
 	// Authentication is required.
 	expectErr(t, e.client().get("/api/v1/updates/3ds"), 401, "unauthorized")
