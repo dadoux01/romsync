@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:pinenacl/ed25519.dart' show Signature, VerifyKey;
 
 import '../api/models.dart';
+import '../message.dart';
 
 /// Version of this client, set at build time
 /// (`--dart-define=ROMSYNC_VERSION=0.5.0`); "dev" for a local build, which
@@ -108,9 +109,9 @@ bool _isCanonicalScalar(Uint8List s) {
 
 class UpdateVerificationException implements Exception {
   UpdateVerificationException(this.message);
-  final String message;
+  final CoreMessage message;
   @override
-  String toString() => message;
+  String toString() => '$message';
 }
 
 /// Checks a downloaded release file: the Ed25519 signature of SHA256SUMS
@@ -130,20 +131,18 @@ Future<void> verifyReleaseFile({
     sig = base64.decode(signature.trim());
     key = base64.decode(publicKey);
   } on FormatException {
-    throw UpdateVerificationException('Signature illisible : mise à jour refusée.');
+    throw UpdateVerificationException(const CoreMessage(Msg.updateSignatureUnreadable));
   }
   if (!verifyEd25519(publicKey: key, signature: sig, message: sums)) {
-    throw UpdateVerificationException(
-      'Signature invalide : cette mise à jour ne vient pas de RomSync, elle est refusée.',
-    );
+    throw UpdateVerificationException(const CoreMessage(Msg.updateSignatureInvalid));
   }
   final expected = sumFor(utf8.decode(sums, allowMalformed: true), fileName);
   if (expected == null) {
-    throw UpdateVerificationException('$fileName ne figure pas dans SHA256SUMS : mise à jour refusée.');
+    throw UpdateVerificationException(CoreMessage(Msg.updateNotListed, {'file': fileName}));
   }
   final actual = (await sha256.bind(file.openRead()).first).toString();
   if (actual != expected) {
-    throw UpdateVerificationException('Le fichier téléchargé est altéré (hash différent) : mise à jour refusée.');
+    throw UpdateVerificationException(const CoreMessage(Msg.updateHashMismatch));
   }
 }
 
@@ -180,15 +179,3 @@ Compatibility checkCompatibility(ServerInfo? info, {String clientVersion = romsy
   if (min != null && me != null && me < min) return Compatibility.clientTooOld;
   return Compatibility.ok;
 }
-
-/// Message shown for an incompatibility.
-String compatibilityMessage(Compatibility c, ServerInfo? info) => switch (c) {
-  Compatibility.ok => '',
-  Compatibility.serverTooOld =>
-    'Le serveur RomSync (${info?.version ?? 'version antérieure à 0.5.0'}) est trop ancien pour cette appli : '
-        'mets d’abord à jour le serveur (nouvelle image Docker). En attendant, le choix en cas de divergence '
-        'n’est pas disponible.',
-  Compatibility.clientTooOld =>
-    'Cette appli ($romsyncClientVersion) est trop ancienne pour le serveur, qui demande au moins '
-        '${info?.minClientVersion} : mets-la à jour.',
-};

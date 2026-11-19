@@ -75,7 +75,7 @@ void main() {
 
     test('names the save like DeSmuME (invalid characters become *)', () async {
       final d = DeSmuME(settings: desmumeSettings(), platform: HostPlatform.linux, home: home.path);
-      const loc = SaveLocation(dir: '/b', source: 'x');
+      const loc = SaveLocation(dir: '/b', source: CoreMessage(Msg.sourceSetting));
       expect(d.savePathFor(rom('/roms/Mario "Kart" <DS>.v1.nds'), loc), '/b/Mario *Kart* *DS*.v1.dsv');
       expect(d.scrubName('Pokémon|Noire'), 'Pokémon*Noire');
     });
@@ -83,7 +83,7 @@ void main() {
     test('ROMs in archives are left to melonDS', () async {
       final d = DeSmuME(settings: desmumeSettings(), platform: HostPlatform.linux, home: home.path);
       final loc = await d.saveLocation();
-      expect(d.cannotSync(rom('/roms/g.zip', inner: 'g.nds'), loc), contains('melonDS'));
+      expect(d.cannotSync(rom('/roms/g.zip', inner: 'g.nds'), loc)?.code, Msg.emuArchiveNotSupported);
       expect(d.cannotSync(rom('/roms/g.nds'), loc), isNull);
     });
 
@@ -118,7 +118,7 @@ void main() {
       );
       final loc = await d.saveLocation();
       expect(loc.dir, isNull);
-      expect(d.cannotSync(rom('/roms/a.nds'), loc), contains('exécutable'));
+      expect(d.cannotSync(rom('/roms/a.nds'), loc)?.code, Msg.desmumeExecutableNeeded);
     });
   });
 
@@ -135,13 +135,13 @@ void main() {
         platform: HostPlatform.macos,
         home: home.path,
       );
-      expect((await d.saveLocation()).warning, contains('introuvable'));
+      expect((await d.saveLocation()).warning?.code, Msg.desmumeBatteryNotFound);
       final only = battery('0.9.13');
       expect((await d.saveLocation()).dir, only);
       battery('0.9.12');
       final two = await d.saveLocation();
       expect(two.dir, isNull);
-      expect(two.warning, contains('Plusieurs'));
+      expect(two.warning?.code, Msg.desmumeBatteryAmbiguous);
       final chosen = DeSmuME(
         settings: desmumeSettings(executable: '/Applications/DeSmuME.app', saveDir: only),
         platform: HostPlatform.macos,

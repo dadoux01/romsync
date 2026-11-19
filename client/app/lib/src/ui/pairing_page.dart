@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../l10n.dart';
 
 /// First screen: server address, pairing code and device name.
 class PairingPage extends StatefulWidget {
@@ -21,22 +22,22 @@ class _PairingPageState extends State<PairingPage> {
   bool _busy = false;
   String? _error;
 
-  static String? validateServer(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Adresse du serveur requise';
+  static String? validateServer(AppLocalizations l, String? v) {
+    if (v == null || v.trim().isEmpty) return l.pairServerRequired;
     try {
       RomSyncApi.normalizeServerUrl(v);
       return null;
     } on FormatException {
-      return 'Adresse invalide (ex. http://nas:8080)';
+      return l.pairServerInvalid;
     }
   }
 
-  static String? validateCode(String? v) => RegExp(r'^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$').hasMatch((v ?? '').trim())
-      ? null
-      : 'Code de 8 caractères (ex. K7QM-4XPA)';
+  static String? validateCode(AppLocalizations l, String? v) =>
+      RegExp(r'^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$').hasMatch((v ?? '').trim()) ? null : l.pairCodeInvalid;
 
   Future<void> _submit({bool allowFile = false}) async {
     if (!_form.currentState!.validate()) return;
+    final l = AppLocalizations.of(context);
     setState(() {
       _busy = true;
       _error = null;
@@ -53,19 +54,11 @@ class _PairingPageState extends State<PairingPage> {
       final accept = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Aucun trousseau disponible'),
-          content: const Text(
-            'RomSync range le jeton de l’appareil dans le trousseau du système (Secret Service : '
-            'GNOME Keyring, KWallet, KeePassXC…), mais aucun ne répond dans cette session.\n\n'
-            'Tu peux démarrer un trousseau puis réessayer, ou stocker le jeton dans un fichier.\n\n'
-            '${FileTokenStore.warning}',
-          ),
+          title: Text(l.pairNoKeyringTitle),
+          content: Text('${l.pairNoKeyringBody}\n\n${l.tokenFileWarning}'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
-            FilledButton.tonal(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Stocker le jeton dans un fichier'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l.cancel)),
+            FilledButton.tonal(onPressed: () => Navigator.pop(context, true), child: Text(l.pairUseFile)),
           ],
         ),
       );
@@ -73,16 +66,16 @@ class _PairingPageState extends State<PairingPage> {
     } on ApiException catch (e) {
       setState(
         () => _error = switch (e.code) {
-          'expired' => 'Ce code a expiré ou a déjà été utilisé : génère-en un nouveau sur le site.',
-          'not_found' => 'Code inconnu : vérifie-le, ou génère-en un nouveau sur le site.',
-          'rate_limited' => 'Trop de tentatives : réessaie dans une minute.',
+          'expired' => l.pairCodeExpired,
+          'not_found' => l.pairCodeUnknown,
+          'rate_limited' => l.rateLimited,
           _ => e.message,
         },
       );
     } on ServerUnreachableException {
-      setState(() => _error = 'Serveur injoignable : vérifie l’adresse et ta connexion (Tailscale ?).');
+      setState(() => _error = l.pairUnreachable);
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = errorText(l, e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -90,6 +83,7 @@ class _PairingPageState extends State<PairingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -104,24 +98,24 @@ class _PairingPageState extends State<PairingPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Appairer cet appareil', style: Theme.of(context).textTheme.headlineSmall),
+                    Text(l.pairTitle, style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 8),
-                    const Text('Sur le site RomSync : Appareils → Ajouter un appareil, puis saisis le code ici.'),
+                    Text(l.pairIntro),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _server,
-                      decoration: const InputDecoration(labelText: 'Adresse du serveur', hintText: 'http://nas:8080'),
-                      validator: validateServer,
+                      decoration: InputDecoration(labelText: l.pairServer, hintText: 'http://nas:8080'),
+                      validator: (v) => validateServer(l, v),
                     ),
                     TextFormField(
                       controller: _code,
-                      decoration: const InputDecoration(labelText: 'Code d’appairage', hintText: 'K7QM-4XPA'),
-                      validator: validateCode,
+                      decoration: InputDecoration(labelText: l.pairCode, hintText: 'K7QM-4XPA'),
+                      validator: (v) => validateCode(l, v),
                     ),
                     TextFormField(
                       controller: _name,
-                      decoration: const InputDecoration(labelText: 'Nom de l’appareil'),
-                      validator: (v) => (v ?? '').trim().isEmpty ? 'Nom requis' : null,
+                      decoration: InputDecoration(labelText: l.pairName),
+                      validator: (v) => (v ?? '').trim().isEmpty ? l.pairNameRequired : null,
                       maxLength: 64,
                     ),
                     if (_error != null)
@@ -129,7 +123,7 @@ class _PairingPageState extends State<PairingPage> {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                       ),
-                    FilledButton(onPressed: _busy ? null : _submit, child: const Text('Appairer')),
+                    FilledButton(onPressed: _busy ? null : _submit, child: Text(l.pairSubmit)),
                   ],
                 ),
               ),

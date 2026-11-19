@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:pinenacl/ed25519.dart' as nacl;
+import 'package:romsync/src/l10n.dart';
 import 'package:romsync/src/update_manager.dart';
 import 'package:romsync_core/romsync_core.dart';
 
@@ -80,6 +81,7 @@ void main() {
     saveConfig: () async {},
     api: () => paired ? api() : null,
     blockedReason: () => blocked,
+    texts: () => textsFor(const Locale('fr')),
     restart: (t, s) async => restarts.add((t, s)),
     onNotice: (t, b) => notices.add(t),
     clientVersion: version,

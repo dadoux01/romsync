@@ -24,7 +24,7 @@ void main() {
       File(path).writeAsStringSync('{not json');
       final f = JsonFile(path);
       expect(await f.read(), isNull);
-      expect(f.lastWarning, contains('corrupt'));
+      expect(f.lastWarning?.arg('path'), contains('corrupt'));
       expect(dir.listSync().map((e) => p.basename(e.path)).single, startsWith('bad.json.corrupt-'));
     });
   });
@@ -44,6 +44,7 @@ void main() {
       backupCount: 4,
       tokenStorage: TokenStorage.file,
       romChoices: {'/roms/a.nds': const RomChoice.share(), '/roms/b.nds': const RomChoice.separate('x:multi')},
+      language: 'en',
     );
     await c.save(path);
     final r = await ClientConfig.load(path);
@@ -53,6 +54,8 @@ void main() {
     expect((await ClientConfig.load(p.join(dir.path, 'none.json'))).backupCount, 10);
     expect(r.emulatorFor('IRBF'), 'melonds');
     expect(r.emulatorFor('CPUF'), 'desmume');
+    expect(r.language, 'en');
+    expect((await ClientConfig.load(p.join(dir.path, 'none.json'))).language, isNull, reason: 'follows the system');
   });
 
   test('ClientConfig migrates the phase 2 single melonDS profile', () async {

@@ -1,0 +1,813 @@
+{
+  "@@locale": "fr",
+  "ok": "OK",
+  "cancel": "Annuler",
+  "later": "Plus tard",
+  "save": "Enregistrer",
+  "choose": "Choisir",
+  "browse": "Parcourir",
+  "retry": "Réessayer",
+  "add": "Ajouter",
+  "website": "site web",
+  "dateTimePattern": "dd/MM/yyyy HH:mm",
+  "decimalSeparator": ",",
+  "sizeBytes": "{n} o",
+  "@sizeBytes": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "sizeKib": "{n} Kio",
+  "@sizeKib": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "sizeMib": "{n} Mio",
+  "@sizeMib": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "serverUnreachable": "Serveur injoignable.",
+  "language": "Langue",
+  "languageSystem": "Langue du système",
+  "trayOpen": "Ouvrir RomSync",
+  "traySyncNow": "Synchroniser maintenant",
+  "trayQuit": "Quitter RomSync",
+  "pairTitle": "Appairer cet appareil",
+  "pairIntro": "Sur le site RomSync : Appareils → Ajouter un appareil, puis saisis le code ici.",
+  "pairServer": "Adresse du serveur",
+  "pairServerRequired": "Adresse du serveur requise",
+  "pairServerInvalid": "Adresse invalide (ex. http://nas:8080)",
+  "pairCode": "Code d’appairage",
+  "pairCodeInvalid": "Code de 8 caractères (ex. K7QM-4XPA)",
+  "pairName": "Nom de l’appareil",
+  "pairNameRequired": "Nom requis",
+  "pairSubmit": "Appairer",
+  "pairNoKeyringTitle": "Aucun trousseau disponible",
+  "pairNoKeyringBody": "RomSync range le jeton de l’appareil dans le trousseau du système (Secret Service : GNOME Keyring, KWallet, KeePassXC…), mais aucun ne répond dans cette session.\n\nTu peux démarrer un trousseau puis réessayer, ou stocker le jeton dans un fichier.",
+  "tokenFileWarning": "Le jeton de cet appareil est stocké en clair dans un fichier (permissions 0600). Toute personne ou application ayant accès à ton compte peut le lire ; en cas de doute, révoque l’appareil depuis le site.",
+  "pairUseFile": "Stocker le jeton dans un fichier",
+  "pairCodeExpired": "Ce code a expiré ou a déjà été utilisé : génère-en un nouveau sur le site.",
+  "pairCodeUnknown": "Code inconnu : vérifie-le, ou génère-en un nouveau sur le site.",
+  "rateLimited": "Trop de tentatives : réessaie dans une minute.",
+  "pairUnreachable": "Serveur injoignable : vérifie l’adresse et ta connexion (Tailscale ?).",
+  "homeRescan": "Rescanner et synchroniser",
+  "settings": "Réglages",
+  "homeUnauthorized": "Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.",
+  "homePairAgain": "Appairer à nouveau",
+  "homeOffline": "Serveur injoignable : les parties se lancent avec les saves locales.",
+  "homeOfflineQueued": "Serveur injoignable : les parties se lancent avec les saves locales, {count, plural, =1{1 envoi en attente} other{{count} envois en attente}}.",
+  "@homeOfflineQueued": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeRunning": "Partie en cours : {game}. Chaque sauvegarde est envoyée automatiquement.",
+  "@homeRunning": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "homeDivergence": "Choix à faire pour {game} : deux appareils ont joué sans se synchroniser. Rien n’a été envoyé.",
+  "@homeDivergence": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "homeAddFolder": "Ajoute un dossier de ROMs dans les réglages.",
+  "homeScanIssues": "{count, plural, =1{1 fichier non lu} other{{count} fichiers non lus}}",
+  "@homeScanIssues": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeActivity": "Activité récente",
+  "divergenceLocalSent": "Save locale envoyée : c’est la save active.",
+  "divergenceServerTaken": "Save du serveur récupérée ; ta save locale est dans l’historique.",
+  "divergenceServerTakenBackup": "Save du serveur récupérée ; ta save locale est dans l’historique et dans {path}.",
+  "@divergenceServerTakenBackup": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "launchFailed": "Lancement impossible",
+  "staleTitle": "Une save {emulator} existe déjà",
+  "@staleTitle": {
+    "placeholders": {
+      "emulator": {
+        "type": "String"
+      }
+    }
+  },
+  "staleBody": "RomSync ne l’a jamais synchronisée pour ce jeu : c’est probablement une ancienne partie.\n\nMise de côté (recommandé), elle est copiée dans le dossier .backup voisin, et la save du serveur sera téléchargée au prochain lancement.\nGardée, elle sera envoyée au serveur, qui gardera la plus récente des deux.",
+  "staleKeep": "La garder",
+  "staleSetAside": "La mettre de côté",
+  "gameSharedNeedsChoice": "{count} ROMs partagent l’identifiant {id} : choisis pour celle-ci.",
+  "@gameSharedNeedsChoice": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "gameShared": "{count, plural, =1{Save partagée avec 1 autre ROM} other{Save partagée avec {count} autres ROMs}}",
+  "@gameShared": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gameSeparate": "Save séparée",
+  "gameModify": "Modifier",
+  "gameEmulatorTooltip": "Émulateur de ce jeu",
+  "emulatorDefault": "{name} (par défaut)",
+  "@emulatorDefault": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "emulatorNoArchives": "{name} — pas pour les archives",
+  "@emulatorNoArchives": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "history": "Historique",
+  "play": "Jouer",
+  "launchDownloaded": "Save du serveur téléchargée.",
+  "launchDownloadedBackup": "Save du serveur téléchargée ; l’ancienne copie locale est dans {path}.",
+  "@launchDownloadedBackup": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "notPaired": "Appareil non appairé.",
+  "closeGameFirst": "Ferme d’abord le jeu en cours : RomSync téléchargera ensuite la save du serveur.",
+  "gameAlreadyRunning": "Une partie est déjà en cours : {game}.",
+  "@gameAlreadyRunning": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeNewSaveTitle": "Nouvelle save : {title}",
+  "@noticeNewSaveTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeChoiceTitle": "Choix à faire pour {game}",
+  "@noticeChoiceTitle": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeChoiceBody": "Deux appareils ont joué sans se synchroniser : rien n’a été envoyé. Ouvre RomSync pour choisir la save à garder.",
+  "updateWaitGame": "Partie en cours ({game}) : la mise à jour s’installera à la fin de la partie.",
+  "@updateWaitGame": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "updateWaitQueue": "{count, plural, =1{1 envoi en attente} other{{count} envois en attente}} : la mise à jour s’installera dès qu’ils seront partis.",
+  "@updateWaitQueue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "updateWaitQueueHeld": "{count, plural, =1{1 envoi en attente} other{{count} envois en attente}}, dont {held} en attente de ton choix (divergence) : la mise à jour s’installera dès qu’ils seront partis.",
+  "@updateWaitQueueHeld": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "held": {
+        "type": "int"
+      }
+    }
+  },
+  "statusUpToDate": "À jour",
+  "statusToUpload": "À envoyer",
+  "statusToDownload": "À télécharger",
+  "statusOffline": "Hors ligne",
+  "statusNeedsChoice": "Choix requis",
+  "statusDiverged": "Choix à faire",
+  "statusUnavailable": "Indisponible",
+  "statusNoSave": "Pas de save",
+  "conflictResolved": "Conflit résolu automatiquement",
+  "conflictResolvedTooltip": "La dernière save envoyée ne partait pas de la version active : les deux sont dans l’historique du site.",
+  "copyCommand": "Copier la commande",
+  "commandCopied": "Commande copiée",
+  "settingsServer": "Serveur",
+  "settingsDevice": "Appareil « {name} » · {storage}",
+  "@settingsDevice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "storage": {
+        "type": "String"
+      }
+    }
+  },
+  "tokenInKeyring": "jeton dans le trousseau du système",
+  "tokenInFile": "jeton dans un fichier (0600)",
+  "unpair": "Désappairer",
+  "romFolders": "Dossiers de ROMs",
+  "romFoldersHelp": "Les .nds sont lus, y compris dans les .zip et les .7z (programme 7z, 7zz ou 7za).",
+  "addFolder": "Ajouter un dossier",
+  "emulators": "Émulateurs",
+  "defaultEmulator": "Émulateur par défaut",
+  "defaultEmulatorHelp": "Chaque jeu peut avoir le sien, depuis la liste des jeux.",
+  "tray": "Barre système",
+  "keepInTray": "Garder RomSync dans la barre système à la fermeture",
+  "keepInTrayHelp": "Les saves des jeux lancés sans passer par RomSync sont alors envoyées automatiquement. Les saves plus récentes du serveur sont signalées par une notification, et téléchargées au prochain lancement depuis RomSync.",
+  "backups": "Copies de sécurité",
+  "backupCount": "Copies .backup gardées par save",
+  "backupHelp": "Copie de la save locale remplacée par un téléchargement, dans un dossier .backup à côté.",
+  "updates": "Mises à jour",
+  "autoUpdate": "Rechercher les mises à jour automatiquement",
+  "autoUpdateHelp": "Au démarrage puis toutes les 24 heures, auprès de ton serveur RomSync. Rien n’est installé sans ton accord.",
+  "lastCheck": "Dernière vérification : {date}",
+  "@lastCheck": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "seeUpdate": "Voir la mise à jour",
+  "checkUpdate": "Rechercher une mise à jour",
+  "emuDefault": "par défaut",
+  "emuInUse": "utilisé par certains jeux",
+  "emuFormatToCheck": "format de save à vérifier",
+  "emuToConfigure": "à configurer",
+  "emuExecutable": "Exécutable",
+  "emuAppMac": "Application (.app)",
+  "emuExeWindows": "Exécutable (.exe)",
+  "emuExeLinux": "Exécutable (nom dans le PATH ou chemin complet)",
+  "emuArgs": "Arguments supplémentaires",
+  "emuSaveDir": "Dossier des saves (vide : détecté)",
+  "emuDetected": "Détecté : {where} (source : {source})",
+  "@emuDetected": {
+    "placeholders": {
+      "where": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "emuDetectedRetroarch": "selon la configuration de RetroArch",
+  "emuDetectedUnknown": "inconnu",
+  "emuDetectedNextToRom": "à côté de chaque ROM",
+  "chooseFolder": "Choisir un dossier",
+  "historyTitle": "Historique — {title}",
+  "@historyTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "historyRestoreOnSite": "Restaurer sur le site",
+  "historyNoSave": "Ce jeu n’a pas encore de save sur le serveur.",
+  "historyReadOnly": "Lecture seule : pour restaurer une ancienne version, ouvre le jeu sur le site. L’appli la téléchargera avant la prochaine partie.",
+  "versionActive": "active",
+  "versionDivergent": "divergente",
+  "versionPinned": "épinglée",
+  "versionClockFixed": "horloge corrigée",
+  "versionNote": "« {note} »",
+  "@versionNote": {
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "sizeTrimmed": "reçue en {from}, remplissage coupé",
+  "@sizeTrimmed": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      }
+    }
+  },
+  "sizeShrunk": "taille du jeu passée de {from} à {to}",
+  "@sizeShrunk": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "sizeForced": "taille forcée (avant : {from})",
+  "@sizeForced": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      }
+    }
+  },
+  "olderVersions": "Versions plus anciennes",
+  "choiceTitle": "Plusieurs ROMs, un même jeu",
+  "choiceSameId": "« {rom} » a le même identifiant ({id}) que :",
+  "@choiceSameId": {
+    "placeholders": {
+      "rom": {
+        "type": "String"
+      },
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "choiceNotSynced": "Tant que tu n’as pas choisi, cette ROM n’est pas synchronisée.",
+  "choiceShare": "Partager la save",
+  "choiceShareHelp": "Même progression que les autres ROMs de ce jeu (ROM patchée ou traduite).",
+  "choiceSeparate": "Séparer",
+  "choiceSeparateHelp": "Sa propre save sur le serveur, sous un identifiant que tu nommes (hack qui change la save).",
+  "choiceIdName": "Nom de l’identifiant",
+  "choiceIdHelp": "Lettres, chiffres et tirets, 32 caractères au plus",
+  "choiceIdPreview": "Identifiant : {id}",
+  "@choiceIdPreview": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "choiceIdInvalid": "Nom invalide : lettres sans accents, chiffres et tirets",
+  "validate": "Valider",
+  "divTitle": "Deux appareils ont joué sans se synchroniser",
+  "divServer": "• Sur le serveur : save du {date}, venant de {from}.",
+  "@divServer": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "from": {
+        "type": "String"
+      }
+    }
+  },
+  "divFromWebsite": "l’import sur le site",
+  "divLocalUnknown": "• Sur cet appareil : une autre save, modifiée depuis la dernière synchronisation.",
+  "divLocal": "• Sur cet appareil : save modifiée le {date}, qui ne part pas de celle du serveur.",
+  "@divLocal": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "divExplain": "Envoyer ma save locale : elle devient la save active et les autres appareils la téléchargeront.\nPrendre celle du serveur : ta save locale est quand même envoyée, comme ancienne version (restaurable sur le site), puis remplacée par celle du serveur ; une copie reste dans le dossier .backup.",
+  "divCloseEmulator": "Ferme d’abord l’émulateur s’il a encore ce jeu ouvert.",
+  "divLaterLaunch": "Plus tard : rien n’est envoyé ni écrasé, et le jeu ne se lance pas.",
+  "divLater": "Plus tard : rien n’est envoyé ni écrasé.",
+  "divTakeServer": "Prendre celle du serveur",
+  "divSendLocal": "Envoyer ma save locale",
+  "updateCurrent": "Version actuelle : {version}",
+  "@updateCurrent": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNoNotes": "Pas de notes de version.",
+  "updateVerifiedInfo": "Le téléchargement est vérifié (signature et empreinte) avant d’être proposé à l’installation. RomSync te demandera ton accord avant d’installer et de redémarrer.",
+  "download": "Télécharger",
+  "installTitle": "Installer RomSync {version} ?",
+  "@installTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "installBody": "RomSync va se fermer, installer la nouvelle version, puis redémarrer. Si l’installation échoue, la version actuelle reste en place. Pendant une partie ou avec des envois en attente, l’installation attend qu’ils soient terminés.",
+  "installRestart": "Installer et redémarrer",
+  "updateAvailableDefault": "Une nouvelle version est disponible.",
+  "seeNotes": "Voir les notes",
+  "compatServerTooOld": "Le serveur RomSync ({version}) est trop ancien pour cette appli : mets d’abord à jour le serveur (nouvelle image Docker). En attendant, le choix en cas de divergence n’est pas disponible.",
+  "@compatServerTooOld": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "compatOldVersion": "version antérieure à 0.5.0",
+  "compatClientTooOld": "Cette appli ({version}) est trop ancienne pour le serveur, qui demande au moins {min} : mets-la à jour.",
+  "@compatClientTooOld": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "updDev": "Version de développement : pas de mise à jour automatique.",
+  "updNoPlatform": "Pas de mise à jour pour ce système.",
+  "updPairFirst": "Appaire d’abord cet appareil.",
+  "updAvailable": "RomSync {version} est disponible.",
+  "@updAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updNoticeTitle": "RomSync {version} est disponible",
+  "@updNoticeTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updNoticeBody": "Ouvre RomSync pour lire les notes de version et installer la mise à jour.",
+  "updNoRelay": "Le serveur ne propose pas de mise à jour (relais désactivé, serveur trop ancien ou aucune version publiée).",
+  "updUpToDate": "RomSync est à jour ({version}).",
+  "@updUpToDate": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updUnreachable": "Serveur injoignable : vérification reportée.",
+  "updCheckFailed": "Vérification impossible : {detail}",
+  "@updCheckFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "updDownloading": "Téléchargement de RomSync {version}…",
+  "@updDownloading": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updVerifying": "Vérification de la signature…",
+  "updNotWritable": "Le dossier d’installation ({path}) n’est pas modifiable : installe la nouvelle version à la main, ou déplace RomSync dans un dossier à toi.",
+  "@updNotWritable": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "updReady": "RomSync {version} est prête à être installée.",
+  "@updReady": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updUnreachableDownload": "Serveur injoignable pendant le téléchargement.",
+  "updDownloadFailed": "Téléchargement impossible : {detail}",
+  "@updDownloadFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "updInstallFailedWith": "{detail} RomSync continue avec la version actuelle.",
+  "@updInstallFailedWith": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "updInstallFailed": "Installation impossible ({detail}). RomSync continue avec la version actuelle.",
+  "@updInstallFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "updInstalling": "Installation…",
+  "updUpdaterMissing": "romsync-updater.exe est introuvable.",
+  "coreSyncNeedsChoice": "Deux appareils ont joué sans se synchroniser : choix à faire",
+  "coreSyncIdentical": "Save identique à la version active",
+  "coreSyncArchived": "Save locale archivée sur le serveur",
+  "coreSyncUploaded": "Save envoyée",
+  "coreSyncUploadedDivergent": "Save envoyée (divergence)",
+  "coreSyncUploadedNotActive": "Save envoyée, mais une version plus récente reste active",
+  "coreSyncOffline": "Serveur injoignable : {count, plural, =1{1 envoi en attente} other{{count} envois en attente}}",
+  "@coreSyncOffline": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "coreSyncUnauthorized": "Appareil non autorisé : appaire-le à nouveau.",
+  "coreSyncRefused": "Envoi refusé ({code}) : {detail}. Copie conservée : {copy}",
+  "@coreSyncRefused": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      },
+      "copy": {
+        "type": "String"
+      }
+    }
+  },
+  "coreSyncQueued": "Save mise en file d’attente",
+  "coreSyncUpToDate": "Save à jour",
+  "coreSyncDownloaded": "Save du serveur téléchargée",
+  "coreSyncOfflineLaunch": "Serveur injoignable : la partie se lance avec la save locale, les envois partiront dès que le serveur répondra.",
+  "coreSyncSharedId": "Plusieurs ROMs partagent l’identifiant {gameId} : choisis d’abord de partager ou séparer leur save.",
+  "@coreSyncSharedId": {
+    "placeholders": {
+      "gameId": {
+        "type": "String"
+      }
+    }
+  },
+  "coreSyncServerTooOld": "Le serveur RomSync ({version}) est trop ancien pour appliquer ce choix : rien n’a été envoyé ni écrasé. Mets d’abord à jour le serveur, puis recommence.",
+  "@coreSyncServerTooOld": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "coreFileProblem": "{file} : {reason}",
+  "@coreFileProblem": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "coreFileBadFormat": "{file} : format inattendu ({detail})",
+  "@coreFileBadFormat": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "coreFileChanging": "le fichier change pendant la lecture",
+  "coreFileStillWriting": "le fichier est encore en cours d’écriture",
+  "coreFileLocked": "fichier verrouillé par un autre programme ({detail})",
+  "@coreFileLocked": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "coreFileUnreadable": "lecture impossible",
+  "coreStateFileSetAside": "Fichier illisible mis de côté ({path}) : {detail}",
+  "@coreStateFileSetAside": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "coreScanFolderNotFound": "dossier introuvable",
+  "coreScanUnsupportedCompression": "compression non prise en charge",
+  "coreScanInstallSevenZip": "Installer 7zip (paquet p7zip ou 7zip) pour lire les archives .7z.",
+  "coreScanUnreadable": "illisible : {detail}",
+  "@coreScanUnreadable": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "coreSaveNotFound": "Save introuvable.",
+  "coreEmuExited": "{name} s’est arrêté avec le code {code}\n{output}",
+  "@coreEmuExited": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "code": {
+        "type": "int"
+      },
+      "output": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuNotConfigured": "Émulateur non configuré.",
+  "coreEmuArchiveNotSupported": "{name} ne lance pas les ROMs en archive dans RomSync : choisis melonDS pour ce jeu, ou décompresse la ROM.",
+  "@coreEmuArchiveNotSupported": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuFlatpakLinuxOnly": "Le mode Flatpak n’existe que sous Linux : indique l’exécutable de {name}.",
+  "@coreEmuFlatpakLinuxOnly": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuExecutableNotFound": "Exécutable {name} introuvable : « {path} ». Indique son chemin dans les réglages.",
+  "@coreEmuExecutableNotFound": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuExecutableNotFoundLinux": "Exécutable {name} introuvable : « {path} ». Indique son chemin dans les réglages, ou choisis le mode Flatpak.",
+  "@coreEmuExecutableNotFoundLinux": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuFlatpakMissing": "Flatpak n’est pas installé sur ce système.",
+  "coreEmuFlatpakAppMissing": "Le Flatpak {id} n’est pas installé.",
+  "@coreEmuFlatpakAppMissing": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuFlatpakNoWrite": "Le Flatpak {name} n’a pas accès en écriture au dossier {folder}.",
+  "@coreEmuFlatpakNoWrite": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "coreEmuFlatpakNoRead": "Le Flatpak {name} n’a pas accès au dossier de ROMs {folder}.",
+  "@coreEmuFlatpakNoRead": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "coreDesmumeExecutableNeeded": "Indique l’exécutable de DeSmuME : son dossier Battery est défini dans le desmume.ini à côté de lui.",
+  "coreDesmumeBatteryNotFound": "Dossier Battery de DeSmuME introuvable : lance DeSmuME une fois, ou choisis le dossier dans les réglages.",
+  "coreDesmumeBatteryAmbiguous": "Plusieurs dossiers Battery de DeSmuME ({folders}) : choisis le bon dans les réglages.",
+  "@coreDesmumeBatteryAmbiguous": {
+    "placeholders": {
+      "folders": {
+        "type": "String"
+      }
+    }
+  },
+  "coreDesmumeBatteryUnknown": "Dossier Battery de DeSmuME inconnu.",
+  "coreMelonConfigUnreadable": "Configuration de melonDS illisible ({detail}) : les saves sont supposées à côté des ROMs.",
+  "@coreMelonConfigUnreadable": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "coreMelonRelativeDir": "melonDS utilise un dossier de saves relatif ({value}) : indique le dossier réel dans les réglages.",
+  "@coreMelonRelativeDir": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "coreRetroarchConfigNotFound": "retroarch.cfg introuvable : lance RetroArch une fois, ou indique le dossier des saves dans les réglages.",
+  "coreRetroarchDefaultDir": "RetroArch utilise son dossier de saves par défaut, qui dépend de son paquet : vérifie où il écrit les .srm.",
+  "coreRetroarchSaveDirUnknown": "Dossier des saves de RetroArch inconnu.",
+  "coreRetroarchCoreMissing": "Cœur melonDS DS introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).",
+  "coreRetroarchCoreMissingAt": "Cœur melonDS DS introuvable ({path}) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).",
+  "@coreRetroarchCoreMissingAt": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "coreSourceSetting": "réglage RomSync",
+  "coreSourceDesmumeLinux": "dossier fixe de DeSmuME sous Linux",
+  "coreSourceMelonDefault": "valeur par défaut de melonDS (à côté de la ROM)",
+  "coreSourcePath": "{path}",
+  "@coreSourcePath": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "coreNoticeNewerSave": "{title} : une save plus récente vient de {device}. Lance le jeu depuis RomSync pour la récupérer.",
+  "@coreNoticeNewerSave": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "coreNoticeNewerSaveWebsite": "{title} : une save plus récente vient de l’import sur le site. Lance le jeu depuis RomSync pour la récupérer.",
+  "@coreNoticeNewerSaveWebsite": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "coreUpdateSignatureUnreadable": "Signature illisible : mise à jour refusée.",
+  "coreUpdateSignatureInvalid": "Signature invalide : cette mise à jour ne vient pas de RomSync, elle est refusée.",
+  "coreUpdateNotListed": "{file} ne figure pas dans SHA256SUMS : mise à jour refusée.",
+  "@coreUpdateNotListed": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      }
+    }
+  },
+  "coreUpdateHashMismatch": "Le fichier téléchargé est altéré (hash différent) : mise à jour refusée."
+}

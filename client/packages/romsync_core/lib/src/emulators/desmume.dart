@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../message.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -39,14 +40,14 @@ class DeSmuME extends EmulatorBase {
   Future<SaveLocation> saveLocation() async {
     final override = settings.saveDirOverride;
     if (override != null && override.isNotEmpty) {
-      return SaveLocation(dir: override, source: 'réglage RomSync');
+      return SaveLocation(dir: override, source: const CoreMessage(Msg.sourceSetting));
     }
     switch (platform) {
       case HostPlatform.linux:
         final dir = isFlatpak
             ? paths.join(home, '.var', 'app', settings.flatpakId, 'config', 'desmume')
             : paths.join(xdgConfigHome, 'desmume');
-        return SaveLocation(dir: dir, source: 'dossier fixe de DeSmuME sous Linux');
+        return SaveLocation(dir: dir, source: const CoreMessage(Msg.sourceDesmumeLinux));
       case HostPlatform.windows:
         return _windowsBattery();
       case HostPlatform.macos:
@@ -59,8 +60,8 @@ class DeSmuME extends EmulatorBase {
     if (exe == null) {
       return const SaveLocation(
         dir: null,
-        source: 'desmume.ini',
-        warning: 'Indique l’exécutable de DeSmuME : son dossier Battery est défini dans le desmume.ini à côté de lui.',
+        source: CoreMessage(Msg.sourcePath, {'path': 'desmume.ini'}),
+        warning: CoreMessage(Msg.desmumeExecutableNeeded),
       );
     }
     final exeDir = paths.dirname(exe);
@@ -72,7 +73,7 @@ class DeSmuME extends EmulatorBase {
     }
     value = (value == null || value.isEmpty) ? r'.\Battery' : value;
     final dir = paths.isAbsolute(value) ? value : paths.normalize(paths.join(exeDir, value));
-    return SaveLocation(dir: dir, source: ini);
+    return SaveLocation(dir: dir, source: CoreMessage(Msg.sourcePath, {'path': ini}));
   }
 
   Future<SaveLocation> _macBattery() async {
@@ -84,13 +85,15 @@ class DeSmuME extends EmulatorBase {
         if (version is Directory && await battery.exists()) found.add(battery.path);
       }
     }
-    if (found.length == 1) return SaveLocation(dir: found.single, source: base.path);
+    if (found.length == 1) {
+      return SaveLocation(dir: found.single, source: CoreMessage(Msg.sourcePath, {'path': base.path}));
+    }
     return SaveLocation(
       dir: null,
-      source: base.path,
+      source: CoreMessage(Msg.sourcePath, {'path': base.path}),
       warning: found.isEmpty
-          ? 'Dossier Battery de DeSmuME introuvable : lance DeSmuME une fois, ou choisis le dossier dans les réglages.'
-          : 'Plusieurs dossiers Battery de DeSmuME (${found.join(', ')}) : choisis le bon dans les réglages.',
+          ? const CoreMessage(Msg.desmumeBatteryNotFound)
+          : CoreMessage(Msg.desmumeBatteryAmbiguous, {'folders': found.join(', ')}),
     );
   }
 
@@ -135,10 +138,10 @@ class DeSmuME extends EmulatorBase {
   }
 
   @override
-  String? cannotSync(ScannedRom rom, SaveLocation location) {
+  CoreMessage? cannotSync(ScannedRom rom, SaveLocation location) {
     final base = super.cannotSync(rom, location);
     if (base != null) return base;
-    if (location.dir == null) return location.warning ?? 'Dossier Battery de DeSmuME inconnu.';
+    if (location.dir == null) return location.warning ?? const CoreMessage(Msg.desmumeBatteryUnknown);
     return null;
   }
 

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../message.dart';
 import 'file_access.dart';
 
 /// A JSON document on disk, written atomically (temporary file, fsync,
@@ -23,12 +24,12 @@ class JsonFile {
     } on FormatException catch (e) {
       final aside = '$path.corrupt-${DateTime.now().millisecondsSinceEpoch}';
       await f.rename(aside);
-      lastWarning = 'Fichier illisible mis de côté ($aside) : ${e.message}';
+      lastWarning = CoreMessage(Msg.stateFileSetAside, {'path': aside, 'detail': e.message});
       return null;
     }
   }
 
-  String? lastWarning;
+  CoreMessage? lastWarning;
 
   Future<void> write(Object? value) async {
     await Directory(p.dirname(path)).create(recursive: true);

@@ -1,0 +1,7 @@
+# Translations of the app (docs/SPEC.md, "Langues"): app_fr.arb is the
+# reference; every other language has the same keys (checked by a test).
+arb-dir: lib/l10n
+template-arb-file: app_fr.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+nullable-getter: false

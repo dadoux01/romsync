@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../message.dart';
 import '../profiles/profile.dart';
 import '../state/file_access.dart';
 import '../state/json_file.dart';
@@ -33,7 +34,7 @@ class LocalSave {
 class SyncEvent {
   SyncEvent(this.kind, this.message, {this.gameId});
   final SyncEventKind kind;
-  final String message;
+  final CoreMessage message;
   final String? gameId;
   @override
   String toString() => '${kind.name}: $message';
@@ -74,7 +75,7 @@ class FlushResult {
   bool unauthorized = false;
 
   /// Uploads refused by the server (moved to the `failed` folder).
-  final List<String> failures = [];
+  final List<CoreMessage> failures = [];
 
   /// Automatic uploads held back because they diverge, one per save file:
   /// they stay in the queue until the user chooses.
@@ -100,7 +101,7 @@ class PrepareResult {
 
   /// Copy of the local save replaced by the download.
   final String? backupPath;
-  final String? message;
+  final CoreMessage? message;
 
   /// Set when the user must choose before the launch: nothing was sent nor
   /// overwritten. Call [SyncEngine.prepare] again with the choice.
@@ -109,21 +110,23 @@ class PrepareResult {
 }
 
 class SyncException implements Exception {
-  SyncException(this.message);
-  final String message;
+  SyncException(this.message, {this.more = const []});
+  final CoreMessage message;
+
+  /// Other failures of the same attempt (several refused uploads).
+  final List<CoreMessage> more;
   @override
-  String toString() => message;
+  String toString() => [message, ...more].join('\n');
 }
 
 /// The server is too old to apply the user's choice after a divergence
 /// (no X-Activate): nothing was sent, the server must be updated first.
 class ServerTooOldException extends SyncException {
   ServerTooOldException(this.serverVersion)
-    : super(
-        'Le serveur RomSync ($serverVersion) est trop ancien pour appliquer ce choix : '
-        'rien n’a été envoyé ni écrasé. Mets d’abord à jour le serveur, puis recommence.',
-      );
-  final String serverVersion;
+    : super(CoreMessage(Msg.syncServerTooOld, {'version': ?serverVersion}));
+
+  /// Null for a server older than 0.5.0.
+  final String? serverVersion;
 }
 
 /// The sync protocol of docs/SPEC.md, "Protocole de synchronisation".
@@ -169,7 +172,7 @@ class SyncEngine {
     return result;
   }
 
-  void _emit(SyncEventKind kind, String message, [String? gameId]) =>
+  void _emit(SyncEventKind kind, CoreMessage message, [String? gameId]) =>
       onEvent?.call(SyncEvent(kind, message, gameId: gameId));
 
   /// Reads and decodes the local save of [entry]; null when there is none.
@@ -179,14 +182,14 @@ class SyncEngine {
     try {
       file = await readStable(savePath);
     } on UnstableFileException catch (e) {
-      throw SyncException('${p.basename(savePath)} : ${e.reason}');
+      throw SyncException(CoreMessage(Msg.fileProblem, {'file': p.basename(savePath), 'reason': e.reason}));
     }
     if (file == null) return null;
     final Uint8List raw;
     try {
       raw = profile.decode(file);
     } on ProfileFormatException catch (e) {
-      throw SyncException('${p.basename(savePath)} : ${e.message}');
+      throw SyncException(CoreMessage(Msg.fileBadFormat, {'file': p.basename(savePath), 'detail': e.message}));
     }
     return LocalSave(raw, sha256.convert(raw).toString(), (await f.lastModified()).toUtc());
   }
@@ -234,7 +237,7 @@ class SyncEngine {
               await queue.update(u.savePath, (x) => x.mode == UploadMode.auto ? x.copyWith(held: true) : x);
               _emit(
                 SyncEventKind.needsChoice,
-                'Deux appareils ont joué sans se synchroniser : choix à faire',
+                const CoreMessage(Msg.syncNeedsChoice),
                 u.gameId,
               );
             }
@@ -263,23 +266,25 @@ class SyncEngine {
         res.sent++;
         _emit(
           SyncEventKind.uploaded,
-          !r.created
-              ? 'Save identique à la version active'
-              : u.mode == UploadMode.archive
-              ? 'Save locale archivée sur le serveur'
-              : r.active
-              ? 'Save envoyée${r.conflict ? ' (divergence)' : ''}'
-              : 'Save envoyée, mais une version plus récente reste active',
+          CoreMessage(
+            !r.created
+                ? Msg.syncIdentical
+                : u.mode == UploadMode.archive
+                ? Msg.syncArchived
+                : r.active
+                ? (r.conflict ? Msg.syncUploadedDivergent : Msg.syncUploaded)
+                : Msg.syncUploadedNotActive,
+          ),
           u.gameId,
         );
       } on ServerUnreachableException {
         res.offline = true;
-        _emit(SyncEventKind.offline, 'Serveur injoignable : ${queue.length} envoi(s) en attente', u.gameId);
+        _emit(SyncEventKind.offline, CoreMessage(Msg.syncOffline, {'count': queue.length}), u.gameId);
         break;
       } on ApiException catch (e) {
         if (e.status == 401) {
           res.unauthorized = true;
-          _emit(SyncEventKind.failed, 'Appareil non autorisé : appaire-le à nouveau', u.gameId);
+          _emit(SyncEventKind.failed, const CoreMessage(Msg.syncUnauthorized), u.gameId);
           break;
         }
         if (e.status >= 500 || e.status == 429) {
@@ -290,7 +295,7 @@ class SyncEngine {
         final failed = p.join(queue.dir, 'failed', '${u.uploadId}.bin');
         await writeBytesAtomic(failed, data);
         await queue.remove(u);
-        final msg = 'Envoi refusé (${e.code}) : ${e.message}. Copie conservée : $failed';
+        final msg = CoreMessage(Msg.syncRefused, {'code': e.code, 'detail': e.message, 'copy': failed});
         res.failures.add(msg);
         _emit(SyncEventKind.failed, msg, u.gameId);
       }
@@ -314,7 +319,7 @@ class SyncEngine {
       now: _now(),
       mode: mode,
     );
-    _emit(SyncEventKind.queued, 'Save mise en file d’attente', entry.gameId);
+    _emit(SyncEventKind.queued, const CoreMessage(Msg.syncQueued), entry.gameId);
     return true;
   });
 
@@ -326,13 +331,11 @@ class SyncEngine {
   Future<PrepareResult> prepare(LibraryEntry entry, {required int? chipSize, DivergenceChoice? choice}) async {
     if (entry.unavailable != null) throw SyncException(entry.unavailable!);
     if (entry.needsChoice) {
-      throw SyncException(
-        'Plusieurs ROMs partagent l’identifiant ${entry.gameId} : choisis d’abord de partager ou séparer leur save.',
-      );
+      throw SyncException(CoreMessage(Msg.syncSharedId, {'gameId': entry.gameId}));
     }
     // 1. Empty the queue if the server answers.
     var flush = await flushQueue();
-    if (flush.unauthorized) throw SyncException('Appareil non autorisé : appaire-le à nouveau.');
+    if (flush.unauthorized) throw SyncException(const CoreMessage(Msg.syncUnauthorized));
     final local = await readLocal(entry.savePath, entry.profile);
     if (flush.offline) return _offline(entry, local);
 
@@ -389,7 +392,7 @@ class SyncEngine {
             // that would ignore it and apply "most recent wins".
             final info = await serverInfo();
             if ((info?.apiLevel ?? 1) < requiredServerApiLevel) {
-              throw ServerTooOldException(info?.version ?? 'antérieur à 0.5.0');
+              throw ServerTooOldException(info?.version);
             }
           }
           final mode = !diverged
@@ -401,7 +404,9 @@ class SyncEngine {
           if (local != null) await enqueue(entry, local, mode: mode);
           flush = await flushQueue();
           if (flush.offline) return await _offline(entry, local);
-          if (flush.failures.isNotEmpty) throw SyncException(flush.failures.join('\n'));
+          if (flush.failures.isNotEmpty) {
+            throw SyncException(flush.failures.first, more: flush.failures.sublist(1));
+          }
           // Another device uploaded in the meantime: ask again.
           final again = flush.held.where((d) => d.savePath == entry.savePath).firstOrNull;
           if (again != null) return PrepareResult(offline: false, divergence: again);
@@ -417,7 +422,7 @@ class SyncEngine {
         final backup = await download(entry, active, chipSize: chip ?? chipSize);
         return PrepareResult(offline: false, uploaded: uploaded, downloaded: true, backupPath: backup);
       }
-      _emit(SyncEventKind.upToDate, 'Save à jour', entry.gameId);
+      _emit(SyncEventKind.upToDate, const CoreMessage(Msg.syncUpToDate), entry.gameId);
       return PrepareResult(offline: false, uploaded: uploaded);
     } on ServerUnreachableException {
       return _offline(entry, local);
@@ -433,7 +438,7 @@ class SyncEngine {
     if (local != null && local.hash != stateOf(entry)?.lastSyncedHash) await enqueue(entry, local);
     return PrepareResult(
       offline: true,
-      message: 'Serveur injoignable : la partie se lance avec la save locale, les envois partiront dès que le serveur répondra.',
+      message: const CoreMessage(Msg.syncOfflineLaunch),
     );
   }
 
@@ -450,7 +455,7 @@ class SyncEngine {
       hash: sha256.convert(raw).toString(),
       at: _now(),
     );
-    _emit(SyncEventKind.downloaded, 'Save du serveur téléchargée', entry.gameId);
+    _emit(SyncEventKind.downloaded, const CoreMessage(Msg.syncDownloaded), entry.gameId);
     return backup;
   });
 

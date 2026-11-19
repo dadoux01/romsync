@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 import 'package:romsync_updater/romsync_updater.dart';
 
+import 'l10n.dart';
+
 /// Where the update of the app stands.
 enum UpdatePhase {
   /// Nothing to do (or not checked yet).
@@ -38,6 +40,7 @@ class UpdateManager extends ChangeNotifier {
     required this.api,
     required this.blockedReason,
     required this.restart,
+    required this.texts,
     this.onNotice,
     this.clientVersion = romsyncClientVersion,
     this.publicKey = releasePublicKey,
@@ -67,6 +70,9 @@ class UpdateManager extends ChangeNotifier {
   /// the installation failed (the previous version stays in place).
   final Future<void> Function(String target, String staged) restart;
   final void Function(String title, String body)? onNotice;
+
+  /// Texts in the language of the interface.
+  final AppLocalizations Function() texts;
   final String clientVersion;
   final String publicKey;
   final String? platform;
@@ -127,12 +133,12 @@ class UpdateManager extends ChangeNotifier {
   /// Asks the server's relay for a newer version.
   Future<void> check({bool manual = false}) async {
     if (isDevBuild) {
-      return _set(UpdatePhase.idle, 'Version de développement : pas de mise à jour automatique.');
+      return _set(UpdatePhase.idle, texts().updDev);
     }
     final platform = this.platform;
     final a = api();
-    if (platform == null) return _set(UpdatePhase.idle, 'Pas de mise à jour pour ce système.');
-    if (a == null) return _set(UpdatePhase.idle, 'Appaire d’abord cet appareil.');
+    if (platform == null) return _set(UpdatePhase.idle, texts().updNoPlatform);
+    if (a == null) return _set(UpdatePhase.idle, texts().updPairFirst);
     if (phase.index >= UpdatePhase.downloading.index && phase != UpdatePhase.failed) return;
     _set(UpdatePhase.checking);
     try {
@@ -141,27 +147,19 @@ class UpdateManager extends ChangeNotifier {
       await saveConfig();
       if (found != null && isUpdate(found.version, clientVersion)) {
         info = found;
-        _set(UpdatePhase.available, 'RomSync ${found.version} est disponible.');
+        _set(UpdatePhase.available, texts().updAvailable(found.version));
         if (!manual && _announced != found.version) {
           _announced = found.version;
-          onNotice?.call(
-            'RomSync ${found.version} est disponible',
-            'Ouvre RomSync pour lire les notes de version et installer la mise à jour.',
-          );
+          onNotice?.call(texts().updNoticeTitle(found.version), texts().updNoticeBody);
         }
       } else {
         info = null;
-        _set(
-          UpdatePhase.idle,
-          found == null
-              ? 'Le serveur ne propose pas de mise à jour (relais désactivé, serveur trop ancien ou aucune version publiée).'
-              : 'RomSync est à jour ($clientVersion).',
-        );
+        _set(UpdatePhase.idle, found == null ? texts().updNoRelay : texts().updUpToDate(clientVersion));
       }
     } on ServerUnreachableException {
-      _set(UpdatePhase.idle, 'Serveur injoignable : vérification reportée.');
+      _set(UpdatePhase.idle, texts().updUnreachable);
     } on ApiException catch (e) {
-      _set(UpdatePhase.idle, 'Vérification impossible : ${e.message}');
+      _set(UpdatePhase.idle, texts().updCheckFailed(e.message));
     }
   }
 
@@ -172,7 +170,7 @@ class UpdateManager extends ChangeNotifier {
     final a = api();
     if (u == null || a == null || phase == UpdatePhase.downloading) return;
     final dir = Directory(p.join(paths.dataDir, 'updates'));
-    _set(UpdatePhase.downloading, 'Téléchargement de RomSync ${u.version}…');
+    _set(UpdatePhase.downloading, texts().updDownloading(u.version));
     progress = null;
     try {
       if (await dir.exists()) await dir.delete(recursive: true);
@@ -191,7 +189,7 @@ class UpdateManager extends ChangeNotifier {
           notifyListeners();
         },
       );
-      _set(UpdatePhase.downloading, 'Vérification de la signature…');
+      _set(UpdatePhase.downloading, texts().updVerifying);
       await verifyReleaseFile(
         sums: await sums.readAsBytes(),
         signature: await sig.readAsString(),
@@ -200,25 +198,22 @@ class UpdateManager extends ChangeNotifier {
         publicKey: publicKey,
       );
       if (!await canReplace(target)) {
-        throw UpdateInstallException(
-          'Le dossier d’installation ($target) n’est pas modifiable : installe la nouvelle version à la main, '
-          'ou déplace RomSync dans un dossier à toi.',
-        );
+        throw UpdateInstallException(texts().updNotWritable(target));
       }
       _staged = await stageRelease(archive: archive, target: target, launch: launch);
       await dir.delete(recursive: true);
       progress = null;
-      _set(UpdatePhase.ready, 'RomSync ${u.version} est prête à être installée.');
+      _set(UpdatePhase.ready, texts().updReady(u.version));
     } on UpdateVerificationException catch (e) {
-      _fail(dir, e.message);
+      _fail(dir, coreText(texts(), e.message));
     } on UpdateInstallException catch (e) {
       _fail(dir, e.message);
     } on ServerUnreachableException {
-      _fail(dir, 'Serveur injoignable pendant le téléchargement.');
+      _fail(dir, texts().updUnreachableDownload);
     } on ApiException catch (e) {
-      _fail(dir, 'Téléchargement impossible : ${e.message}');
+      _fail(dir, texts().updDownloadFailed(e.message));
     } on FileSystemException catch (e) {
-      _fail(dir, 'Téléchargement impossible : ${e.message}');
+      _fail(dir, texts().updDownloadFailed(e.message));
     }
   }
 
@@ -235,13 +230,13 @@ class UpdateManager extends ChangeNotifier {
     if (staged == null || (phase != UpdatePhase.ready && phase != UpdatePhase.waiting)) return;
     final reason = blockedReason();
     if (reason != null) return _set(UpdatePhase.waiting, reason);
-    _set(UpdatePhase.installing, 'Installation…');
+    _set(UpdatePhase.installing, texts().updInstalling);
     try {
       await restart(target, staged);
     } on UpdateInstallException catch (e) {
-      _set(UpdatePhase.failed, '${e.message} RomSync continue avec la version actuelle.');
+      _set(UpdatePhase.failed, texts().updInstallFailedWith(e.message));
     } on Exception catch (e) {
-      _set(UpdatePhase.failed, 'Installation impossible ($e). RomSync continue avec la version actuelle.');
+      _set(UpdatePhase.failed, texts().updInstallFailed('$e'));
     }
   }
 
@@ -267,13 +262,14 @@ Future<void> installAndRestart(
   String staged, {
   required Future<void> Function() quit,
   required String logFile,
+  required String updaterMissing,
 }) async {
   if (Platform.isWindows) {
     // The updater of the new version, copied out of the folders it swaps.
     final source = File(p.join(staged, 'romsync-updater.exe'));
     final fallback = File(p.join(target, 'romsync-updater.exe'));
     final updater = await source.exists() ? source : fallback;
-    if (!await updater.exists()) throw UpdateInstallException('romsync-updater.exe est introuvable.');
+    if (!await updater.exists()) throw UpdateInstallException(updaterMissing);
     final tmp = await Directory.systemTemp.createTemp('romsync-update');
     final copy = await updater.copy(p.join(tmp.path, 'romsync-updater.exe'));
     await Process.start(copy.path, [

@@ -1,3 +1,4 @@
+import '../message.dart';
 import '../profiles/profile.dart';
 import '../rom/scanner.dart';
 import '../state/config.dart';
@@ -37,7 +38,7 @@ class LibraryEntry {
 
   /// Why this ROM cannot be synced with its emulator (archive not supported,
   /// save folder unknown…), or null.
-  final String? unavailable;
+  final CoreMessage? unavailable;
 
   String get key => rom.file.key;
   String get title => rom.title;
@@ -59,7 +60,7 @@ class SaveTarget {
   final String emulator;
   final ConversionProfile profile;
   final String? savePath;
-  final String? unavailable;
+  final CoreMessage? unavailable;
 }
 
 /// Builds the library entries from scanned ROMs and the user's choices.
@@ -93,7 +94,7 @@ List<LibraryEntry> buildLibrary({
           emulator: target.emulator,
           sharedWith: others,
           choice: choice,
-          unavailable: target.savePath == null ? (target.unavailable ?? 'Save introuvable.') : null,
+          unavailable: target.savePath == null ? (target.unavailable ?? const CoreMessage(Msg.saveNotFound)) : null,
         );
       }(),
   ];

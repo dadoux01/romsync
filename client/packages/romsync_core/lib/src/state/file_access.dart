@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import '../message.dart';
 
 /// Whether [e] is a temporary access conflict: a file kept open by another
 /// program on Windows (sharing or lock violation), or busy elsewhere.
@@ -18,7 +19,7 @@ bool isTransientFileError(FileSystemException e) {
 class UnstableFileException implements Exception {
   UnstableFileException(this.path, this.reason);
   final String path;
-  final String reason;
+  final CoreMessage reason;
   @override
   String toString() => '$path : $reason';
 }
@@ -35,7 +36,7 @@ Future<Uint8List?> readStable(
   Duration settle = const Duration(milliseconds: 100),
 }) async {
   final f = File(path);
-  String? lastReason;
+  CoreMessage? lastReason;
   for (var i = 0; i < attempts; i++) {
     if (i > 0) await Future<void>.delayed(retryDelay * i);
     try {
@@ -44,12 +45,12 @@ Future<Uint8List?> readStable(
       final bytes = await f.readAsBytes();
       final after = await f.stat();
       if (!_same(before, after) || bytes.length != after.size) {
-        lastReason = 'le fichier change pendant la lecture';
+        lastReason = const CoreMessage(Msg.fileChanging);
         continue;
       }
       await Future<void>.delayed(settle);
       if (!_same(after, await f.stat())) {
-        lastReason = 'le fichier est encore en cours d’écriture';
+        lastReason = const CoreMessage(Msg.fileStillWriting);
         continue;
       }
       return bytes;
@@ -57,10 +58,10 @@ Future<Uint8List?> readStable(
       return null;
     } on FileSystemException catch (e) {
       if (!isTransientFileError(e)) rethrow;
-      lastReason = 'fichier verrouillé par un autre programme (${e.osError?.message ?? e.message})';
+      lastReason = CoreMessage(Msg.fileLocked, {'detail': e.osError?.message ?? e.message});
     }
   }
-  throw UnstableFileException(path, lastReason ?? 'lecture impossible');
+  throw UnstableFileException(path, lastReason ?? const CoreMessage(Msg.fileUnreadable));
 }
 
 bool _same(FileStat a, FileStat b) => a.size == b.size && a.modified == b.modified && a.type == b.type;

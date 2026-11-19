@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../l10n.dart';
 import '../update_manager.dart';
 import 'emulator_card.dart';
 import 'update_widgets.dart';
@@ -25,32 +26,49 @@ class _SettingsPageState extends State<SettingsPage> {
       listenable: Listenable.merge([c, c.updates]),
       builder: (context, _) {
         final text = Theme.of(context).textTheme;
+        final l = AppLocalizations.of(context);
         return Scaffold(
-          appBar: AppBar(title: const Text('Réglages')),
+          appBar: AppBar(title: Text(l.settings)),
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Serveur', style: text.titleMedium),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.translate),
+                title: Text(l.language),
+                trailing: DropdownButton<String?>(
+                  value: c.config.language,
+                  items: [
+                    DropdownMenuItem(child: Text(l.languageSystem)),
+                    for (final code in appLanguages) DropdownMenuItem(value: code, child: Text(languageNames[code]!)),
+                  ],
+                  onChanged: c.setLanguage,
+                ),
+              ),
+              const Divider(),
+              Text(l.settingsServer, style: text.titleMedium),
               ListTile(
                 leading: const Icon(Icons.dns),
                 title: Text(c.config.serverUrl ?? '—'),
                 subtitle: Text(
-                  'Appareil « ${c.config.deviceName ?? '—'} » · jeton '
-                  '${c.config.tokenStorage == TokenStorage.keyring ? 'dans le trousseau du système' : 'dans un fichier (0600)'}',
+                  l.settingsDevice(
+                    c.config.deviceName ?? '—',
+                    c.config.tokenStorage == TokenStorage.keyring ? l.tokenInKeyring : l.tokenInFile,
+                  ),
                 ),
                 trailing: TextButton(
                   onPressed: () async {
                     await c.unpair();
                     if (context.mounted) Navigator.pop(context);
                   },
-                  child: const Text('Désappairer'),
+                  child: Text(l.unpair),
                 ),
               ),
               if (c.config.tokenStorage == TokenStorage.file)
-                const ListTile(leading: Icon(Icons.warning_amber), title: Text(FileTokenStore.warning)),
+                ListTile(leading: const Icon(Icons.warning_amber), title: Text(l.tokenFileWarning)),
               const Divider(),
-              Text('Dossiers de ROMs', style: text.titleMedium),
-              const Text('Les .nds sont lus, y compris dans les .zip et les .7z (programme 7z, 7zz ou 7za).'),
+              Text(l.romFolders, style: text.titleMedium),
+              Text(l.romFoldersHelp),
               for (final f in c.config.romFolders)
                 ListTile(
                   leading: const Icon(Icons.folder),
@@ -61,19 +79,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   icon: const Icon(Icons.create_new_folder_outlined),
-                  label: const Text('Ajouter un dossier'),
+                  label: Text(l.addFolder),
                   onPressed: () async {
-                    final dir = await getDirectoryPath(confirmButtonText: 'Ajouter');
+                    final dir = await getDirectoryPath(confirmButtonText: l.add);
                     if (dir != null) await c.addFolder(dir);
                   },
                 ),
               ),
               const Divider(),
-              Text('Émulateurs', style: text.titleMedium),
+              Text(l.emulators, style: text.titleMedium),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Émulateur par défaut'),
-                subtitle: const Text('Chaque jeu peut avoir le sien, depuis la liste des jeux.'),
+                title: Text(l.defaultEmulator),
+                subtitle: Text(l.defaultEmulatorHelp),
                 trailing: DropdownButton<String>(
                   value: c.config.defaultEmulator,
                   items: [for (final id in emulatorIds) DropdownMenuItem(value: id, child: Text(emulatorName(id)))],
@@ -82,25 +100,19 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               for (final id in emulatorIds) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
               const Divider(),
-              Text('Barre système', style: text.titleMedium),
+              Text(l.tray, style: text.titleMedium),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: c.config.keepInTray,
                 onChanged: c.setKeepInTray,
-                title: const Text('Garder RomSync dans la barre système à la fermeture'),
-                subtitle: const Text(
-                  'Les saves des jeux lancés sans passer par RomSync sont alors envoyées automatiquement. '
-                  'Les saves plus récentes du serveur sont signalées par une notification, et téléchargées '
-                  'au prochain lancement depuis RomSync.',
-                ),
+                title: Text(l.keepInTray),
+                subtitle: Text(l.keepInTrayHelp),
               ),
               const Divider(),
-              Text('Copies de sécurité', style: text.titleMedium),
+              Text(l.backups, style: text.titleMedium),
               ListTile(
-                title: const Text('Copies .backup gardées par save'),
-                subtitle: const Text(
-                  'Copie de la save locale remplacée par un téléchargement, dans un dossier .backup à côté.',
-                ),
+                title: Text(l.backupCount),
+                subtitle: Text(l.backupHelp),
                 trailing: DropdownButton<int>(
                   value: c.config.backupCount,
                   items: [
@@ -111,16 +123,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const Divider(),
-              Text('Mises à jour', style: text.titleMedium),
+              Text(l.updates, style: text.titleMedium),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: c.config.autoUpdateCheck,
                 onChanged: c.setAutoUpdateCheck,
-                title: const Text('Rechercher les mises à jour automatiquement'),
-                subtitle: const Text(
-                  'Au démarrage puis toutes les 24 heures, auprès de ton serveur RomSync. Rien n’est installé '
-                  'sans ton accord.',
-                ),
+                title: Text(l.autoUpdate),
+                subtitle: Text(l.autoUpdateHelp),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -128,21 +137,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: Text(
                   [
                     if (c.updates.message != null) c.updates.message!,
-                    if (c.config.lastUpdateCheck != null)
-                      'Dernière vérification : ${c.config.lastUpdateCheck!.toLocal().toString().substring(0, 16)}',
+                    if (c.config.lastUpdateCheck != null) l.lastCheck(formatDate(l, c.config.lastUpdateCheck!)),
                   ].join('\n'),
                 ),
                 trailing: c.updates.phase == UpdatePhase.checking
                     ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : c.updates.phase == UpdatePhase.available
-                    ? FilledButton(
-                        onPressed: () => showUpdateNotes(context, c.updates),
-                        child: const Text('Voir la mise à jour'),
-                      )
-                    : TextButton(
-                        onPressed: () => c.updates.check(manual: true),
-                        child: const Text('Rechercher une mise à jour'),
-                      ),
+                    ? FilledButton(onPressed: () => showUpdateNotes(context, c.updates), child: Text(l.seeUpdate))
+                    : TextButton(onPressed: () => c.updates.check(manual: true), child: Text(l.checkUpdate)),
               ),
             ],
           ),

@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import 'src/app_controller.dart';
 import 'src/desktop_shell.dart';
 import 'src/keyring_token_store.dart';
+import 'src/l10n.dart';
 import 'src/ui/home_page.dart';
 import 'src/ui/pairing_page.dart';
 import 'src/windows_credential_store.dart';
@@ -45,13 +47,22 @@ class RomSyncApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFF4F6DF5);
-    return MaterialApp(
-      title: 'RomSync',
-      theme: ThemeData(colorSchemeSeed: seed),
-      darkTheme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark),
-      home: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => controller.isPaired
+    // Rebuilt when the language changes in the settings.
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => MaterialApp(
+        title: 'RomSync',
+        theme: ThemeData(colorSchemeSeed: seed),
+        darkTheme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark),
+        locale: controller.locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: controller.isPaired
             ? HomePage(controller: controller)
             : PairingPage(controller: controller, defaultDeviceName: Platform.localHostname),
       ),

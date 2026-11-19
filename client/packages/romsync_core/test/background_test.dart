@@ -39,7 +39,7 @@ void main() {
   });
   tearDown(() => tmp.deleteSync(recursive: true));
 
-  LibraryEntry entry(String name, String gameId, {List<String> sharedWith = const [], String? unavailable}) =>
+  LibraryEntry entry(String name, String gameId, {List<String> sharedWith = const [], CoreMessage? unavailable}) =>
       LibraryEntry(
         rom: ScannedRom(file: PlainRomFile(p.join(tmp.path, '$name.nds')), header: null, detectedId: gameId),
         gameId: gameId,
@@ -88,7 +88,7 @@ void main() {
   test('skips the game launched from the app, unsynced choices and unavailable ROMs', () async {
     final launched = entry('A', 'AAAA');
     final waiting = entry('B', 'BBBB', sharedWith: ['other']);
-    final unavailable = entry('C', 'CCCC', unavailable: 'archive');
+    final unavailable = entry('C', 'CCCC', unavailable: const CoreMessage(Msg.saveNotFound));
     final normal = entry('D', 'DDDD');
     final bg = BackgroundWatcher(engine: engine, quietPeriod: const Duration(milliseconds: 100));
     await bg.update([launched, waiting, unavailable, normal], excluded: {launched.savePath});
@@ -119,10 +119,11 @@ void main() {
     final notified = <String>{};
 
     final first = downloadNotices([(e, toDownload, remote(4, 'Asahi'))], notified);
-    expect(first.single.message, contains('Pokémon Noire'));
-    expect(first.single.message, contains('Asahi'));
+    expect(first.single.message.code, Msg.noticeNewerSave);
+    expect(first.single.message.arg('title'), 'Pokémon Noire');
+    expect(first.single.message.arg('device'), 'Asahi');
     expect(downloadNotices([(e, toDownload, remote(4, 'Asahi'))], notified), isEmpty, reason: 'once per version');
-    expect(downloadNotices([(e, toDownload, remote(5, null))], notified).single.message, contains('site'));
+    expect(downloadNotices([(e, toDownload, remote(5, null))], notified).single.message.code, Msg.noticeNewerSaveWebsite);
     expect(downloadNotices([(e, const SaveStatusInfo(SaveStatus.upToDate), remote(6, 'Asahi'))], notified), isEmpty);
   });
 }

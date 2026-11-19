@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 
+import '../message.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -63,7 +64,7 @@ class MelonDS extends EmulatorBase {
   Future<SaveLocation> saveLocation() async {
     final override = settings.saveDirOverride;
     if (override != null && override.isNotEmpty) {
-      return SaveLocation(dir: override, source: 'réglage RomSync');
+      return SaveLocation(dir: override, source: const CoreMessage(Msg.sourceSetting));
     }
     for (final path in configCandidates) {
       final f = File(path);
@@ -74,21 +75,21 @@ class MelonDS extends EmulatorBase {
       } catch (e) {
         return SaveLocation(
           dir: null,
-          source: path,
-          warning: 'Configuration de melonDS illisible ($e) : les saves sont supposées à côté des ROMs.',
+          source: CoreMessage(Msg.sourcePath, {'path': path}),
+          warning: CoreMessage(Msg.melonConfigUnreadable, {'detail': '$e'}),
         );
       }
-      if (value == null || value.isEmpty) return SaveLocation(dir: null, source: path);
+      if (value == null || value.isEmpty) return SaveLocation(dir: null, source: CoreMessage(Msg.sourcePath, {'path': path}));
       if (!p.isAbsolute(value)) {
         return SaveLocation(
           dir: null,
-          source: path,
-          warning: 'melonDS utilise un dossier de saves relatif ($value) : indique le dossier réel dans les réglages.',
+          source: CoreMessage(Msg.sourcePath, {'path': path}),
+          warning: CoreMessage(Msg.melonRelativeDir, {'value': value}),
         );
       }
-      return SaveLocation(dir: value, source: path);
+      return SaveLocation(dir: value, source: CoreMessage(Msg.sourcePath, {'path': path}));
     }
-    return const SaveLocation(dir: null, source: 'valeur par défaut de melonDS (à côté de la ROM)');
+    return const SaveLocation(dir: null, source: CoreMessage(Msg.sourceMelonDefault));
   }
 
   static String? _fromToml(String text) {

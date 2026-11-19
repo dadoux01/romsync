@@ -72,7 +72,7 @@ void main() {
       expect(res.roms.map((r) => r.detectedId), ['IRBF', 'h:${sha1.convert(homebrew)}']);
       expect(res.roms.first.title, 'POKEMON B');
       expect(res.roms.first.file.key, path('Black.nds'));
-      expect(res.issues.single.message, contains('introuvable'));
+      expect(res.issues.single.message.code, Msg.scanFolderNotFound);
     });
 
     for (final deflate in [true, false]) {
@@ -99,7 +99,7 @@ void main() {
       File(path('game.7z')).writeAsBytesSync([0x37, 0x7A]);
       final res = await RomScanner(findSevenZip: false).scan([dir.path]);
       expect(res.roms, isEmpty);
-      expect(res.issues.single.message, contains('Installer 7zip'));
+      expect(res.issues.single.message.code, Msg.scanInstallSevenZip);
     });
 
     final tool = SevenZip.find();

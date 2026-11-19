@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../message.dart';
 import 'game_id.dart';
 import 'nds_header.dart';
 import 'rom_file.dart';
@@ -32,7 +33,7 @@ class ScannedRom {
 class ScanIssue {
   ScanIssue(this.path, this.message);
   final String path;
-  final String message;
+  final CoreMessage message;
   @override
   String toString() => '$path: $message';
 }
@@ -52,7 +53,7 @@ class RomScanner {
   /// The 7-Zip program, or null when none is installed.
   final SevenZip? sevenZip;
 
-  static const installSevenZipMessage = 'Installer 7zip (paquet p7zip ou 7zip) pour lire les archives .7z.';
+  static const installSevenZipMessage = CoreMessage(Msg.scanInstallSevenZip);
 
   Future<ScanResult> scan(Iterable<String> folders) async {
     final roms = <ScannedRom>[];
@@ -60,7 +61,7 @@ class RomScanner {
     for (final folder in folders) {
       final dir = Directory(folder);
       if (!await dir.exists()) {
-        issues.add(ScanIssue(folder, 'dossier introuvable'));
+        issues.add(ScanIssue(folder, const CoreMessage(Msg.scanFolderNotFound)));
         continue;
       }
       await for (final entity in dir.list(recursive: true, followLinks: false)) {
@@ -78,7 +79,7 @@ class RomScanner {
               for (final e in zip.entries) {
                 if (p.extension(e.name).toLowerCase() != '.nds') continue;
                 if (!e.isSupported) {
-                  issues.add(ScanIssue('${entity.path}#${e.name}', 'compression non prise en charge'));
+                  issues.add(ScanIssue('${entity.path}#${e.name}', const CoreMessage(Msg.scanUnsupportedCompression)));
                   continue;
                 }
                 roms.add(await identify(ZipRomFile(entity.path, zip, e)));
@@ -95,7 +96,7 @@ class RomScanner {
               }
           }
         } catch (e) {
-          issues.add(ScanIssue(entity.path, 'illisible : $e'));
+          issues.add(ScanIssue(entity.path, CoreMessage(Msg.scanUnreadable, {'detail': '$e'})));
         }
       }
     }

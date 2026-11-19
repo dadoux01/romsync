@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../l10n.dart';
 import '../update_manager.dart';
 
 /// Notes of a release and the choice to download it.
@@ -11,6 +12,7 @@ class UpdateDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return AlertDialog(
       title: Text('RomSync ${info.version}'),
       content: SizedBox(
@@ -20,21 +22,18 @@ class UpdateDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Version actuelle : $romsyncClientVersion', style: Theme.of(context).textTheme.bodySmall),
+              Text(l.updateCurrent(romsyncClientVersion), style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 12),
-              SelectableText(info.notes.trim().isEmpty ? 'Pas de notes de version.' : info.notes.trim()),
+              SelectableText(info.notes.trim().isEmpty ? l.updateNoNotes : info.notes.trim()),
               const SizedBox(height: 12),
-              const Text(
-                'Le téléchargement est vérifié (signature et empreinte) avant d’être proposé à l’installation. '
-                'RomSync te demandera ton accord avant d’installer et de redémarrer.',
-              ),
+              Text(l.updateVerifiedInfo),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Plus tard')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Télécharger')),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l.later)),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l.download)),
       ],
     );
   }
@@ -55,18 +54,17 @@ Future<void> showUpdateNotes(BuildContext context, UpdateManager u) async {
 Future<void> confirmInstall(BuildContext context, UpdateManager u) async {
   final ok = await showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Installer RomSync ${u.info?.version ?? ''} ?'),
-      content: const Text(
-        'RomSync va se fermer, installer la nouvelle version, puis redémarrer. Si l’installation échoue, '
-        'la version actuelle reste en place. Pendant une partie ou avec des envois en attente, '
-        'l’installation attend qu’ils soient terminés.',
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Installer et redémarrer')),
-      ],
-    ),
+    builder: (context) {
+      final l = AppLocalizations.of(context);
+      return AlertDialog(
+        title: Text(l.installTitle(u.info?.version ?? '')),
+        content: Text(l.installBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l.cancel)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l.installRestart)),
+        ],
+      );
+    },
   );
   if (ok == true) await u.install();
 }
@@ -80,12 +78,13 @@ class UpdateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final u = updates;
+    final l = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return switch (u.phase) {
       UpdatePhase.available => MaterialBanner(
         leading: const Icon(Icons.system_update),
-        content: Text(u.message ?? 'Une nouvelle version est disponible.'),
-        actions: [TextButton(onPressed: () => showUpdateNotes(context, u), child: const Text('Voir les notes'))],
+        content: Text(u.message ?? l.updateAvailableDefault),
+        actions: [TextButton(onPressed: () => showUpdateNotes(context, u), child: Text(l.seeNotes))],
       ),
       UpdatePhase.downloading || UpdatePhase.installing => MaterialBanner(
         leading: const Icon(Icons.downloading),
@@ -102,9 +101,7 @@ class UpdateBanner extends StatelessWidget {
       UpdatePhase.ready => MaterialBanner(
         leading: Icon(Icons.verified, color: Colors.green.shade700),
         content: Text(u.message ?? ''),
-        actions: [
-          FilledButton(onPressed: () => confirmInstall(context, u), child: const Text('Installer et redémarrer')),
-        ],
+        actions: [FilledButton(onPressed: () => confirmInstall(context, u), child: Text(l.installRestart))],
       ),
       UpdatePhase.waiting => MaterialBanner(
         leading: const Icon(Icons.hourglass_top),
@@ -114,7 +111,7 @@ class UpdateBanner extends StatelessWidget {
       UpdatePhase.failed => MaterialBanner(
         leading: Icon(Icons.error_outline, color: scheme.error),
         content: Text(u.message ?? ''),
-        actions: [TextButton(onPressed: () => u.check(manual: true), child: const Text('Réessayer'))],
+        actions: [TextButton(onPressed: () => u.check(manual: true), child: Text(l.retry))],
       ),
       _ => const SizedBox.shrink(),
     };
@@ -132,7 +129,7 @@ class CompatibilityBanner extends StatelessWidget {
     if (c == null || c == Compatibility.ok) return const SizedBox.shrink();
     return MaterialBanner(
       leading: Icon(Icons.sync_problem, color: Theme.of(context).colorScheme.error),
-      content: Text(compatibilityMessage(c, controller.serverInfo)),
+      content: Text(compatibilityText(AppLocalizations.of(context), c, controller.serverInfo)),
       actions: const [SizedBox.shrink()],
     );
   }

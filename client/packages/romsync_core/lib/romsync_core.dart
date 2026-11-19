@@ -9,6 +9,7 @@ export 'src/emulators/flatpak.dart';
 export 'src/emulators/melonds.dart';
 export 'src/emulators/registry.dart';
 export 'src/emulators/retroarch.dart';
+export 'src/message.dart';
 export 'src/profiles/profile.dart';
 export 'src/rom/game_id.dart';
 export 'src/rom/nds_header.dart';

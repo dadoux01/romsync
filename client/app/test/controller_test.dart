@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:romsync/src/app_controller.dart';
+import 'package:romsync/src/l10n.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 /// In-memory token store standing for the system keyring.
@@ -118,7 +119,10 @@ void main() {
 
     expect(c.rows.map((r) => r.status.status), everyElement(SaveStatus.needsChoice));
     final hack = c.rows.firstWhere((r) => r.entry.rom.file.romName == 'Platine-hack.nds').entry;
-    await expectLater(c.launch(hack), throwsA(isA<SyncException>()));
+    await expectLater(
+      c.launch(hack),
+      throwsA(isA<SyncException>().having((e) => e.message.code, 'code', Msg.syncSharedId)),
+    );
 
     await c.setChoice(hack.key, const RomChoice.separate('x:platine-hack'));
     final byName = {for (final r in c.rows) r.entry.rom.file.romName: r};
@@ -307,9 +311,8 @@ void main() {
       expect(uploads, 0);
       expect(c.divergences.keys, [entry.savePath]);
       expect(c.rows.single.status.status, SaveStatus.diverged);
-      final choice = notices.where((n) => n.$1.startsWith('Choix à faire'));
+      final choice = notices.where((n) => n.$1 == c.l10n.noticeChoiceTitle('Pokémon Noire'));
       expect(choice, hasLength(1));
-      expect(choice.single.$1, contains('Pokémon Noire'));
 
       // A click on the notification asks the home page to open the dialog.
       c.openPendingDivergence();
@@ -322,6 +325,8 @@ void main() {
     await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'PC');
     await c.refresh();
     expect(c.compatibility, Compatibility.serverTooOld);
-    expect(compatibilityMessage(c.compatibility!, c.serverInfo), contains('mets d’abord à jour le serveur'));
+    final l = textsFor(const Locale('fr'));
+    expect(compatibilityText(l, c.compatibility!, c.serverInfo), contains('mets d’abord à jour le serveur'));
+    expect(compatibilityText(l, c.compatibility!, c.serverInfo), contains(l.compatOldVersion));
   });
 }

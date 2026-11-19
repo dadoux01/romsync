@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../message.dart';
 import '../rom/scanner.dart';
 import '../state/config.dart';
 import 'flatpak.dart';
@@ -21,10 +22,10 @@ class SaveLocation {
   final String? dir;
 
   /// Where the information comes from (configuration file, user setting…).
-  final String source;
+  final CoreMessage source;
 
   /// Set when the detection is not reliable and the user should check.
-  final String? warning;
+  final CoreMessage? warning;
 
   /// Emulator-specific details (RetroArch's configuration, whose save folder
   /// depends on each ROM).
@@ -44,13 +45,13 @@ class LaunchPlan {
 /// command that fixes it when there is one.
 class EmulatorIssue {
   const EmulatorIssue(this.message, {this.fixCommand, this.blocking = false});
-  final String message;
+  final CoreMessage message;
   final String? fixCommand;
 
   /// The emulator cannot be launched at all (not installed, core missing).
   final bool blocking;
   @override
-  String toString() => fixCommand == null ? message : '$message\n  $fixCommand';
+  String toString() => fixCommand == null ? '$message' : '$message\n  $fixCommand';
 }
 
 /// An emulator supported by the client. melonDS is the only one in phase 2;
@@ -72,7 +73,7 @@ abstract class EmulatorProfile {
 
   /// Why [rom] cannot be synced with this emulator (archive not supported,
   /// save folder unknown…), or null when it can.
-  String? cannotSync(ScannedRom rom, SaveLocation location);
+  CoreMessage? cannotSync(ScannedRom rom, SaveLocation location);
 
   /// Save file of [rom] for a [location]; only valid when [cannotSync] is null.
   String savePathFor(ScannedRom rom, SaveLocation location);
@@ -169,9 +170,9 @@ abstract class EmulatorBase implements EmulatorProfile {
   bool get macUsesOpen => false;
 
   @override
-  String? cannotSync(ScannedRom rom, SaveLocation location) {
+  CoreMessage? cannotSync(ScannedRom rom, SaveLocation location) {
     if (rom.file.innerName != null && !supportsArchives) {
-      return '$name ne lance pas les ROMs en archive dans RomSync : choisis melonDS pour ce jeu, ou décompresse la ROM.';
+      return CoreMessage(Msg.emuArchiveNotSupported, {'name': name});
     }
     return null;
   }
@@ -242,15 +243,17 @@ abstract class EmulatorBase implements EmulatorProfile {
   }) async {
     if (settings.mode == LaunchMode.flatpak && platform != HostPlatform.linux) {
       return [
-        EmulatorIssue('Le mode Flatpak n’existe que sous Linux : indique l’exécutable de $name.', blocking: true),
+        EmulatorIssue(CoreMessage(Msg.emuFlatpakLinuxOnly, {'name': name}), blocking: true),
       ];
     }
     if (!isFlatpak) {
       return resolveExecutable() == null
           ? [
               EmulatorIssue(
-                'Exécutable $name introuvable : « ${settings.executable} ». '
-                'Indique son chemin dans les réglages${platform == HostPlatform.linux ? ', ou choisis le mode Flatpak' : ''}.',
+                CoreMessage(
+                  platform == HostPlatform.linux ? Msg.emuExecutableNotFoundLinux : Msg.emuExecutableNotFound,
+                  {'name': name, 'path': settings.executable},
+                ),
                 blocking: true,
               ),
             ]
@@ -260,12 +263,12 @@ abstract class EmulatorBase implements EmulatorProfile {
     try {
       info = await run('flatpak', ['info', '--show-permissions', settings.flatpakId]);
     } on ProcessException {
-      return [const EmulatorIssue('Flatpak n’est pas installé sur ce système.', blocking: true)];
+      return [const EmulatorIssue(CoreMessage(Msg.emuFlatpakMissing), blocking: true)];
     }
     if (info.exitCode != 0) {
       return [
         EmulatorIssue(
-          'Le Flatpak ${settings.flatpakId} n’est pas installé.',
+          CoreMessage(Msg.emuFlatpakAppMissing, {'id': settings.flatpakId}),
           fixCommand: 'flatpak install flathub ${settings.flatpakId}',
           blocking: true,
         ),
@@ -279,11 +282,14 @@ abstract class EmulatorBase implements EmulatorProfile {
     return [
       for (final f in writeFolders)
         if (!perms.canAccess(f, write: true))
-          EmulatorIssue('Le Flatpak $name n’a pas accès en écriture au dossier $f.', fixCommand: overrideCommand(f)),
+          EmulatorIssue(
+            CoreMessage(Msg.emuFlatpakNoWrite, {'name': name, 'folder': f}),
+            fixCommand: overrideCommand(f),
+          ),
       for (final f in readFolders)
         if (!writeFolders.contains(f) && !perms.canAccess(f))
           EmulatorIssue(
-            'Le Flatpak $name n’a pas accès au dossier de ROMs $f.',
+            CoreMessage(Msg.emuFlatpakNoRead, {'name': name, 'folder': f}),
             fixCommand: overrideCommand(f, readOnly: true),
           ),
     ];

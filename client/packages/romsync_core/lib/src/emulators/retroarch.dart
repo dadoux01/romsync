@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../message.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -162,32 +163,28 @@ class RetroArchMelonDSDS extends EmulatorBase {
   Future<SaveLocation> saveLocation() async {
     final override = settings.saveDirOverride;
     if (override != null && override.isNotEmpty) {
-      return SaveLocation(dir: override, source: 'réglage RomSync');
+      return SaveLocation(dir: override, source: const CoreMessage(Msg.sourceSetting));
     }
     final cfg = await _readConfig();
     if (cfg == null) {
       return SaveLocation(
         dir: null,
-        source: configCandidates.join(', '),
-        warning:
-            'retroarch.cfg introuvable : lance RetroArch une fois, ou indique le dossier des saves dans les réglages.',
+        source: CoreMessage(Msg.sourcePath, {'path': configCandidates.join(', ')}),
+        warning: const CoreMessage(Msg.retroarchConfigNotFound),
       );
     }
     final raw = cfg.values['savefile_directory'];
-    String? warning;
-    if (raw == 'default' && platform == HostPlatform.linux) {
-      warning =
-          'RetroArch utilise son dossier de saves par défaut, qui dépend de son paquet : vérifie où il écrit les .srm.';
-    }
-    return SaveLocation(dir: null, source: cfg.path, warning: warning, data: cfg);
+    CoreMessage? warning;
+    if (raw == 'default' && platform == HostPlatform.linux) warning = const CoreMessage(Msg.retroarchDefaultDir);
+    return SaveLocation(dir: null, source: CoreMessage(Msg.sourcePath, {'path': cfg.path}), warning: warning, data: cfg);
   }
 
   @override
-  String? cannotSync(ScannedRom rom, SaveLocation location) {
+  CoreMessage? cannotSync(ScannedRom rom, SaveLocation location) {
     final base = super.cannotSync(rom, location);
     if (base != null) return base;
     if (location.dir == null && location.data is! RetroArchConfig) {
-      return location.warning ?? 'Dossier des saves de RetroArch inconnu.';
+      return location.warning ?? const CoreMessage(Msg.retroarchSaveDirUnknown);
     }
     return null;
   }
@@ -236,8 +233,9 @@ class RetroArchMelonDSDS extends EmulatorBase {
     if (_core == null || !await File(_core!).exists()) {
       issues.add(
         EmulatorIssue(
-          'Cœur melonDS DS introuvable${_core == null ? '' : ' ($_core)'} : installe-le depuis RetroArch '
-          '(Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).',
+          _core == null
+              ? const CoreMessage(Msg.retroarchCoreMissing)
+              : CoreMessage(Msg.retroarchCoreMissingAt, {'path': _core!}),
           blocking: true,
         ),
       );

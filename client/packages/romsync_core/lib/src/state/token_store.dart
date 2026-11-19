@@ -19,11 +19,6 @@ class FileTokenStore implements TokenStore {
 
   final String path;
 
-  static const warning =
-      'Le jeton de cet appareil est stocké en clair dans un fichier (permissions 0600). '
-      'Toute personne ou application ayant accès à ton compte peut le lire ; '
-      'en cas de doute, révoque l’appareil depuis le site.';
-
   @override
   Future<bool> isAvailable() async => true;
 

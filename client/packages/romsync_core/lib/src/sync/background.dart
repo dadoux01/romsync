@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../api/models.dart';
+import '../message.dart';
 import 'engine.dart';
 import 'library.dart';
 import 'status.dart';
@@ -89,9 +90,9 @@ class DownloadNotice {
   final String? fromDevice;
 
   /// Notification text: the game and where the newer save comes from.
-  String get message =>
-      '$title : une save plus récente vient de ${fromDevice ?? 'l’import sur le site'}. '
-      'Lance le jeu depuis RomSync pour la récupérer.';
+  CoreMessage get message => fromDevice == null
+      ? CoreMessage(Msg.noticeNewerSaveWebsite, {'title': title})
+      : CoreMessage(Msg.noticeNewerSave, {'title': title, 'device': fromDevice!});
 }
 
 /// Newer server saves to announce, once per game and server version:

@@ -53,7 +53,7 @@ void main() {
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', ''));
       final loc = await m.saveLocation();
       expect(loc.dir, isNull);
-      expect(loc.source, endsWith('melonDS.toml'));
+      expect(loc.source.arg('path'), endsWith('melonDS.toml'));
       expect(m.savePathFor(rom('/roms/Pokemon Noire.nds'), loc), '/roms/Pokemon Noire.sav');
     });
 
@@ -93,9 +93,9 @@ void main() {
     test('a relative path or an unreadable file gives a warning', () async {
       writeConfig('.config/melonDS', tomlSample.replaceFirst('%s', 'saves'));
       final m = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
-      expect((await m.saveLocation()).warning, contains('relatif'));
+      expect((await m.saveLocation()).warning?.code, Msg.melonRelativeDir);
       writeConfig('.config/melonDS', 'not = [valid');
-      expect((await m.saveLocation()).warning, contains('illisible'));
+      expect((await m.saveLocation()).warning?.code, Msg.melonConfigUnreadable);
     });
 
     test('the RomSync setting wins', () async {
@@ -110,7 +110,7 @@ void main() {
 
     test('a ROM inside an archive saves next to the archive, named after the inner ROM', () {
       final m = MelonDS(platform: HostPlatform.linux, settings: EmulatorSettings(), home: home.path);
-      const loc = SaveLocation(dir: null, source: 'x');
+      const loc = SaveLocation(dir: null, source: CoreMessage(Msg.sourceSetting));
       expect(m.savePathFor(rom('/roms/packs/games.zip', inner: 'sub/Kirby.nds'), loc), '/roms/packs/Kirby.sav');
     });
   });
@@ -153,9 +153,9 @@ void main() {
       );
       final issues = await m.check(
         romFolders: ['/roms'],
-        location: const SaveLocation(dir: null, source: 'x'),
+        location: const SaveLocation(dir: null, source: CoreMessage(Msg.sourceSetting)),
       );
-      expect(issues.single.message, contains('introuvable'));
+      expect(issues.single.message.code, Msg.emuExecutableNotFoundLinux);
     });
 
     test('flatpak: reports folders outside its permissions with the override command', () async {
@@ -172,7 +172,7 @@ void main() {
           return ok(perms);
         },
       );
-      const nextToRom = SaveLocation(dir: null, source: 'x');
+      const nextToRom = SaveLocation(dir: null, source: CoreMessage(Msg.sourceSetting));
       final inHome = p.join(home.path, 'Jeux');
       expect(
         await m.check(romFolders: [inHome, p.join(home.path, 'Téléchargements', 'DS')], location: nextToRom),
@@ -188,12 +188,12 @@ void main() {
         'flatpak override --user --filesystem=/mnt/ro net.kuribo64.melonDS',
         'flatpak override --user --filesystem=${p.join(home.path, 'secret')} net.kuribo64.melonDS',
       ]);
-      expect(issues[1].message, contains('en écriture'), reason: 'saves next to the ROMs need write access');
+      expect(issues[1].message.code, Msg.emuFlatpakNoWrite, reason: 'saves next to the ROMs need write access');
 
       // With a separate save folder, a read-only ROM folder is enough.
       final saves = await m.check(
         romFolders: ['/mnt/ro'],
-        location: const SaveLocation(dir: '/srv/saves', source: 'x'),
+        location: const SaveLocation(dir: '/srv/saves', source: CoreMessage(Msg.sourceSetting)),
       );
       expect(saves.single.fixCommand, contains('--filesystem=/srv/saves'));
     });
@@ -207,7 +207,7 @@ void main() {
       );
       final issues = await m.check(
         romFolders: [],
-        location: const SaveLocation(dir: null, source: 'x'),
+        location: const SaveLocation(dir: null, source: CoreMessage(Msg.sourceSetting)),
       );
       expect(issues.single.fixCommand, 'flatpak install flathub net.kuribo64.melonDS');
     });

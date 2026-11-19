@@ -59,7 +59,7 @@ void main() {
   test('without retroarch.cfg the user is asked to run RetroArch once', () async {
     final r = ra();
     final loc = await r.saveLocation();
-    expect(r.cannotSync(rom('/roms/a.nds'), loc), contains('retroarch.cfg introuvable'));
+    expect(r.cannotSync(rom('/roms/a.nds'), loc)?.code, Msg.retroarchConfigNotFound);
   });
 
   group('save folder', () {
@@ -92,7 +92,7 @@ void main() {
     test('"default" is next to the ROM on Linux, with a warning', () async {
       writeCfg('savefile_directory = "default"\n');
       final r = ra();
-      expect((await r.saveLocation()).warning, contains('par défaut'));
+      expect((await r.saveLocation()).warning?.code, Msg.retroarchDefaultDir);
       expect(await savePath(r, '/roms/a.nds'), '/roms/a.srm');
     });
 
@@ -121,7 +121,7 @@ void main() {
       writeCfg('savefile_directory = ""\n');
       final r = ra();
       final archived = ScannedRom(file: _Inner('/roms/a.zip', 'a.nds'), header: null, detectedId: 'IRBF');
-      expect(r.cannotSync(archived, await r.saveLocation()), contains('melonDS'));
+      expect(r.cannotSync(archived, await r.saveLocation())?.code, Msg.emuArchiveNotSupported);
     });
   });
 
@@ -146,7 +146,7 @@ void main() {
     final r = ra(run: (e, a) async => ProcessResult(0, 0, '[Context]\nfilesystems=host;\n', ''));
     final loc = await r.saveLocation();
     final issues = await r.check(romFolders: ['/roms'], location: loc);
-    expect(issues.map((i) => i.message).join(), contains('Cœur melonDS DS introuvable'));
+    expect(issues.map((i) => i.message.code), contains(Msg.retroarchCoreMissingAt));
 
     final core = p.join(home.path, '.config/retroarch/cores/melondsds_libretro.so');
     File(core)

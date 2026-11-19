@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../message.dart';
 import 'json_file.dart';
 
 /// How an upload is activated on the server (docs/SPEC.md, "Divergence").
@@ -122,7 +123,7 @@ class UploadQueue {
     return q;
   }
 
-  String? get warning => _file.lastWarning;
+  CoreMessage? get warning => _file.lastWarning;
 
   List<PendingUpload> get items => List.unmodifiable(_items);
   bool get isEmpty => _items.isEmpty;

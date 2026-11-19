@@ -1,9 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:romsync/src/l10n.dart';
 import 'package:romsync/src/ui/choice_dialog.dart';
 import 'package:romsync/src/ui/divergence_dialog.dart';
 import 'package:romsync/src/ui/status_chip.dart';
 import 'package:romsync_core/romsync_core.dart';
+
+/// A MaterialApp with the app's translations, in French unless [locale].
+MaterialApp app(Widget home, {Locale locale = const Locale('fr')}) => MaterialApp(
+  locale: locale,
+  supportedLocales: AppLocalizations.supportedLocales,
+  localizationsDelegates: const [
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ],
+  home: home,
+);
 
 LibraryEntry entry() => LibraryEntry(
   rom: ScannedRom(file: const PlainRomFile('/roms/Platine Hack.nds'), header: null, detectedId: 'CPUF'),
@@ -26,28 +41,30 @@ LibraryEntry entry() => LibraryEntry(
 
 void main() {
   testWidgets('status chips show the save state and the resolved conflict', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: Column(
-            children: [
-              StatusChip(SaveStatusInfo(SaveStatus.toDownload, conflictResolved: true)),
-              StatusChip(SaveStatusInfo(SaveStatus.needsChoice)),
-            ],
-          ),
-        ),
+    const chips = Scaffold(
+      body: Column(
+        children: [
+          StatusChip(SaveStatusInfo(SaveStatus.toDownload, conflictResolved: true)),
+          StatusChip(SaveStatusInfo(SaveStatus.needsChoice)),
+        ],
       ),
     );
+    await tester.pumpWidget(app(chips));
     expect(find.text('À télécharger'), findsOneWidget);
     expect(find.text('Conflit résolu automatiquement'), findsOneWidget);
     expect(find.text('Choix requis'), findsOneWidget);
+
+    await tester.pumpWidget(app(chips, locale: const Locale('en')));
+    expect(find.text('To download'), findsOneWidget);
+    expect(find.text('Conflict resolved automatically'), findsOneWidget);
+    expect(find.text('Choice required'), findsOneWidget);
   });
 
   testWidgets('choice dialog: share, or separate under a named identifier', (tester) async {
     RomChoice? result;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
+      app(
+        Builder(
           builder: (context) => TextButton(
             onPressed: () async => result = await showDialog<RomChoice>(
               context: context,
@@ -94,8 +111,8 @@ void main() {
     final results = <DivergenceChoice?>[];
     for (final button in ['Envoyer ma save locale', 'Prendre celle du serveur', 'Plus tard']) {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
+        app(
+          Builder(
             builder: (context) => TextButton(
               onPressed: () async => results.add(
                 await showDialog<DivergenceChoice>(

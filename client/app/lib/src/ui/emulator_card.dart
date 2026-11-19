@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../l10n.dart';
 import 'issue_tile.dart';
 
 /// Settings of one emulator: launch mode, executable, arguments, save folder.
@@ -35,8 +36,9 @@ class _EmulatorCardState extends State<EmulatorCard> {
 
   Future<void> _pickExecutable() async {
     // A macOS application is a folder (.app); elsewhere a file.
+    final choose = AppLocalizations.of(context).choose;
     final path = c.platform == HostPlatform.macos
-        ? await getDirectoryPath(initialDirectory: '/Applications', confirmButtonText: 'Choisir')
+        ? await getDirectoryPath(initialDirectory: '/Applications', confirmButtonText: choose)
         : (await openFile())?.path;
     if (path == null) return;
     _exe.text = path;
@@ -44,7 +46,7 @@ class _EmulatorCardState extends State<EmulatorCard> {
   }
 
   Future<void> _pickSaveDir() async {
-    final path = await getDirectoryPath(confirmButtonText: 'Choisir');
+    final path = await getDirectoryPath(confirmButtonText: AppLocalizations.of(context).choose);
     if (path == null) return;
     _saveDir.text = path;
     await _save();
@@ -53,6 +55,7 @@ class _EmulatorCardState extends State<EmulatorCard> {
   @override
   Widget build(BuildContext context) {
     final s = settings;
+    final l = AppLocalizations.of(context);
     final loc = c.saveLocations[widget.emulatorId];
     final issues = c.emulatorIssues[widget.emulatorId] ?? const <EmulatorIssue>[];
     final inUse = c.emulatorsInUse.contains(widget.emulatorId);
@@ -63,9 +66,9 @@ class _EmulatorCardState extends State<EmulatorCard> {
         title: Text(emulatorName(widget.emulatorId)),
         subtitle: Text(
           [
-            if (widget.emulatorId == c.config.defaultEmulator) 'par défaut' else if (inUse) 'utilisé par certains jeux',
-            if (profile != null && !profile.confirmed) 'format de save à vérifier',
-            if (inUse && issues.any((i) => i.blocking)) 'à configurer',
+            if (widget.emulatorId == c.config.defaultEmulator) l.emuDefault else if (inUse) l.emuInUse,
+            if (profile != null && !profile.confirmed) l.emuFormatToCheck,
+            if (inUse && issues.any((i) => i.blocking)) l.emuToConfigure,
           ].join(' · '),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -74,9 +77,13 @@ class _EmulatorCardState extends State<EmulatorCard> {
             Align(
               alignment: Alignment.centerLeft,
               child: SegmentedButton<LaunchMode>(
-                segments: const [
-                  ButtonSegment(value: LaunchMode.native, label: Text('Exécutable'), icon: Icon(Icons.terminal)),
+                segments: [
                   ButtonSegment(
+                    value: LaunchMode.native,
+                    label: Text(l.emuExecutable),
+                    icon: const Icon(Icons.terminal),
+                  ),
+                  const ButtonSegment(
                     value: LaunchMode.flatpak,
                     label: Text('Flatpak'),
                     icon: Icon(Icons.inventory_2_outlined),
@@ -94,22 +101,22 @@ class _EmulatorCardState extends State<EmulatorCard> {
                     controller: _exe,
                     decoration: InputDecoration(
                       labelText: switch (c.platform) {
-                        HostPlatform.macos => 'Application (.app)',
-                        HostPlatform.windows => 'Exécutable (.exe)',
-                        HostPlatform.linux => 'Exécutable (nom dans le PATH ou chemin complet)',
+                        HostPlatform.macos => l.emuAppMac,
+                        HostPlatform.windows => l.emuExeWindows,
+                        HostPlatform.linux => l.emuExeLinux,
                       },
                     ),
                     onSubmitted: (_) => _save(),
                   ),
                 ),
-                IconButton(tooltip: 'Parcourir', icon: const Icon(Icons.folder_open), onPressed: _pickExecutable),
+                IconButton(tooltip: l.browse, icon: const Icon(Icons.folder_open), onPressed: _pickExecutable),
               ],
             )
           else
             ListTile(dense: true, title: Text('flatpak run ${s.flatpakId}')),
           TextField(
             controller: _args,
-            decoration: const InputDecoration(labelText: 'Arguments supplémentaires'),
+            decoration: InputDecoration(labelText: l.emuArgs),
             onSubmitted: (_) => _save(),
           ),
           Row(
@@ -118,27 +125,30 @@ class _EmulatorCardState extends State<EmulatorCard> {
                 child: TextField(
                   controller: _saveDir,
                   decoration: InputDecoration(
-                    labelText: 'Dossier des saves (vide : détecté)',
+                    labelText: l.emuSaveDir,
                     helperText: loc == null
                         ? null
-                        : 'Détecté : ${loc.dir ?? (loc.data != null
-                                      ? 'selon la configuration de RetroArch'
-                                      : loc.warning != null
-                                      ? 'inconnu'
-                                      : 'à côté de chaque ROM')}'
-                              ' (source : ${loc.source})',
+                        : l.emuDetected(
+                            loc.dir ??
+                                (loc.data != null
+                                    ? l.emuDetectedRetroarch
+                                    : loc.warning != null
+                                    ? l.emuDetectedUnknown
+                                    : l.emuDetectedNextToRom),
+                            coreText(l, loc.source),
+                          ),
                     helperMaxLines: 3,
                   ),
                   onSubmitted: (_) => _save(),
                 ),
               ),
-              IconButton(tooltip: 'Choisir un dossier', icon: const Icon(Icons.folder_open), onPressed: _pickSaveDir),
+              IconButton(tooltip: l.chooseFolder, icon: const Icon(Icons.folder_open), onPressed: _pickSaveDir),
             ],
           ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
-            child: FilledButton.tonal(onPressed: _save, child: const Text('Enregistrer')),
+            child: FilledButton.tonal(onPressed: _save, child: Text(l.save)),
           ),
           if (inUse)
             for (final issue in issues) IssueTile(issue),

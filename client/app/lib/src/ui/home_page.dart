@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
 import '../app_controller.dart';
+import '../l10n.dart';
 import 'choice_dialog.dart';
 import 'divergence_dialog.dart';
 import 'history_page.dart';
@@ -35,7 +36,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  /// A "choix à faire" notification was clicked: open its dialog.
+  /// A "choice needed" notification was clicked: open its dialog.
   void _onChange() {
     final path = controller.promptDivergence;
     if (path == null || _dialogOpen) return;
@@ -65,6 +66,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _resolve(BuildContext context, Divergence d) async {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    final l = AppLocalizations.of(context);
     final entry = controller.entryFor(d);
     if (entry == null) return;
     final choice = await _ask(context, d);
@@ -76,16 +78,16 @@ class _HomePageState extends State<HomePage> {
         SnackBar(
           content: Text(
             choice == DivergenceChoice.local
-                ? 'Save locale envoyée : c’est la save active.'
+                ? l.divergenceLocalSent
                 : r.backupPath == null
-                ? 'Save du serveur récupérée ; ta save locale est dans l’historique.'
-                : 'Save du serveur récupérée ; ta save locale est dans l’historique et dans ${r.backupPath}.',
+                ? l.divergenceServerTaken
+                : l.divergenceServerTakenBackup(r.backupPath!),
           ),
           duration: const Duration(seconds: 8),
         ),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e'), duration: const Duration(seconds: 8)));
+      messenger.showSnackBar(SnackBar(content: Text(errorText(l, e)), duration: const Duration(seconds: 8)));
     }
   }
 
@@ -105,9 +107,9 @@ class _HomePageState extends State<HomePage> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Lancement impossible'),
-          content: Text('$e'),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+          title: Text(AppLocalizations.of(context).launchFailed),
+          content: Text(errorText(AppLocalizations.of(context), e)),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context).ok))],
         ),
       );
     }
@@ -123,7 +125,7 @@ class _HomePageState extends State<HomePage> {
       final choice = await showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Une save ${emulatorName(emulatorId)} existe déjà'),
+          title: Text(AppLocalizations.of(context).staleTitle(emulatorName(emulatorId))),
           content: SizedBox(
             width: 520,
             child: Column(
@@ -132,19 +134,20 @@ class _HomePageState extends State<HomePage> {
               children: [
                 for (final path in stale) SelectableText(path, style: const TextStyle(fontFamily: 'monospace')),
                 const SizedBox(height: 12),
-                const Text(
-                  'RomSync ne l’a jamais synchronisée pour ce jeu : c’est probablement une ancienne partie.\n\n'
-                  'Mise de côté (recommandé), elle est copiée dans le dossier .backup voisin, et la save du serveur '
-                  'sera téléchargée au prochain lancement.\n'
-                  'Gardée, elle sera envoyée au serveur, qui gardera la plus récente des deux.',
-                ),
+                Text(AppLocalizations.of(context).staleBody),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-            TextButton(onPressed: () => Navigator.pop(context, 'keep'), child: const Text('La garder')),
-            FilledButton(onPressed: () => Navigator.pop(context, 'aside'), child: const Text('La mettre de côté')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(AppLocalizations.of(context).cancel)),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'keep'),
+              child: Text(AppLocalizations.of(context).staleKeep),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, 'aside'),
+              child: Text(AppLocalizations.of(context).staleSetAside),
+            ),
           ],
         ),
       );
@@ -168,6 +171,7 @@ class _HomePageState extends State<HomePage> {
       listenable: Listenable.merge([controller, controller.updates]),
       builder: (context, _) {
         final c = controller;
+        final l = AppLocalizations.of(context);
         final scheme = Theme.of(context).colorScheme;
         return Scaffold(
           appBar: AppBar(
@@ -178,9 +182,9 @@ class _HomePageState extends State<HomePage> {
                   padding: EdgeInsets.all(16),
                   child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
-              IconButton(tooltip: 'Rescanner et synchroniser', icon: const Icon(Icons.refresh), onPressed: c.rescan),
+              IconButton(tooltip: l.homeRescan, icon: const Icon(Icons.refresh), onPressed: c.rescan),
               IconButton(
-                tooltip: 'Réglages',
+                tooltip: l.settings,
                 icon: const Icon(Icons.settings),
                 onPressed: () =>
                     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => SettingsPage(controller: c))),
@@ -191,42 +195,37 @@ class _HomePageState extends State<HomePage> {
             children: [
               CompatibilityBanner(controller: c),
               UpdateBanner(updates: c.updates),
-              if (c.unauthorizedMessage != null)
+              if (c.unauthorized)
                 MaterialBanner(
-                  content: Text(c.unauthorizedMessage!),
+                  content: Text(l.homeUnauthorized),
                   leading: Icon(Icons.lock, color: scheme.error),
-                  actions: [TextButton(onPressed: c.unpair, child: const Text('Appairer à nouveau'))],
+                  actions: [TextButton(onPressed: c.unpair, child: Text(l.homePairAgain))],
                 ),
               if (!c.online)
                 MaterialBanner(
-                  content: Text(
-                    'Serveur injoignable : les parties se lancent avec les saves locales'
-                    '${c.queue.isEmpty ? '' : ', ${c.queue.length} envoi(s) en attente'}.',
-                  ),
+                  content: Text(c.queue.isEmpty ? l.homeOffline : l.homeOfflineQueued(c.queue.length)),
                   leading: const Icon(Icons.cloud_off),
-                  actions: [TextButton(onPressed: c.refresh, child: const Text('Réessayer'))],
+                  actions: [TextButton(onPressed: c.refresh, child: Text(l.retry))],
                 ),
               if (c.runningGame != null)
                 MaterialBanner(
-                  content: Text('Partie en cours : ${c.runningGame}. Chaque sauvegarde est envoyée automatiquement.'),
+                  content: Text(l.homeRunning(c.runningGame!)),
                   leading: const Icon(Icons.sports_esports),
                   actions: const [SizedBox.shrink()],
                 ),
               for (final d in c.divergences.values)
                 MaterialBanner(
-                  content: Text(
-                    'Choix à faire pour ${_title(d)} : deux appareils ont joué sans se synchroniser. '
-                    'Rien n’a été envoyé.',
-                  ),
+                  content: Text(l.homeDivergence(_title(d))),
                   leading: Icon(Icons.call_split, color: scheme.error),
-                  actions: [TextButton(onPressed: () => _resolve(context, d), child: const Text('Choisir'))],
+                  actions: [TextButton(onPressed: () => _resolve(context, d), child: Text(l.choose))],
                 ),
               for (final issue in c.emulatorIssues.values.expand((i) => i)) IssueTile(issue),
-              for (final w in c.warnings) ListTile(leading: const Icon(Icons.info_outline), title: Text(w)),
+              for (final w in c.warnings)
+                ListTile(leading: const Icon(Icons.info_outline), title: Text(coreText(l, w))),
               if (c.config.romFolders.isEmpty)
                 ListTile(
                   leading: const Icon(Icons.folder_open),
-                  title: const Text('Ajoute un dossier de ROMs dans les réglages.'),
+                  title: Text(l.homeAddFolder),
                   onTap: () =>
                       Navigator.push(context, MaterialPageRoute<void>(builder: (_) => SettingsPage(controller: c))),
                 ),
@@ -235,18 +234,19 @@ class _HomePageState extends State<HomePage> {
               if (c.scanIssues.isNotEmpty)
                 ExpansionTile(
                   leading: const Icon(Icons.report_problem_outlined),
-                  title: Text('${c.scanIssues.length} fichier(s) non lus'),
+                  title: Text(l.homeScanIssues(c.scanIssues.length)),
                   children: [
-                    for (final i in c.scanIssues) ListTile(dense: true, title: Text(i.path), subtitle: Text(i.message)),
+                    for (final i in c.scanIssues)
+                      ListTile(dense: true, title: Text(i.path), subtitle: Text(coreText(l, i.message))),
                   ],
                 ),
               if (c.events.isNotEmpty)
                 ExpansionTile(
                   leading: const Icon(Icons.list_alt),
-                  title: const Text('Activité récente'),
+                  title: Text(l.homeActivity),
                   children: [
                     for (final e in c.events)
-                      ListTile(dense: true, title: Text(e.message), subtitle: Text(e.gameId ?? '')),
+                      ListTile(dense: true, title: Text(coreText(l, e.message)), subtitle: Text(e.gameId ?? '')),
                   ],
                 ),
             ],
@@ -274,6 +274,7 @@ class _GameTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = row.entry;
+    final l = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -290,36 +291,28 @@ class _GameTile extends StatelessWidget {
                   if (e.sharedWith.isNotEmpty)
                     Text(
                       e.needsChoice
-                          ? '${e.sharedWith.length + 1} ROMs partagent l’identifiant ${e.rom.detectedId} : choisis pour celle-ci.'
-                          : (e.choice!.shares
-                                ? 'Save partagée avec ${e.sharedWith.length} autre(s) ROM(s)'
-                                : 'Save séparée'),
+                          ? l.gameSharedNeedsChoice(e.sharedWith.length + 1, e.rom.detectedId)
+                          : (e.choice!.shares ? l.gameShared(e.sharedWith.length) : l.gameSeparate),
                       style: TextStyle(color: e.needsChoice ? scheme.error : null, fontSize: 12),
                     ),
                   if (e.unavailable != null)
-                    Text(e.unavailable!, style: TextStyle(color: scheme.outline, fontSize: 12)),
-                  if (row.error != null) Text(row.error!, style: TextStyle(color: scheme.error, fontSize: 12)),
+                    Text(coreText(l, e.unavailable!), style: TextStyle(color: scheme.outline, fontSize: 12)),
+                  if (row.error != null)
+                    Text(coreText(l, row.error!), style: TextStyle(color: scheme.error, fontSize: 12)),
                   const SizedBox(height: 6),
                   StatusChip(row.status),
                 ],
               ),
             ),
             if (e.sharedWith.isNotEmpty)
-              TextButton(onPressed: () => onChoose(context, e), child: Text(e.needsChoice ? 'Choisir' : 'Modifier')),
+              TextButton(onPressed: () => onChoose(context, e), child: Text(e.needsChoice ? l.choose : l.gameModify)),
             PopupMenuButton<String>(
-              tooltip: 'Émulateur de ce jeu',
+              tooltip: l.gameEmulatorTooltip,
               enabled: controller.runningGame == null,
               onSelected: (id) => onEmulator(context, e, id),
               itemBuilder: (context) => [
                 for (final id in emulatorIds)
-                  CheckedPopupMenuItem(
-                    value: id,
-                    checked: id == e.emulator,
-                    child: Text(
-                      '${emulatorName(id)}${id == controller.config.defaultEmulator ? ' (par défaut)' : ''}'
-                      '${id != 'melonds' && e.rom.file.innerName != null ? ' — pas pour les archives' : ''}',
-                    ),
-                  ),
+                  CheckedPopupMenuItem(value: id, checked: id == e.emulator, child: Text(_emulatorLabel(l, id, e))),
               ],
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -330,7 +323,7 @@ class _GameTile extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Historique',
+              tooltip: l.history,
               icon: const Icon(Icons.history),
               onPressed: controller.api == null || e.needsChoice
                   ? null
@@ -345,12 +338,21 @@ class _GameTile extends StatelessWidget {
             const SizedBox(width: 4),
             FilledButton.icon(
               icon: const Icon(Icons.play_arrow),
-              label: const Text('Jouer'),
+              label: Text(l.play),
               onPressed: !e.syncable || controller.runningGame != null ? null : () => onLaunch(context, e),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// An emulator of the menu, marked when it is the default or cannot
+  /// launch this ROM (archive).
+  String _emulatorLabel(AppLocalizations l, String id, LibraryEntry e) {
+    var label = emulatorName(id);
+    if (id == controller.config.defaultEmulator) label = l.emulatorDefault(label);
+    if (id != 'melonds' && e.rom.file.innerName != null) label = l.emulatorNoArchives(label);
+    return label;
   }
 }

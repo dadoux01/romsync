@@ -1,3 +1,4 @@
+import '../message.dart';
 import 'json_file.dart';
 
 /// Sync state of one local save file (docs/SPEC.md, "État local").
@@ -49,7 +50,7 @@ class StateStore {
     });
   }
 
-  String? get warning => _file.lastWarning;
+  CoreMessage? get warning => _file.lastWarning;
 
   SaveState? operator [](String savePath) => _states[savePath];
 

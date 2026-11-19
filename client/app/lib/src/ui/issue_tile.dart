@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:romsync_core/romsync_core.dart';
 
+import '../l10n.dart';
+
 /// Shows a problem and, when there is one, the command that fixes it with a
 /// copy button.
 class IssueTile extends StatelessWidget {
@@ -11,9 +13,10 @@ class IssueTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
     return ListTile(
       leading: Icon(Icons.warning_amber, color: scheme.error),
-      title: Text(issue.message),
+      title: Text(coreText(l, issue.message)),
       subtitle: issue.fixCommand == null
           ? null
           : Padding(
@@ -24,11 +27,11 @@ class IssueTile extends StatelessWidget {
                     child: SelectableText(issue.fixCommand!, style: const TextStyle(fontFamily: 'monospace')),
                   ),
                   IconButton(
-                    tooltip: 'Copier la commande',
+                    tooltip: l.copyCommand,
                     icon: const Icon(Icons.copy),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: issue.fixCommand!));
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Commande copiée')));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.commandCopied)));
                     },
                   ),
                 ],

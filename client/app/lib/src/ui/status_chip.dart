@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:romsync_core/romsync_core.dart';
 
+import '../l10n.dart';
+
 /// Label and colour of a save status.
-({String label, IconData icon, Color color}) statusStyle(SaveStatus s, ColorScheme scheme) => switch (s) {
-  SaveStatus.upToDate => (label: 'À jour', icon: Icons.check_circle_outline, color: Colors.green),
-  SaveStatus.toUpload => (label: 'À envoyer', icon: Icons.upload, color: scheme.primary),
-  SaveStatus.toDownload => (label: 'À télécharger', icon: Icons.download, color: Colors.orange),
-  SaveStatus.offline => (label: 'Hors ligne', icon: Icons.cloud_off, color: scheme.outline),
-  SaveStatus.needsChoice => (label: 'Choix requis', icon: Icons.call_split, color: scheme.error),
-  SaveStatus.diverged => (label: 'Choix à faire', icon: Icons.call_split, color: scheme.error),
-  SaveStatus.unavailable => (label: 'Indisponible', icon: Icons.block, color: scheme.outline),
-  SaveStatus.noSave => (label: 'Pas de save', icon: Icons.remove_circle_outline, color: scheme.outline),
-};
+({String label, IconData icon, Color color}) statusStyle(SaveStatus s, ColorScheme scheme, AppLocalizations l) =>
+    switch (s) {
+      SaveStatus.upToDate => (label: l.statusUpToDate, icon: Icons.check_circle_outline, color: Colors.green),
+      SaveStatus.toUpload => (label: l.statusToUpload, icon: Icons.upload, color: scheme.primary),
+      SaveStatus.toDownload => (label: l.statusToDownload, icon: Icons.download, color: Colors.orange),
+      SaveStatus.offline => (label: l.statusOffline, icon: Icons.cloud_off, color: scheme.outline),
+      SaveStatus.needsChoice => (label: l.statusNeedsChoice, icon: Icons.call_split, color: scheme.error),
+      SaveStatus.diverged => (label: l.statusDiverged, icon: Icons.call_split, color: scheme.error),
+      SaveStatus.unavailable => (label: l.statusUnavailable, icon: Icons.block, color: scheme.outline),
+      SaveStatus.noSave => (label: l.statusNoSave, icon: Icons.remove_circle_outline, color: scheme.outline),
+    };
 
 class StatusChip extends StatelessWidget {
   const StatusChip(this.info, {super.key});
@@ -19,7 +22,8 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = statusStyle(info.status, Theme.of(context).colorScheme);
+    final l = AppLocalizations.of(context);
+    final style = statusStyle(info.status, Theme.of(context).colorScheme, l);
     return Wrap(
       spacing: 6,
       runSpacing: 4,
@@ -31,12 +35,10 @@ class StatusChip extends StatelessWidget {
         ),
         if (info.conflictResolved)
           Tooltip(
-            message:
-                'La dernière save envoyée ne partait pas de la version active : '
-                'les deux sont dans l’historique du site.',
+            message: l.conflictResolvedTooltip,
             child: Chip(
               avatar: const Icon(Icons.merge_type, size: 18, color: Colors.orange),
-              label: const Text('Conflit résolu automatiquement'),
+              label: Text(l.conflictResolved),
               visualDensity: VisualDensity.compact,
             ),
           ),

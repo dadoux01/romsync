@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:romsync_core/romsync_core.dart';
 
+import 'l10n.dart';
 import 'update_manager.dart';
 
 /// A line of the game list.
@@ -17,7 +19,7 @@ class GameRow {
   final int queued;
 
   /// Problem reading the local save (unexpected format…).
-  final String? error;
+  final CoreMessage? error;
 }
 
 /// Thrown by [AppController.launch] when the local save diverges from the
@@ -26,13 +28,13 @@ class DivergenceException implements Exception {
   DivergenceException(this.divergence);
   final Divergence divergence;
   @override
-  String toString() => 'Deux appareils ont joué sans se synchroniser.';
+  String toString() => 'divergence: ${divergence.gameId}';
 }
 
 /// Thrown when pairing needs the user's consent to store the token in a file.
 class KeyringUnavailableException implements Exception {
   @override
-  String toString() => 'Aucun trousseau système (Secret Service) n’est disponible.';
+  String toString() => 'no system keyring (Secret Service) available';
 }
 
 /// State and actions of the app. All the logic lives in romsync_core; this
@@ -65,26 +67,41 @@ class AppController extends ChangeNotifier {
     saveConfig: _saveConfig,
     api: () => api,
     blockedReason: updateBlockedReason,
+    texts: () => l10n,
     onNotice: (t, b) => onNotice?.call(t, b),
     restart: (target, staged) => installAndRestart(
       target,
       staged,
       quit: () async => quitApp != null ? quitApp!() : exit(0),
       logFile: p.join(paths.dataDir, 'updater.log'),
+      updaterMissing: l10n.updUpdaterMissing,
     ),
   );
 
   /// Why an update must wait: never during a game nor with pending uploads.
   String? updateBlockedReason() {
-    if (runningGame != null) {
-      return 'Partie en cours ($runningGame) : la mise à jour s’installera à la fin de la partie.';
-    }
+    final l = l10n;
+    if (runningGame != null) return l.updateWaitGame(runningGame!);
     if (!queue.isEmpty) {
       final held = queue.items.where((u) => u.held).length;
-      return '${queue.length} envoi(s) en attente${held > 0 ? ', dont $held en attente de ton choix (divergence)' : ''} : '
-          'la mise à jour s’installera dès qu’ils seront partis.';
+      return held > 0 ? l.updateWaitQueueHeld(queue.length, held) : l.updateWaitQueue(queue.length);
     }
     return null;
+  }
+
+  /// Language of the interface: the user's choice, else the system's
+  /// (docs/SPEC.md, "Langues").
+  Locale get locale => resolveLocale(config.language, PlatformDispatcher.instance.locales);
+
+  /// Texts in the current language, for what is shown outside a widget
+  /// (notifications, tray menu, update status).
+  AppLocalizations get l10n => textsFor(locale);
+
+  /// Sets the language (null: the system's); applies at once.
+  Future<void> setLanguage(String? language) async {
+    config.language = language;
+    await _saveConfig();
+    notifyListeners();
   }
 
   /// Compatibility with the server, once it answered (docs/SPEC.md,
@@ -120,7 +137,7 @@ class AppController extends ChangeNotifier {
   /// HOME so that they never touch the real emulator folders).
   final Map<String, String>? environment;
   final List<SyncEvent> events = [];
-  final List<String> warnings = [];
+  final List<CoreMessage> warnings = [];
 
   /// Shows a desktop notification (set by the desktop shell).
   void Function(String title, String body)? onNotice;
@@ -142,7 +159,9 @@ class AppController extends ChangeNotifier {
   bool online = true;
   bool loading = false;
   String? runningGame;
-  String? unauthorizedMessage;
+
+  /// The token was revoked or is no longer valid: pair again.
+  bool unauthorized = false;
   Timer? _timer;
   List<ScannedRom> _roms = [];
 
@@ -230,9 +249,9 @@ class AppController extends ChangeNotifier {
   /// from RomSync, since the emulator would overwrite it.
   Future<PrepareResult> resolveDivergence(LibraryEntry entry, DivergenceChoice choice) async {
     final e = engine;
-    if (e == null) throw SyncException('Appareil non appairé.');
+    if (e == null) throw AppException(l10n.notPaired);
     if (choice == DivergenceChoice.server && _runningSave == entry.savePath) {
-      throw SyncException('Ferme d’abord le jeu en cours : RomSync téléchargera ensuite la save du serveur.');
+      throw AppException(l10n.closeGameFirst);
     }
     final remote = rows.where((r) => r.entry.key == entry.key).firstOrNull?.remote;
     final r = await e.prepare(entry, chipSize: remote?.chipSize, choice: choice);
@@ -261,7 +280,7 @@ class AppController extends ChangeNotifier {
       ..tokenStorage = keyringOk ? TokenStorage.keyring : TokenStorage.file;
     await tokenStore.write(res.token);
     await _saveConfig();
-    unauthorizedMessage = null;
+    unauthorized = false;
     _connect(res.token);
     await rescan();
     unawaited(updates.checkIfDue());
@@ -386,7 +405,7 @@ class AppController extends ChangeNotifier {
     targetFor: (r, gameId) {
       final emu = emulatorOf(config.emulatorFor(gameId));
       final loc = saveLocations[emu.id];
-      final reason = loc == null ? 'Émulateur non configuré.' : emu.cannotSync(r, loc);
+      final reason = loc == null ? const CoreMessage(Msg.emuNotConfigured) : emu.cannotSync(r, loc);
       return SaveTarget(
         emulator: emu.id,
         profile: profiles[emu.conversionProfileId]!,
@@ -407,9 +426,7 @@ class AppController extends ChangeNotifier {
       if (!flush.offline && !flush.unauthorized) {
         divergences = {for (final d in flush.held) d.savePath: d};
       }
-      if (flush.unauthorized) {
-        unauthorizedMessage = 'Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.';
-      }
+      if (flush.unauthorized) unauthorized = true;
       try {
         remote = {for (final g in await a.games()) g.code: g};
         online = true;
@@ -426,15 +443,13 @@ class AppController extends ChangeNotifier {
         online = false;
       } on ApiException catch (err) {
         online = true;
-        if (err.isUnauthorized) {
-          unauthorizedMessage = 'Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.';
-        }
+        if (err.isUnauthorized) unauthorized = true;
       }
     }
     final out = <GameRow>[];
     for (final entry in saveLocations.isEmpty ? const <LibraryEntry>[] : library) {
       String? hash;
-      String? error;
+      CoreMessage? error;
       try {
         if (entry.unavailable == null) hash = (await SyncEngine.readLocal(entry.savePath, entry.profile))?.hash;
       } on SyncException catch (err) {
@@ -465,8 +480,9 @@ class AppController extends ChangeNotifier {
     // Games launched without RomSync: watch their saves (uploads only), and
     // announce newer server saves once.
     await background?.update(out.map((r) => r.entry), excluded: {?_runningSave});
+    final l = l10n;
     for (final n in downloadNotices([for (final r in out) (r.entry, r.status, r.remote)], _notified)) {
-      onNotice?.call('Nouvelle save : ${n.title}', n.message);
+      onNotice?.call(l.noticeNewSaveTitle(n.title), coreText(l, n.message));
     }
     // Held uploads: announce each divergence once.
     unawaited(updates.conditionsChanged());
@@ -474,10 +490,7 @@ class AppController extends ChangeNotifier {
       if (!_notified.add('diverged#${d.savePath}#${d.server.id}')) continue;
       final title =
           remote[d.gameId]?.title ?? out.where((r) => r.entry.savePath == d.savePath).firstOrNull?.entry.title;
-      onNotice?.call(
-        'Choix à faire pour ${title ?? d.gameId}',
-        'Deux appareils ont joué sans se synchroniser : rien n’a été envoyé. Ouvre RomSync pour choisir la save à garder.',
-      );
+      onNotice?.call(l.noticeChoiceTitle(title ?? d.gameId), l.noticeChoiceBody);
     }
     notifyListeners();
   }
@@ -488,10 +501,15 @@ class AppController extends ChangeNotifier {
   /// with the [choice].
   Future<List<String>> launch(LibraryEntry entry, {DivergenceChoice? choice}) async {
     final e = engine;
-    if (e == null) throw SyncException('Appareil non appairé.');
-    if (runningGame != null) throw SyncException('Une partie est déjà en cours : $runningGame.');
+    final l = l10n;
+    if (e == null) throw AppException(l.notPaired);
+    if (runningGame != null) throw AppException(l.gameAlreadyRunning(runningGame!));
+    // The user must choose first: say so rather than an emulator problem.
+    if (entry.needsChoice) throw SyncException(CoreMessage(Msg.syncSharedId, {'gameId': entry.gameId}));
     final blocking = (emulatorIssues[entry.emulator] ?? const <EmulatorIssue>[]).where((i) => i.blocking);
-    if (blocking.isNotEmpty) throw SyncException(blocking.map((i) => i.toString()).join('\n'));
+    if (blocking.isNotEmpty) {
+      throw AppException(blocking.map((i) => [coreText(l, i.message), ?i.fixCommand].join('\n  ')).join('\n'));
+    }
 
     final messages = <String>[];
     final remote = rows.where((r) => r.entry.key == entry.key).firstOrNull?.remote;
@@ -501,13 +519,9 @@ class AppController extends ChangeNotifier {
       throw DivergenceException(prep.divergence!);
     }
     if (choice != null) divergences.remove(entry.savePath);
-    if (prep.offline) messages.add(prep.message!);
+    if (prep.offline) messages.add(coreText(l, prep.message!));
     if (prep.downloaded) {
-      messages.add(
-        prep.backupPath == null
-            ? 'Save du serveur téléchargée.'
-            : 'Save du serveur téléchargée ; l’ancienne copie locale est dans ${prep.backupPath}.',
-      );
+      messages.add(prep.backupPath == null ? l.launchDownloaded : l.launchDownloadedBackup(prep.backupPath!));
     }
 
     final running = await RunningEmulator.start(emulatorOf(entry.emulator).launchPlan(entry.rom));
@@ -527,7 +541,11 @@ class AppController extends ChangeNotifier {
           _onEvent(
             SyncEvent(
               SyncEventKind.failed,
-              '${emulatorName(entry.emulator)} s’est arrêté avec le code $code\n${running.stderrTail.join('\n')}',
+              CoreMessage(Msg.emuExited, {
+                'name': emulatorName(entry.emulator),
+                'code': code,
+                'output': running.stderrTail.join('\n'),
+              }),
               gameId: entry.gameId,
             ),
           );

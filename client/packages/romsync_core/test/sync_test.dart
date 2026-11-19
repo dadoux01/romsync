@@ -269,7 +269,7 @@ void main() {
 
       final r = await h.engine.prepare(h.entry(), chipSize: null);
       expect(r.offline, isTrue);
-      expect(r.message, contains('injoignable'));
+      expect(r.message?.code, Msg.syncOfflineLaunch);
       expect(h.queue.length, 1);
       final id = h.queue.items.single.uploadId;
 

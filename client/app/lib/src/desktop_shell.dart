@@ -6,6 +6,7 @@ import 'package:nativeapi/nativeapi.dart' as native;
 import 'package:tray_manager/tray_manager.dart' show ImageAsset;
 
 import 'app_controller.dart';
+import 'l10n.dart';
 
 /// System tray icon, window closing to the tray, and desktop notifications,
 /// through nativeapi (Linux: StatusNotifierItem over D-Bus, no AppIndicator
@@ -18,6 +19,7 @@ class DesktopShell {
   native.Window? _window;
   var _quitting = false;
   var _nativeNotifications = false;
+  Locale? _menuLocale;
 
   /// Sets up the tray; throws when the desktop has no tray.
   Future<void> init() async {
@@ -45,27 +47,18 @@ class DesktopShell {
     tray.isIconTemplate = Platform.isMacOS;
     tray.setTooltip('RomSync');
 
-    final menu = native.Menu.create()!;
-    void item(String label, void Function() onClick) {
-      final i = native.MenuItem.createWithLabelAndType(label, native.MenuItemType.normal)!;
-      i.addListener((e) {
-        if (e is native.MenuItemClickedEvent) onClick();
-      });
-      menu.addItem(i);
-    }
-
-    item('Ouvrir RomSync', show);
-    item('Synchroniser maintenant', () => unawaited(controller.rescan()));
-    menu.addSeparator();
-    item('Quitter RomSync', quit);
-    tray.setContextMenu(menu);
+    _tray = tray;
+    _buildMenu();
+    // The menu follows a change of language in the settings.
+    controller.addListener(() {
+      if (controller.locale != _menuLocale) _buildMenu();
+    });
     // Linux panels open the exported menu themselves; elsewhere a right click.
     tray.setContextMenuTrigger(native.ContextMenuTrigger.rightClicked);
     tray.addListener((e) {
       if (e is native.TrayIconClickedEvent) show();
     });
     tray.setVisible(true);
-    _tray = tray;
 
     final notifications = native.NotificationManager.instance;
     _nativeNotifications = notifications.isSupported() && notifications.initialize();
@@ -81,6 +74,26 @@ class DesktopShell {
         }
       });
     }
+  }
+
+  /// The tray menu, in the language of the interface.
+  void _buildMenu() {
+    _menuLocale = controller.locale;
+    final l = textsFor(_menuLocale!);
+    final menu = native.Menu.create()!;
+    void item(String label, void Function() onClick) {
+      final i = native.MenuItem.createWithLabelAndType(label, native.MenuItemType.normal)!;
+      i.addListener((e) {
+        if (e is native.MenuItemClickedEvent) onClick();
+      });
+      menu.addItem(i);
+    }
+
+    item(l.trayOpen, show);
+    item(l.traySyncNow, () => unawaited(controller.rescan()));
+    menu.addSeparator();
+    item(l.trayQuit, quit);
+    _tray?.setContextMenu(menu);
   }
 
   Future<void> _notify(String title, String body) async {

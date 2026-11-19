@@ -109,6 +109,7 @@ class ClientConfig {
     Map<String, RomChoice>? romChoices,
     this.autoUpdateCheck = true,
     this.lastUpdateCheck,
+    this.language,
   }) : romFolders = romFolders ?? [],
        emulators = emulators ?? {},
        gameEmulators = gameEmulators ?? {},
@@ -149,6 +150,10 @@ class ClientConfig {
   /// Last check for a new version.
   DateTime? lastUpdateCheck;
 
+  /// Language of the interface (`fr`, `en`), or null to follow the system
+  /// (docs/SPEC.md, "Langues").
+  String? language;
+
   bool get isPaired => serverUrl != null && deviceId != null;
 
   Map<String, Object?> toJson() => {
@@ -165,6 +170,7 @@ class ClientConfig {
     'rom_choices': {for (final e in romChoices.entries) e.key: e.value.toJson()},
     'auto_update_check': autoUpdateCheck,
     'last_update_check': lastUpdateCheck?.toUtc().toIso8601String(),
+    'language': language,
   };
 
   factory ClientConfig.fromJson(Map<String, Object?> j) => ClientConfig(
@@ -192,6 +198,7 @@ class ClientConfig {
     },
     autoUpdateCheck: (j['auto_update_check'] as bool?) ?? true,
     lastUpdateCheck: j['last_update_check'] == null ? null : DateTime.tryParse(j['last_update_check']! as String),
+    language: j['language'] as String?,
   );
 
   static Future<ClientConfig> load(String path) async {

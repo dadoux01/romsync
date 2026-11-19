@@ -140,7 +140,7 @@ void main() {
       home: home,
     );
     final archived = ScannedRom(file: _Inner(p.join(tmp.path, 'g.zip'), 'g.nds'), header: null, detectedId: 'IRBF');
-    expect(emu.cannotSync(archived, await emu.saveLocation()), contains('melonDS'));
+    expect(emu.cannotSync(archived, await emu.saveLocation())?.code, Msg.emuArchiveNotSupported);
   });
 
   test('defaults per platform', () {
