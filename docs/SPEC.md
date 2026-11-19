@@ -19,6 +19,8 @@ RomSync garde une seule save à jour par jeu et par compte, sur un serveur auto-
 - Hébergement ou distribution de ROMs : les ROMs restent sur chaque appareil.
 - Save states, autres consoles (GBA, 3DS natif…), succès, partage de saves entre comptes.
 
+Les autres consoles arrivent avec la phase 7, d'abord celles de Nintendo, en émulation comme sur les consoles elles-mêmes : voir « Multi-consoles ».
+
 **Limites connues**
 
 - DS Lite + DSTT : aucune synchronisation automatique possible (Wi-Fi WEP uniquement, pas d'appli réseau sur flashcard). La save passe par la page d'import/export du site.
@@ -450,6 +452,59 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 - Chaque langue a toutes les clés de la langue de référence (le français), avec les mêmes paramètres : un test le vérifie pour chaque interface (`web/src/lib/i18n.test.ts`, `client/app/test/l10n_test.dart`, `3ds/tests/test_msg.c`). Sur 3DS, les textes ne contiennent que des caractères de la page de code CP437 de la console (`3ds/core/cp437.c`, vérifié par le même test).
 - Dates, heures et tailles sont formatées selon la langue (« 1,5 Mio » en français, « 1.5 MiB » en anglais).
 
+## Multi-consoles (phase 7, en conception)
+
+RomSync synchronise les saves de toutes les consoles émulables, une marque après l'autre : Nintendo d'abord, puis Sony et les autres. Une save va d'un émulateur à l'autre et, quand la console a un homebrew RomSync, de l'émulateur à la console et inversement. Les règles de la synchro (file d'attente, état par fichier, divergence, historique, rétention) ne changent pas ; cette section décrit ce qui change.
+
+**Consoles**
+
+Chaque jeu appartient à une console (`system`). Les saves de deux consoles ne sont jamais mélangées, même si leurs codes se ressemblent.
+
+| `system` | Console | Save | Identifiant (après le préfixe) | Ordre |
+| --- | --- | --- | --- | --- |
+| `nds` | DS (et DSi) | fichier | code de 4 caractères, `h:`, `x:` (inchangés, voir « Identification des jeux ») | fait |
+| `gba` | Game Boy Advance | fichier | code de 4 caractères de l'en-tête (`0xAC`) | 7.1 |
+| `gb` | Game Boy et Game Boy Color | fichier | empreinte de la ROM (`h:`) : le titre de l'en-tête n'est pas unique | 7.2 |
+| `3ds` | 3DS | dossier | ID du titre, 16 chiffres hexadécimaux | 7.4 |
+| `nes`, `snes` | NES, Super Nintendo | fichier | empreinte de la ROM sans son en-tête de copieur (`h:`) | 7.5 |
+| `n64` | Nintendo 64 | fichier par type de mémoire (à préciser) | code de l'en-tête | 7.6 |
+| `gc`, `wii` | GameCube, Wii | fichier `.gci` (GameCube), dossier (Wii) | code du jeu à 6 caractères (GameCube), ID du titre (Wii) | 7.7 |
+| `wiiu` | Wii U | dossier, par utilisateur | ID du titre | 7.8 |
+| `switch` | Switch | dossier, par utilisateur | ID du titre | 7.9, en dernier (risque juridique, émulateurs instables) |
+
+Sony (PS1, PSP, PS2, PS3, Vita) suit avec les mêmes principes ; ses détails seront écrits à ce moment-là.
+
+**Identifiants de jeu**
+
+- `games.game_code` devient `<system>:<identifiant>` (ex. `gba:BPEF`, `3ds:0004000000055D00`, `gb:h:<sha1>`, `gba:x:mon-hack`). Les identifiants DS restent sans préfixe (`IRBF`, `h:…`, `x:…`) : les saves déjà sur le serveur et les clients existants ne changent pas.
+- Une colonne `games.system` (migration : `nds` pour les jeux existants) permet de filtrer ; elle est déduite du préfixe, jamais choisie séparément.
+- Le serveur refuse un identifiant qui ne suit pas le format de sa console (`400 invalid_request`), comme aujourd'hui pour la DS. Les cas `h:` (ROM sans code valide) et `x:` (identifiant forcé, ROMs qui partagent un identifiant) existent pour toutes les consoles.
+
+**Saves en dossier**
+
+- Une save est soit un fichier (DS, GBA, GB, NES, SNES, N64, `.gci`), soit un dossier (3DS, Wii, Wii U, Switch). Chaque console a un seul type.
+- Format canonique d'un dossier : une archive tar déterministe de son contenu (fichiers et dossiers seulement ; chemins relatifs, séparés par `/`, en UTF-8, triés octet par octet ; dates, propriétaires et droits remis à zéro : `0644` pour un fichier, `0755` pour un dossier). Le même contenu donne donc toujours la même archive et le même SHA-256, sur tous les clients ; c'est ce hash qui sert à l'idempotence, à la déduplication et à la comparaison de divergence. Le site télécharge et accepte ce tar.
+- Ce qui est dans l'archive est ce que la console voit dans son système de fichiers de save, déchiffré : les fichiers qu'un gestionnaire de saves (Checkpoint, JKSV, SaveMii) extrait, et ceux que l'émulateur range dans son dossier de save (Azahar, Dolphin, Cemu). La compatibilité exacte entre console et émulateur est à vérifier pour chaque console avant d'en ouvrir la synchro.
+- Lecture stable : un dossier n'est lu que si aucun de ses fichiers ne change pendant la lecture (même règle que pour un fichier) ; l'écriture remplace le dossier entier, après une copie `.backup` du dossier précédent.
+- Les règles de taille (« Taille réelle ») ne concernent que les consoles à puce de save : DS, GBA, GB, NES, SNES, N64. Chaque console a sa table de tailles valides ; un dossier n'a pas de taille de puce.
+- La limite d'envoi (`ROMSYNC_MAX_UPLOAD`, 16 Mio) s'applique à l'archive ; elle sera revue avec la Switch.
+
+**Comptes des consoles**
+
+- Wii U et Switch gardent une save par utilisateur de la console. Chaque appareil choisit, dans ses réglages, l'utilisateur local qui correspond à son compte RomSync ; l'archive ne contient pas l'identifiant de cet utilisateur, pour qu'une save passe d'une console à une autre ou à un émulateur.
+
+**Clients**
+
+- Appli Flutter : `romsync_core` décrit chaque console par un module (extensions de ROM, lecture de l'en-tête ou de l'empreinte, profils d'émulateurs, table des tailles). Un émulateur peut servir plusieurs consoles (RetroArch avec des cœurs différents) ; l'émulateur par défaut se règle par console, puis par jeu comme aujourd'hui.
+- Cœur C : `3ds/core` devient le cœur des homebrews de toutes les consoles (`native/core`, compilé et testé sous Linux comme aujourd'hui), avec une couche par console (`3ds/app`, plus tard `switch/`, `wii/`, `wiiu/`). Il gagne les identifiants préfixés et les saves en dossier (lecture et écriture de l'archive tar canonique), avec les mêmes tests que `romsync_core`.
+- Homebrew 3DS : en plus des jeux DS, il synchronise les jeux 3DS installés ou en cartouche (archives de save du système, comme Checkpoint). À vérifier avant de l'ouvrir : l'écriture d'une save (validation de l'archive), et la « valeur de sécurité » qui empêche certains jeux de recharger une save restaurée.
+- Homebrews Wii, Wii U et Switch : seulement quand quelqu'un peut les tester sur sa console (comme Android). En attendant, ces consoles sont synchronisées entre émulateurs.
+- Un ancien client ignore les jeux d'une console qu'il ne connaît pas (à vérifier et tester pour l'appli 0.6 et le homebrew 0.6).
+
+**Compatibilité**
+
+- Niveau d'API 3 : identifiants préfixés, `system` dans les réponses, saves en dossier. Les clients qui synchronisent une autre console que la DS demandent le niveau 3 ; ceux qui ne gèrent que la DS se contentent du niveau 2.
+
 ## Dépôt, roadmap et questions ouvertes
 
 Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew, pour que l'API et les profils de conversion restent alignés.
@@ -483,6 +538,17 @@ Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew,
    - Delta : ses saves ne sont pas accessibles depuis une autre appli ; seulement l'import/export manuel d'une save par jeu, avec le site de RomSync.
    - Automatisation via Raccourcis : lire une save dans Fichiers et l'envoyer à l'API, ou télécharger la version active, sans appli à installer.
    - Installation d'une appli : compte développeur Apple payant, ou AltStore et identifiant Apple gratuit (signature à renouveler tous les 7 jours).
+7. Multi-consoles, Nintendo d'abord (voir « Multi-consoles ») ; seule une 2DS est disponible pour les tests sur console :
+   1. Notion de console dans le serveur, le site, l'appli et le cœur C ; Game Boy Advance en émulation (mGBA, RetroArch avec le cœur mGBA).
+   2. Game Boy et Game Boy Color.
+   3. Saves en dossier (serveur, `romsync_core`, cœur C).
+   4. Jeux 3DS : homebrew 3DS (testable sur la 2DS) et Azahar.
+   5. NES et Super Nintendo.
+   6. Nintendo 64.
+   7. GameCube et Wii (Dolphin).
+   8. Wii U (Cemu).
+   9. Switch (émulateurs).
+   10. Homebrews Wii, Wii U et Switch, quand un testeur est disponible ; puis Sony.
 
 Version 0.5.0 (entre les phases 4 et 5) : choix en cas de divergence, mises à jour automatiques des applis (PC et 3DS) par le relais du serveur, releases signées. C'est la dernière installation manuelle des applis ; le serveur, lui, se met à jour par son image (Dockge).
 
