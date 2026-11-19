@@ -101,6 +101,7 @@
   "systemNds": "Nintendo DS",
   "systemGba": "Game Boy Advance",
   "systemGb": "Game Boy and Game Boy Color",
+  "system3ds": "Nintendo 3DS",
   "defaultEmulatorOf": "Default emulator ({system})",
   "defaultEmulator": "Default emulator",
   "defaultEmulatorHelp": "Each game can have its own, from the game list.",

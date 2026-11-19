@@ -90,7 +90,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(l.emulators, style: text.titleMedium),
               Text(l.defaultEmulatorHelp),
               // One block per console: its default emulator, then each of its emulators.
-              for (final system in GameSystem.values) ...[
+              for (final system in GameSystem.values.where((s) => emulatorIdsFor(s).isNotEmpty)) ...[
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(systemName(l, system), style: text.titleSmall),

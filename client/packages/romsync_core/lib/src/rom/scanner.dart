@@ -117,6 +117,8 @@ class RomScanner {
       GameSystem.nds => NdsHeader.parse(await file.readStart(NdsHeader.length)),
       GameSystem.gba => GbaHeader.parse(await file.readStart(GbaHeader.length)),
       GameSystem.gb => GbHeader.parse(await file.readStart(GbHeader.length)),
+      // 3DS games are not ROM files of a folder (phase 7.4).
+      GameSystem.n3ds => null,
     };
     final id = header != null && header.hasValidCode
         ? system.gameId(header.gameCode)

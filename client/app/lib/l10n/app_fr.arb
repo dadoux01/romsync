@@ -257,6 +257,7 @@
   "systemNds": "Nintendo DS",
   "systemGba": "Game Boy Advance",
   "systemGb": "Game Boy et Game Boy Color",
+  "system3ds": "Nintendo 3DS",
   "defaultEmulatorOf": "Émulateur par défaut ({system})",
   "@defaultEmulatorOf": {
     "placeholders": {

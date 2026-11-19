@@ -34,4 +34,5 @@ export 'src/sync/play_session.dart';
 export 'src/sync/size_rule.dart';
 export 'src/sync/status.dart';
 export 'src/sync/watcher.dart';
+export 'src/tree/save_tree.dart';
 export 'src/update/release.dart';

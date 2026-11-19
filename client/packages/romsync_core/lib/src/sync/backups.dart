@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../tree/save_tree.dart';
+
 /// Copies of local saves replaced by a download, kept in a `.backup` folder
 /// next to the save (docs/SPEC.md, "Avant le lancement", step 3).
 class Backups {
@@ -13,16 +15,23 @@ class Backups {
   static String dirFor(String savePath) => p.join(p.dirname(savePath), '.backup');
 
   /// Copies [savePath] (when it exists) into the backup folder and removes
-  /// the oldest copies beyond [keep]. Returns the copy's path.
+  /// the oldest copies beyond [keep]. Returns the copy's path. A save made
+  /// of a folder is kept as its canonical archive (`<folder>.<date>.tar`).
   Future<String?> backup(String savePath, {DateTime? now}) async {
     final f = File(savePath);
-    if (!await f.exists()) return null;
+    final isFolder = await Directory(savePath).exists();
+    if (!isFolder && !await f.exists()) return null;
     final dir = Directory(dirFor(savePath));
     await dir.create(recursive: true);
     final stamp = (now ?? DateTime.now()).toUtc().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
     final name = p.basename(savePath);
-    final copy = p.join(dir.path, '$name.$stamp');
-    await f.copy(copy);
+    final copy = p.join(dir.path, isFolder ? '$name.$stamp.tar' : '$name.$stamp');
+    if (isFolder) {
+      final tree = await SaveTree.readStable(savePath);
+      await File(copy).writeAsBytes(tree!.$1, flush: true);
+    } else {
+      await f.copy(copy);
+    }
     await prune(savePath);
     return copy;
   }

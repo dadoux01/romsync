@@ -12,6 +12,7 @@ a small parser.
 | --- | --- |
 | `id` | Identifier used by the API (`?profile=<id>`) |
 | `status` | `confirmed`, or `to_verify` until round-trip tests pass |
+| `kind` | `file` (default) or `tree`: a save made of a folder, read and written as its canonical archive (docs/SPEC.md, "Saves en dossier") |
 | `systems` | Consoles whose saves the profile converts (`nds`, `gba`; docs/SPEC.md, "Multi-consoles") |
 | `extension` | File extension, with its dot |
 | `location` | Where the emulator looks for the file (informational) |

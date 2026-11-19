@@ -7,12 +7,14 @@ abstract final class GameId {
   static final _cartridge = RegExp(r'^[A-Z0-9]{4}$');
   static final _romHash = RegExp(r'^h:[0-9a-f]{40}$');
   static final _custom = RegExp(r'^x:[a-z0-9-]{1,32}$');
+  static final _titleId = RegExp(r'^[0-9A-F]{16}$');
 
   static String _local(String id) => GameSystem.ofGameId(id).local(id);
 
   /// Whether [id] is a valid identifier.
   static bool isValid(String id) {
     final local = _local(id);
+    if (GameSystem.ofGameId(id).titleId) return _titleId.hasMatch(local) || _custom.hasMatch(local);
     return (GameSystem.ofGameId(id).hasCartridgeCode && _cartridge.hasMatch(local)) ||
         _romHash.hasMatch(local) ||
         _custom.hasMatch(local);

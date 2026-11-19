@@ -14,6 +14,7 @@ import '../state/file_access.dart';
 import '../state/json_file.dart';
 import '../state/save_state.dart';
 import '../state/upload_queue.dart';
+import '../tree/save_tree.dart';
 import '../update/release.dart';
 import 'backups.dart';
 import 'library.dart';
@@ -190,7 +191,18 @@ class SyncEngine {
       onEvent?.call(SyncEvent(kind, message, gameId: gameId));
 
   /// Reads and decodes the local save of [entry]; null when there is none.
+  /// A save made of a folder is read as its canonical archive.
   static Future<LocalSave?> readLocal(String savePath, ConversionProfile profile) async {
+    if (profile.isTree) {
+      try {
+        final tree = await SaveTree.readStable(savePath);
+        if (tree == null) return null;
+        final (archive, newest) = tree;
+        return LocalSave(archive, sha256.convert(archive).toString(), newest.toUtc());
+      } on TreeFormatException catch (e) {
+        throw SyncException(CoreMessage(Msg.fileBadFormat, {'file': p.basename(savePath), 'detail': e.message}));
+      }
+    }
     final f = File(savePath);
     final Uint8List? file;
     try {
@@ -478,7 +490,11 @@ class SyncEngine {
   Future<String?> download(LibraryEntry entry, RemoteVersion version, {required int? chipSize}) => _serial(() async {
     final raw = await api.download(version.id);
     final backup = await backups.backup(entry.savePath, now: _now());
-    await writeBytesAtomic(entry.savePath, entry.profile.encode(raw, chipSize: chipSize ?? 0));
+    if (entry.profile.isTree) {
+      await SaveTree.write(entry.savePath, raw);
+    } else {
+      await writeBytesAtomic(entry.savePath, entry.profile.encode(raw, chipSize: chipSize ?? 0));
+    }
     await states.recordSync(
       entry.savePath,
       gameId: entry.gameId,

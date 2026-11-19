@@ -1,0 +1,17 @@
+{
+  "id": "tree",
+  "name": "Save folder",
+  "status": "confirmed",
+  "kind": "tree",
+  "systems": ["3ds"],
+  "extension": "",
+  "location": "The save folder of the game",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "A save made of a folder: the client reads the folder as the canonical archive of docs/SPEC.md (\"Saves en dossier\") and writes an archive back as a folder. Nothing is converted."
+}

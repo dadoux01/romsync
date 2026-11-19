@@ -698,6 +698,12 @@ abstract class AppLocalizations {
   /// **'Game Boy et Game Boy Color'**
   String get systemGb;
 
+  /// No description provided for @system3ds.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nintendo 3DS'**
+  String get system3ds;
+
   /// No description provided for @defaultEmulatorOf.
   ///
   /// In fr, this message translates to:

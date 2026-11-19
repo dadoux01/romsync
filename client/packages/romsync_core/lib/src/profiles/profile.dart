@@ -82,7 +82,14 @@ class ConversionProfile {
     required this.padTo,
     required this.padByte,
     this.systems = const ['nds'],
+    this.kind = 'file',
   });
+
+  /// `file`, or `tree` for a save made of a folder, read and written as its
+  /// canonical archive (docs/SPEC.md, "Saves en dossier").
+  final String kind;
+
+  bool get isTree => kind == 'tree';
 
   final String id;
   final String name;
@@ -121,6 +128,7 @@ class ConversionProfile {
       systems: [
         for (final s in (j['systems'] as List<Object?>?) ?? const ['nds']) s! as String,
       ],
+      kind: (j['kind'] as String?) ?? 'file',
     );
   }
 

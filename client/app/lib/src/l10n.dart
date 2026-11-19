@@ -129,6 +129,7 @@ String systemName(AppLocalizations l, GameSystem s) => switch (s) {
   GameSystem.nds => l.systemNds,
   GameSystem.gba => l.systemGba,
   GameSystem.gb => l.systemGb,
+  GameSystem.n3ds => l.system3ds,
 };
 
 /// An error raised by the app itself, already worded for the user.

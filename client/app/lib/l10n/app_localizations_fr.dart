@@ -390,6 +390,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get systemGb => 'Game Boy et Game Boy Color';
 
   @override
+  String get system3ds => 'Nintendo 3DS';
+
+  @override
   String defaultEmulatorOf(String system) {
     return 'Émulateur par défaut ($system)';
   }

@@ -24,7 +24,11 @@ enum GameSystem {
     'mgba',
     [256, 512, 2 << 10, 8 << 10, 32 << 10, 64 << 10, 128 << 10],
     hasCartridgeCode: false,
-  );
+  ),
+
+  /// Nintendo 3DS: saves made of a folder, games identified by their title
+  /// ID. Its ROMs and emulators come with phase 7.4.
+  n3ds('3ds', '3ds:', [], '', [], hasCartridgeCode: false, titleId: true, tree: true);
 
   const GameSystem(
     this.id,
@@ -33,7 +37,15 @@ enum GameSystem {
     this.defaultEmulator,
     this.chipSizes, {
     this.hasCartridgeCode = true,
+    this.titleId = false,
+    this.tree = false,
   });
+
+  /// Games are identified by their 16-digit title ID (or x:).
+  final bool titleId;
+
+  /// A save is a folder, exchanged as its canonical archive.
+  final bool tree;
 
   /// Whether ROM headers carry a game code (`IRBF`); without one, games are
   /// identified by the SHA-1 of their ROM.
