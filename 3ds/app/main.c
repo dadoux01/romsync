@@ -106,10 +106,11 @@ static void draw_details(const app *a, int sel)
             ui_print(RS_TR(DETAIL_LAST_SYNC), at, at + 11);
         }
         int pending = rs_queue_count_for(&a->queue, g->entry.save_path);
-        if (pending)
+        if (pending) {
             ui_print(UI_YELLOW);
             ui_print(RS_TR(DETAIL_PENDING), pending);
             ui_print(UI_RESET "\n");
+        }
         if (v->choice_pending)
             ui_print(UI_RED "%s" UI_RESET "\n", RS_TR(DETAIL_CHOICE));
         else if (v->conflict)
