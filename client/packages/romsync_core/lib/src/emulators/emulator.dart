@@ -66,8 +66,13 @@ abstract class EmulatorProfile {
   /// Consoles it emulates.
   List<GameSystem> get systems;
 
-  /// Conversion profile of its save files (`profiles/<id>.json`).
+  /// Conversion profile of its save files (`profiles/<id>.json`), for its
+  /// first console.
   String get conversionProfileId;
+
+  /// Conversion profile of its save files for [system] (mGBA: `mgba` for
+  /// the GBA, `mgba-gb` for the Game Boy).
+  String conversionProfileFor(GameSystem system);
 
   /// Detects where the emulator writes its saves.
   Future<SaveLocation> saveLocation();
@@ -163,6 +168,9 @@ abstract class EmulatorBase implements EmulatorProfile {
 
   /// Folder of the user's configuration files on Linux.
   String get xdgConfigHome => env['XDG_CONFIG_HOME'] ?? paths.join(home, '.config');
+
+  @override
+  String conversionProfileFor(GameSystem system) => conversionProfileId;
 
   bool get isFlatpak => platform == HostPlatform.linux && settings.mode == LaunchMode.flatpak;
 

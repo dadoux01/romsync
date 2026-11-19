@@ -133,7 +133,7 @@ void main() {
     expect(byId['IRBF']!.emulator, 'melonds');
     expect(c.emulatorsInUse, containsAll(['mgba', 'melonds']));
 
-    await c.setDefaultEmulator('retroarch-mgba');
+    await c.setDefaultEmulator(GameSystem.gba, 'retroarch-mgba');
     expect(c.config.defaultEmulatorFor(GameSystem.gba), 'retroarch-mgba');
     expect(c.config.defaultEmulator, 'melonds', reason: 'the DS keeps its default');
     expect(c.rows.firstWhere((r) => r.entry.gameId == 'gba:BPEF').entry.emulator, 'retroarch-mgba');

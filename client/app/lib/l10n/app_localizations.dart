@@ -692,6 +692,12 @@ abstract class AppLocalizations {
   /// **'Game Boy Advance'**
   String get systemGba;
 
+  /// No description provided for @systemGb.
+  ///
+  /// In fr, this message translates to:
+  /// **'Game Boy et Game Boy Color'**
+  String get systemGb;
+
   /// No description provided for @defaultEmulatorOf.
   ///
   /// In fr, this message translates to:

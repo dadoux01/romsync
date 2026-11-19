@@ -14,9 +14,30 @@ enum GameSystem {
   ),
 
   /// Game Boy Advance: EEPROM 4 and 64 Kbit, SRAM, flash 512 Kbit and 1 Mbit.
-  gba('gba', 'gba:', ['.gba'], 'mgba', [512, 8 << 10, 32 << 10, 64 << 10, 128 << 10]);
+  gba('gba', 'gba:', ['.gba'], 'mgba', [512, 8 << 10, 32 << 10, 64 << 10, 128 << 10]),
 
-  const GameSystem(this.id, this.prefix, this.romExtensions, this.defaultEmulator, this.chipSizes);
+  /// Game Boy and Game Boy Color: no cartridge code, only h: and x:.
+  gb(
+    'gb',
+    'gb:',
+    ['.gb', '.gbc', '.sgb'],
+    'mgba',
+    [256, 512, 2 << 10, 8 << 10, 32 << 10, 64 << 10, 128 << 10],
+    hasCartridgeCode: false,
+  );
+
+  const GameSystem(
+    this.id,
+    this.prefix,
+    this.romExtensions,
+    this.defaultEmulator,
+    this.chipSizes, {
+    this.hasCartridgeCode = true,
+  });
+
+  /// Whether ROM headers carry a game code (`IRBF`); without one, games are
+  /// identified by the SHA-1 of their ROM.
+  final bool hasCartridgeCode;
 
   /// `games.system` on the server.
   final String id;

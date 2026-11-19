@@ -292,7 +292,7 @@ class RetroArchMGBA extends RetroArch {
   @override
   String get name => 'RetroArch (mGBA)';
   @override
-  List<GameSystem> get systems => const [GameSystem.gba];
+  List<GameSystem> get systems => const [GameSystem.gba, GameSystem.gb];
 
   /// mGBA's project name (`library_name = projectName`).
   @override
@@ -301,4 +301,31 @@ class RetroArchMGBA extends RetroArch {
   String get coreBaseName => 'mgba_libretro';
   @override
   String get coreDownloadEntry => 'Nintendo - Game Boy Advance (mGBA)';
+}
+
+/// Gambatte (Game Boy and Game Boy Color). Its `.srm` is the cartridge RAM
+/// in 8 KiB banks; the clock goes to a separate `.rtc` file, not synced
+/// (docs/SPEC.md, "Game Boy et Game Boy Color").
+class RetroArchGambatte extends RetroArch {
+  RetroArchGambatte({
+    required super.settings,
+    super.platform,
+    super.home,
+    super.environment,
+    super.run,
+    super.searchPath,
+  });
+
+  @override
+  String get id => 'retroarch-gambatte';
+  @override
+  String get name => 'RetroArch (Gambatte)';
+  @override
+  List<GameSystem> get systems => const [GameSystem.gb];
+  @override
+  String get libraryName => 'Gambatte';
+  @override
+  String get coreBaseName => 'gambatte_libretro';
+  @override
+  String get coreDownloadEntry => 'Nintendo - Game Boy / Color (Gambatte)';
 }

@@ -387,6 +387,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get systemGba => 'Game Boy Advance';
 
   @override
+  String get systemGb => 'Game Boy et Game Boy Color';
+
+  @override
   String defaultEmulatorOf(String system) {
     return 'Émulateur par défaut ($system)';
   }

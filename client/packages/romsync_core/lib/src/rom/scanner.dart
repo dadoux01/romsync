@@ -116,6 +116,7 @@ class RomScanner {
     final RomHeader? header = switch (system) {
       GameSystem.nds => NdsHeader.parse(await file.readStart(NdsHeader.length)),
       GameSystem.gba => GbaHeader.parse(await file.readStart(GbaHeader.length)),
+      GameSystem.gb => GbHeader.parse(await file.readStart(GbHeader.length)),
     };
     final id = header != null && header.hasValidCode
         ? system.gameId(header.gameCode)

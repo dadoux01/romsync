@@ -360,9 +360,7 @@ class SyncEngine {
     if (GameSystem.ofGameId(entry.gameId) != GameSystem.nds) {
       try {
         if (!await _knowsConsoles()) {
-          throw SyncException(
-            CoreMessage(Msg.syncServerTooOldForConsole, {'version': ?_serverInfo?.version}),
-          );
+          throw SyncException(CoreMessage(Msg.syncServerTooOldForConsole, {'version': ?_serverInfo?.version}));
         }
       } on ServerUnreachableException {
         final local = await readLocal(entry.savePath, entry.profile);

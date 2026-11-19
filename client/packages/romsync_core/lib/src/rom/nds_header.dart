@@ -100,3 +100,28 @@ class GbaHeader implements RomHeader {
     );
   }
 }
+
+/// The title of a Game Boy or Game Boy Color ROM header (0x134, up to 16
+/// bytes; the last ones may be the CGB flag). There is no reliable game
+/// code: games are identified by the SHA-1 of their ROM (docs/SPEC.md,
+/// "Game Boy et Game Boy Color").
+class GbHeader implements RomHeader {
+  const GbHeader({required this.title});
+
+  /// Number of bytes needed to parse a header.
+  static const length = 0x150;
+
+  @override
+  final String title;
+
+  @override
+  String get gameCode => '';
+
+  @override
+  bool get hasValidCode => false;
+
+  static GbHeader? parse(List<int> bytes) {
+    if (bytes.length < length) return null;
+    return GbHeader(title: _ascii(bytes.sublist(0x134, 0x144)));
+  }
+}

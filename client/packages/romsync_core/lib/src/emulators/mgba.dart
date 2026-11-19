@@ -7,8 +7,9 @@ import '../rom/game_system.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
-/// mGBA standalone (Game Boy Advance), installed as a binary or as the
-/// `io.mgba.mGBA` Flatpak (docs/SPEC.md, "Game Boy Advance").
+/// mGBA standalone (Game Boy Advance, Game Boy and Game Boy Color),
+/// installed as a binary or as the `io.mgba.mGBA` Flatpak (docs/SPEC.md,
+/// "Game Boy Advance" and "Game Boy et Game Boy Color").
 ///
 /// Save files, as computed by mGBA (`mDirectorySetMapOptions` in
 /// src/core/directories.c, `mCoreAutoloadSave` in src/core/core.c): in the
@@ -25,9 +26,13 @@ class MGBA extends EmulatorBase {
   @override
   String get name => 'mGBA';
   @override
-  List<GameSystem> get systems => const [GameSystem.gba];
+  List<GameSystem> get systems => const [GameSystem.gba, GameSystem.gb];
   @override
   String get conversionProfileId => 'mgba';
+
+  /// The cartridge clock is 16 bytes on the GBA, 48 on the Game Boy.
+  @override
+  String conversionProfileFor(GameSystem system) => system == GameSystem.gb ? 'mgba-gb' : 'mgba';
 
   @override
   bool get supportsArchives => true;

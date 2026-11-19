@@ -238,6 +238,34 @@ void _scenario() {
     expect(game.chipSize, 32 << 10);
   });
 
+  test('10. a Game Boy save: mGBA uploads it with its clock, RetroArch (Gambatte) downloads the RAM', () async {
+    final profiles = await ProfileRegistry.loadDirectory(p.join('..', '..', '..', 'profiles'));
+    const gbId = 'gb:x:e2e-gb';
+    LibraryEntry entryFor(Device d, String emulator, String profileId, String file) => LibraryEntry(
+      rom: ScannedRom(file: PlainRomFile(p.join(d.dir, 'roms', 'Gb.gbc')), header: null, detectedId: gbId),
+      gameId: gbId,
+      savePath: p.join(d.dir, emulator, file),
+      profile: profiles[profileId]!,
+      emulator: emulator,
+      sharedWith: const [],
+      choice: null,
+    );
+
+    final ram = Uint8List.fromList(List.generate(32 << 10, (i) => (i * 11 + 3) & 0xFF));
+    final mgba = entryFor(a, 'mgba', 'mgba-gb', 'Gb.sav');
+    File(mgba.savePath)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([...ram, ...List.filled(48, 0x24)]) // MBC3 clock
+      ..setLastModifiedSync(base);
+    expect((await a.engine.prepare(mgba, chipSize: null)).uploaded, isTrue);
+    final active = (await a.api.active(gbId))!;
+    expect(active.size, ram.length);
+
+    final srm = entryFor(b, 'retroarch-gambatte', 'retroarch-gambatte', 'Gb.srm');
+    expect((await b.engine.prepare(srm, chipSize: active.size)).downloaded, isTrue);
+    expect(File(srm.savePath).readAsBytesSync(), ram);
+  });
+
   test('5. divergence: nothing is sent before the user chooses', () async {
     // B is behind (last synced on save 3) and played without syncing.
     final before = (await history()).length;

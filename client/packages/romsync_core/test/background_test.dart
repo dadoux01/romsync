@@ -123,7 +123,10 @@ void main() {
     expect(first.single.message.arg('title'), 'Pokémon Noire');
     expect(first.single.message.arg('device'), 'Asahi');
     expect(downloadNotices([(e, toDownload, remote(4, 'Asahi'))], notified), isEmpty, reason: 'once per version');
-    expect(downloadNotices([(e, toDownload, remote(5, null))], notified).single.message.code, Msg.noticeNewerSaveWebsite);
+    expect(
+      downloadNotices([(e, toDownload, remote(5, null))], notified).single.message.code,
+      Msg.noticeNewerSaveWebsite,
+    );
     expect(downloadNotices([(e, const SaveStatusInfo(SaveStatus.upToDate), remote(6, 'Asahi'))], notified), isEmpty);
   });
 }

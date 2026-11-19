@@ -326,9 +326,9 @@ class AppController extends ChangeNotifier {
     await rescan();
   }
 
-  /// Makes [id] the default emulator of its console.
-  Future<void> setDefaultEmulator(String id) async {
-    config.setDefaultEmulator(systemOfEmulator(id), id);
+  /// Makes [id] the default emulator of [system].
+  Future<void> setDefaultEmulator(GameSystem system, String id) async {
+    config.setDefaultEmulator(system, id);
     await _saveConfig();
     await rescan();
   }
@@ -416,7 +416,7 @@ class AppController extends ChangeNotifier {
       final reason = loc == null ? const CoreMessage(Msg.emuNotConfigured) : emu.cannotSync(r, loc);
       return SaveTarget(
         emulator: emu.id,
-        profile: profiles[emu.conversionProfileId]!,
+        profile: profiles[emu.conversionProfileFor(r.system)]!,
         savePath: reason == null ? emu.savePathFor(r, loc!) : null,
         unavailable: reason,
       );

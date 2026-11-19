@@ -22,10 +22,10 @@ void main() {
   });
 
   test('profiles name their consoles', () {
-    expect(profiles['raw']!.systems, ['nds', 'gba']);
+    expect(profiles['raw']!.systems, ['nds', 'gba', 'gb']);
     expect(profiles['desmume']!.systems, ['nds']);
     expect(profiles['mgba']!.systems, ['gba']);
-    expect(profiles['retroarch-mgba']!.systems, ['gba']);
+    expect(profiles['retroarch-mgba']!.systems, ['gba', 'gb']);
   });
 
   test("mGBA's cartridge clock is removed, never written", () {

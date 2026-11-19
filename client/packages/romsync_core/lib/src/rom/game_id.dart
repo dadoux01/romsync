@@ -13,11 +13,13 @@ abstract final class GameId {
   /// Whether [id] is a valid identifier.
   static bool isValid(String id) {
     final local = _local(id);
-    return _cartridge.hasMatch(local) || _romHash.hasMatch(local) || _custom.hasMatch(local);
+    return (GameSystem.ofGameId(id).hasCartridgeCode && _cartridge.hasMatch(local)) ||
+        _romHash.hasMatch(local) ||
+        _custom.hasMatch(local);
   }
 
   /// Whether [id] is a cartridge code (as opposed to h: or x:).
-  static bool isCartridge(String id) => _cartridge.hasMatch(_local(id));
+  static bool isCartridge(String id) => GameSystem.ofGameId(id).hasCartridgeCode && _cartridge.hasMatch(_local(id));
 
   /// The identifier derived from the SHA-1 of a ROM without a valid code.
   static String fromRomSha1(String sha1Hex, [GameSystem system = GameSystem.nds]) =>

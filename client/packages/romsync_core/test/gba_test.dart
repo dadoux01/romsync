@@ -74,8 +74,8 @@ void main() {
   group('emulators', () {
     test('each console has its emulators and its default', () {
       expect(emulatorIdsFor(GameSystem.gba), ['mgba', 'retroarch-mgba']);
-      expect(systemOfEmulator('retroarch-mgba'), GameSystem.gba);
-      expect(systemOfEmulator('desmume'), GameSystem.nds);
+      expect(systemsOfEmulator('retroarch-mgba'), [GameSystem.gba, GameSystem.gb]);
+      expect(systemsOfEmulator('desmume'), [GameSystem.nds]);
       final c = ClientConfig();
       expect(c.emulatorFor('gba:BPEF'), 'mgba');
       expect(c.emulatorFor('IRBF'), 'melonds');

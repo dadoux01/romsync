@@ -101,11 +101,12 @@ class _SettingsPageState extends State<SettingsPage> {
                       for (final id in emulatorIdsFor(system))
                         DropdownMenuItem(value: id, child: Text(emulatorName(id))),
                     ],
-                    onChanged: (id) => c.setDefaultEmulator(id!),
+                    onChanged: (id) => c.setDefaultEmulator(system, id!),
                   ),
                 ),
-                for (final id in emulatorIdsFor(system)) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
               ],
+              // Each emulator once, even when it serves several consoles.
+              for (final id in emulatorIds) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
               const Divider(),
               Text(l.tray, style: text.titleMedium),
               SwitchListTile(

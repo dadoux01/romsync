@@ -27,6 +27,16 @@ Uint8List fakeGbaRom({String title = 'TEST GBA', String code = 'BPEF', int size 
   return b;
 }
 
+/// Builds a fake Game Boy ROM of [size] bytes with [title] at 0x134.
+Uint8List fakeGbRom({String title = 'POKEMON RED', int size = 0x8000, int seed = 0}) {
+  final b = Uint8List(size);
+  for (var i = 0x150; i < size; i++) {
+    b[i] = (i * 13 + seed) & 0xFF;
+  }
+  b.setRange(0x134, 0x134 + title.length, title.codeUnits);
+  return b;
+}
+
 int _crc32(List<int> data) {
   var crc = 0xFFFFFFFF;
   for (final byte in data) {
