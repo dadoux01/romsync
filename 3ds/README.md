@@ -1,10 +1,19 @@
 # RomSync for the 3DS
 
 A homebrew app that syncs the saves of the DS games you play on a 3DS with
-TWiLight Menu++ and nds-bootstrap. It talks to the same RomSync server as
+TWiLight Menu++ and nds-bootstrap, and those of the 3DS games of the console
+(installed or on a cartridge). It talks to the same RomSync server as
 the desktop client, with the same rules (docs/SPEC.md, "Protocole de
 synchronisation"), so a save moves between the 3DS and melonDS, DeSmuME or
-RetroArch on a PC.
+RetroArch on a PC, or Azahar for 3DS games.
+
+**3DS games** (docs/SPEC.md, "Jeux 3DS") follow the DS ROMs in the list,
+marked `[3DS]`. Their save is read and written like Checkpoint does; before
+a download replaces it, the previous save is copied to
+`sd:/3ds/romsync/backup/3ds/<title ID>.<date>.tar`. A game must have created
+its save once (start it and save) before a save can be downloaded into it.
+Extra data ("extdata") is not synced. This part has not been tested on a
+console yet: keep a Checkpoint backup of your 3DS saves.
 
 - **Sync at startup**: RomSync first sends the saves you changed since the
   last start, then downloads the newer saves from the server (the replaced
@@ -65,7 +74,7 @@ the selected game and the keys.
 | Up/Down, Left/Right | Move, page by page |
 | A | Sync the selected game |
 | R | Sync all games |
-| X | Launch the game (needs YANBF) |
+| X | Launch the game (DS games: needs YANBF) |
 | Y | Share or separate the save, when several ROMs share an identifier |
 | SELECT | Settings: ROM folders, number of `.backup` copies, pairing |
 | START | Quit |
