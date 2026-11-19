@@ -26,11 +26,11 @@ typedef struct {
     rs_save_status status;
     bool synced;        /* a sync ran for this game since the start */
     bool error;         /* the last sync failed: see message */
-    bool conflict;      /* "conflit résolu automatiquement" on the server */
-    /* Two devices played without syncing and the user answered "Plus tard":
+    bool conflict;      /* "conflict resolved automatically" on the server */
+    /* Two devices played without syncing and the user answered "Later":
      * nothing was sent nor overwritten. */
     bool choice_pending;
-    char message[160];
+    char message[256]; /* as long as rs_error.message */
 } game_view;
 
 typedef struct {

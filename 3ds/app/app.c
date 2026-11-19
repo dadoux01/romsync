@@ -268,6 +268,7 @@ static void sync_game(app *a, int i, bool *offline)
 
     rs_prepare_result r;
     rs_error err = {0};
+    bool asked = false; /* the user just chose after a divergence */
     rs_status st = *offline ? rs_engine_offline_pass(&a->engine, &g->entry, &r, &err)
                             : rs_engine_prepare(&a->engine, &g->entry, 0, choice, &r, &err);
     if (st == RS_OK && r.needs_choice) {
@@ -279,6 +280,11 @@ static void sync_game(app *a, int i, bool *offline)
             rs_strlcpy(v->message, RS_TR(CHOICE_POSTPONED), sizeof v->message);
             return;
         }
+        /* Uploading then downloading takes a while: say what happens
+         * instead of leaving the question on screen. */
+        asked = true;
+        ui_progress(RS_TR(CHOICE_NEEDED),
+                    choice == RS_CHOICE_SERVER ? RS_TR(TAKING_SERVER_SAVE) : RS_TR(SENDING_LOCAL_SAVE));
         st = rs_engine_prepare(&a->engine, &g->entry, 0, choice, &r, &err);
         if (st == RS_OK && r.needs_choice) { /* another device uploaded meanwhile */
             v->choice_pending = true;
@@ -302,10 +308,15 @@ static void sync_game(app *a, int i, bool *offline)
         v->status = rs_queue_count_for(&a->queue, g->entry.save_path) ? RS_STATUS_TO_UPLOAD : RS_STATUS_OFFLINE;
     } else {
         v->status = rs_file_exists(g->entry.save_path) ? RS_STATUS_UP_TO_DATE : RS_STATUS_NO_SAVE;
-        if (r.downloaded)
+        if (asked)
+            rs_strlcpy(v->message, choice == RS_CHOICE_SERVER ? RS_TR(SERVER_SAVE_TAKEN) : RS_TR(LOCAL_SAVE_SENT),
+                       sizeof v->message);
+        else if (r.downloaded)
             rs_strlcpy(v->message, RS_TR(DOWNLOADED), sizeof v->message);
         else if (r.uploaded)
             rs_strlcpy(v->message, RS_TR(UPLOADED), sizeof v->message);
+        if (asked)
+            ui_message(RS_TR(CHOICE_NEEDED), v->message);
     }
 }
 

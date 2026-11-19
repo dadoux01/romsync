@@ -97,6 +97,14 @@
     "take the server one")
 #define RS_MSG_LATER(L) L("plus tard", \
     "later")
+#define RS_MSG_TAKING_SERVER_SAVE(L) L("Envoi de ta save comme ancienne version (inactive), puis téléchargement de celle du serveur...", \
+    "Sending your save as an old (inactive) version, then downloading the server one...")
+#define RS_MSG_SENDING_LOCAL_SAVE(L) L("Envoi de ta save : elle devient la save active...", \
+    "Sending your save: it becomes the active one...")
+#define RS_MSG_SERVER_SAVE_TAKEN(L) L("Save du serveur récupérée. Ta save de la console reste dans l'historique du site (version inactive, restaurable ou supprimable) et dans le dossier .backup.", \
+    "Server save retrieved. Your console save stays in the website history (inactive version, which you can restore or delete) and in the .backup folder.")
+#define RS_MSG_LOCAL_SAVE_SENT(L) L("Ta save de la console est envoyée : c'est la save active. Celle d'avant reste dans l'historique du site.", \
+    "Your console save is sent: it is the active one. The previous one stays in the website history.")
 #define RS_MSG_CHOICE_POSTPONED(L) L("Choix reporté : rien n'a été envoyé ni écrasé.", \
     "Choice postponed: nothing was sent nor overwritten.")
 #define RS_MSG_ANOTHER_SAVE_ARRIVED(L) L("Une autre save vient d'arriver : relance la synchronisation.", \
@@ -338,6 +346,10 @@
     X(SEND_MY_SAVE) \
     X(TAKE_SERVER) \
     X(LATER) \
+    X(TAKING_SERVER_SAVE) \
+    X(SENDING_LOCAL_SAVE) \
+    X(SERVER_SAVE_TAKEN) \
+    X(LOCAL_SAVE_SENT) \
     X(CHOICE_POSTPONED) \
     X(ANOTHER_SAVE_ARRIVED) \
     X(DOWNLOADED) \
