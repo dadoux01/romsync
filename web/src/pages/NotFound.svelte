@@ -1,6 +1,7 @@
 <script lang="ts">
   // Shown for unknown client-side routes.
+  import { t } from '../lib/i18n/index.svelte';
 </script>
 
-<h1>Page introuvable</h1>
-<p><a href="/">Retour à la liste des jeux</a></p>
+<h1>{t('notFound.title')}</h1>
+<p><a href="/">{t('notFound.back')}</a></p>

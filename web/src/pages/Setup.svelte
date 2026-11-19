@@ -2,6 +2,8 @@
   import { api } from '../lib/api';
   import { session } from '../lib/session.svelte';
   import { navigate } from '../lib/router.svelte';
+  import { t } from '../lib/i18n/index.svelte';
+  import LanguageSelect from '../components/LanguageSelect.svelte';
 
   let username = $state('');
   let password = $state('');
@@ -13,7 +15,7 @@
     e.preventDefault();
     error = '';
     if (password !== confirm) {
-      error = 'Les deux mots de passe ne correspondent pas.';
+      error = t('common.passwordsDiffer');
       return;
     }
     busy = true;
@@ -32,12 +34,13 @@
 <div class="auth-page">
   <form class="card stack" onsubmit={submit}>
     <div class="brand"><img src="/favicon.svg" alt="" />RomSync</div>
-    <h1>Premier démarrage</h1>
-    <p class="muted">Crée le compte administrateur. Les autres comptes seront créés par invitation.</p>
-    <label>Identifiant <input bind:value={username} autocomplete="username" required maxlength="32" /></label>
-    <label>Mot de passe <input type="password" bind:value={password} autocomplete="new-password" required minlength="8" /></label>
-    <label>Confirmation <input type="password" bind:value={confirm} autocomplete="new-password" required minlength="8" /></label>
+    <h1>{t('setup.title')}</h1>
+    <p class="muted">{t('setup.intro')}</p>
+    <label>{t('common.username')} <input bind:value={username} autocomplete="username" required maxlength="32" /></label>
+    <label>{t('common.password')} <input type="password" bind:value={password} autocomplete="new-password" required minlength="8" /></label>
+    <label>{t('common.confirmation')} <input type="password" bind:value={confirm} autocomplete="new-password" required minlength="8" /></label>
     {#if error}<p class="error">{error}</p>{/if}
-    <button class="primary" disabled={busy}>Créer le compte administrateur</button>
+    <button class="primary" disabled={busy}>{t('setup.submit')}</button>
+    <LanguageSelect compact />
   </form>
 </div>

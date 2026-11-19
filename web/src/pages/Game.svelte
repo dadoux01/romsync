@@ -2,7 +2,8 @@
   import { api, type Game, type Version } from '../lib/api';
   import { session } from '../lib/session.svelte';
   import { describeSizeEvent, formatDate, formatSize, relativeDate, shortHash } from '../lib/format';
-  import { REGIONS } from '../lib/saves';
+  import { regionName } from '../lib/saves';
+  import { t } from '../lib/i18n/index.svelte';
   import RetentionEditor from '../components/RetentionEditor.svelte';
 
   let { code }: { code: string } = $props();
@@ -21,7 +22,7 @@
       const games = await api.games();
       game = games.find((g) => g.code === code) ?? null;
       if (!game) {
-        error = 'Ce jeu n’existe pas dans ton compte.';
+        error = t('game.notFound');
         return;
       }
       const page = await api.versions(code);
@@ -54,17 +55,17 @@
   }
 
   function activate(v: Version) {
-    if (!confirm(`Restaurer la version du ${formatDate(v.saved_at)} ? Elle deviendra la save active, et les appareils la téléchargeront avant la prochaine partie.`)) return;
+    if (!confirm(t('game.confirmRestore', { date: formatDate(v.saved_at) }))) return;
     run(() => api.activate(v.id));
   }
 
   function remove(v: Version) {
-    if (!confirm(`Supprimer définitivement la version du ${formatDate(v.saved_at)} ? Elle disparaîtra de l’historique et ne pourra plus être restaurée.`)) return;
+    if (!confirm(t('game.confirmDelete', { date: formatDate(v.saved_at) }))) return;
     run(() => api.deleteVersion(v.id));
   }
 
   function editNote(v: Version) {
-    const note = prompt('Note pour cette version :', v.note);
+    const note = prompt(t('game.notePrompt'), v.note);
     if (note !== null) run(() => api.updateVersion(v.id, { note }));
   }
 
@@ -77,13 +78,13 @@
   // Where a divergent version started from: the version its device had
   // last synced (base_version_id), to see what happened at a glance.
   function baseLabel(v: Version): string {
-    if (v.base_version_id === null) return 'ne partait d’aucune version (premier envoi de cet appareil pour ce jeu)';
+    if (v.base_version_id === null) return t('game.base.none');
     const base = versions.find((x) => x.id === v.base_version_id);
-    if (!base) return `partait de la version n° ${v.base_version_id}, absente de l’historique affiché (supprimée ou plus ancienne)`;
-    return `partait de la version du ${formatDate(base.saved_at)} (${base.device_name ?? 'site web'})`;
+    if (!base) return t('game.base.missing', { id: v.base_version_id });
+    return t('game.base.from', { date: formatDate(base.saved_at), device: base.device_name ?? t('common.website') });
   }
 
-  // "Conflit résolu automatiquement": the latest upload diverged. The other
+  // "Conflict resolved automatically": the latest upload diverged. The other
   // candidate is that upload when it lost, or the most recent other version
   // when it won.
   const conflict = $derived.by(() => {
@@ -97,53 +98,54 @@
 
 {#if error}
   <p class="error">{error}</p>
-  <p><a href="/">Retour à la liste</a></p>
+  <p><a href="/">{t('game.backToList')}</a></p>
 {:else if !game}
-  <p class="muted">Chargement…</p>
+  <p class="muted">{t('common.loading')}</p>
 {:else}
-  <p class="small"><a href="/">← Jeux</a></p>
+  <p class="small"><a href="/">{t('game.back')}</a></p>
   <div class="spread">
     {#if editingTitle}
       <form class="row" onsubmit={saveTitle}>
-        <input bind:value={title} maxlength="128" required aria-label="Titre" />
-        <button class="primary">Renommer</button>
-        <button type="button" onclick={() => (editingTitle = false)}>Annuler</button>
+        <input bind:value={title} maxlength="128" required aria-label={t('game.titleLabel')} />
+        <button class="primary">{t('game.rename')}</button>
+        <button type="button" onclick={() => (editingTitle = false)}>{t('common.cancel')}</button>
       </form>
     {:else}
       <h1>
         {game.title}
-        <button class="link small" onclick={() => ((title = game!.title), (editingTitle = true))}>renommer</button>
+        <button class="link small" onclick={() => ((title = game!.title), (editingTitle = true))}>{t('game.renameLink')}</button>
       </h1>
     {/if}
-    <a class="button primary" href={`/import?game=${encodeURIComponent(code)}`}>Importer une save</a>
+    <a class="button primary" href={`/import?game=${encodeURIComponent(code)}`}>{t('games.import')}</a>
   </div>
   <p class="muted">
     <span class="mono">{game.code}</span>
-    {#if game.region}· {REGIONS[game.region] ?? `région ${game.region}`}{/if}
-    · taille de save {formatSize(game.chip_size)} · vu pour la première fois {relativeDate(game.first_seen_at)}
+    {#if game.region}· {regionName(game.region) ?? t('game.region', { region: game.region })}{/if}
+    · {t('game.summary', { size: formatSize(game.chip_size), seen: relativeDate(game.first_seen_at) })}
   </p>
 
   {#if actionError}<p class="error">{actionError}</p>{/if}
 
   {#if conflict}
     <div class="notice stack">
-      <strong>Conflit résolu automatiquement</strong>
+      <strong>{t('game.conflict.title')}</strong>
       <span>
-        La save envoyée le {formatDate(conflict.latest.uploaded_at)}
-        {conflict.latest.device_name ? `par ${conflict.latest.device_name}` : 'depuis le site'} ne partait pas de la version active.
-        {conflict.latest.is_active ? 'C’est elle qui est active' : 'Elle n’est pas active'} ; l’autre version est conservée dans l’historique.
+        {conflict.latest.device_name
+          ? t('game.conflict.byDevice', { date: formatDate(conflict.latest.uploaded_at), device: conflict.latest.device_name })
+          : t('game.conflict.fromSite', { date: formatDate(conflict.latest.uploaded_at) })}
+        {conflict.latest.is_active ? t('game.conflict.isActive') : t('game.conflict.notActive')}
       </span>
       {#if conflict.other && !conflict.other.is_active}
-        <div><button onclick={() => activate(conflict.other!)}>Activer l’autre version ({formatDate(conflict.other.saved_at)})</button></div>
+        <div><button onclick={() => activate(conflict.other!)}>{t('game.conflict.activateOther', { date: formatDate(conflict.other.saved_at) })}</button></div>
       {/if}
     </div>
   {/if}
 
-  <h2>Historique</h2>
+  <h2>{t('game.history')}</h2>
   <div class="card table-wrap">
     <table class="responsive">
       <thead>
-        <tr><th>Sauvegardé le</th><th>Origine</th><th>Taille</th><th>État</th><th></th></tr>
+        <tr><th>{t('game.col.savedAt')}</th><th>{t('game.col.origin')}</th><th>{t('game.col.size')}</th><th>{t('game.col.state')}</th><th></th></tr>
       </thead>
       <tbody>
         {#each versions as v (v.id)}
@@ -151,19 +153,19 @@
             <td>
               {formatDate(v.saved_at)}
               {#if v.saved_at_reported}
-                <span class="badge warn" title={`Date annoncée par l’appareil : ${formatDate(v.saved_at_reported)}`}>horloge corrigée</span>
+                <span class="badge warn" title={t('game.clockFixed.title', { date: formatDate(v.saved_at_reported) })}>{t('game.clockFixed')}</span>
               {/if}
               {#if v.note}<div class="muted small">{v.note}</div>{/if}
             </td>
             <td>
-              {v.device_name ?? 'site web'}
+              {v.device_name ?? t('common.website')}
               {#if v.emulator}<div class="muted small">{v.emulator}</div>{/if}
             </td>
             <td>
               {formatSize(v.size)}
               {#if v.size_event}
                 <span class="badge warn" title={describeSizeEvent(v.size_event, v.size)}>
-                  {v.size_event.type === 'trimmed' ? 'coupée' : v.size_event.type === 'shrunk' ? 'taille réduite' : 'taille forcée'}
+                  {v.size_event.type === 'trimmed' ? t('game.size.trimmed') : v.size_event.type === 'shrunk' ? t('game.size.shrunk') : t('game.size.forced')}
                 </span>
                 <div class="muted small">{describeSizeEvent(v.size_event, v.size)}</div>
               {/if}
@@ -171,30 +173,30 @@
             </td>
             <td>
               <div class="row">
-                {#if v.is_active}<span class="badge active">active</span>{/if}
-                {#if v.conflict}<span class="badge warn" title="Envoyée sans partir de la version active">divergente</span>{/if}
-                {#if v.pinned}<span class="badge">épinglée</span>{/if}
+                {#if v.is_active}<span class="badge active">{t('game.badge.active')}</span>{/if}
+                {#if v.conflict}<span class="badge warn" title={t('game.badge.divergent.title')}>{t('game.badge.divergent')}</span>{/if}
+                {#if v.pinned}<span class="badge">{t('game.badge.pinned')}</span>{/if}
               </div>
               {#if v.conflict}<div class="muted small">{baseLabel(v)}</div>{/if}
             </td>
             <td>
               <div class="row">
-                {#if !v.is_active}<button onclick={() => activate(v)}>Restaurer</button>{/if}
+                {#if !v.is_active}<button onclick={() => activate(v)}>{t('game.restore')}</button>{/if}
                 <button onclick={() => run(() => api.updateVersion(v.id, { pinned: !v.pinned }))}>
-                  {v.pinned ? 'Désépingler' : 'Épingler'}
+                  {v.pinned ? t('game.unpin') : t('game.pin')}
                 </button>
-                <button onclick={() => editNote(v)}>Note</button>
+                <button onclick={() => editNote(v)}>{t('game.note')}</button>
                 <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
                 <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
-                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title="Complétée avec 0xFF jusqu’à 512 Kio au moins, jamais coupée (format à vérifier selon la flashcard)">flashcard</a>
+                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title={t('game.flashcard.title')}>{t('game.flashcard')}</a>
                 {#if !v.is_active && !v.pinned}
-                  <button class="danger" onclick={() => remove(v)}>Supprimer</button>
+                  <button class="danger" onclick={() => remove(v)}>{t('game.delete')}</button>
                 {:else}
                   <button
                     class="danger"
                     disabled
-                    title={v.is_active ? 'La version active ne peut pas être supprimée : restaure d’abord une autre version.' : 'Désépingle-la d’abord pour pouvoir la supprimer.'}
-                  >Supprimer</button>
+                    title={v.is_active ? t('game.delete.active') : t('game.delete.pinned')}
+                  >{t('game.delete')}</button>
                 {/if}
               </div>
             </td>
@@ -204,10 +206,10 @@
     </table>
   </div>
   {#if nextBefore}
-    <p><button onclick={more}>Afficher les versions plus anciennes</button></p>
+    <p><button onclick={more}>{t('game.more')}</button></p>
   {/if}
 
-  <h2>Conservation des versions</h2>
+  <h2>{t('settings.retention')}</h2>
   <div class="card">
     <RetentionEditor
       value={game.retention_policy}

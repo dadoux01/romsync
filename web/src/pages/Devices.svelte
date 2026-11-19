@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { api, type Device } from '../lib/api';
   import { formatDate, relativeDate } from '../lib/format';
+  import { t } from '../lib/i18n/index.svelte';
 
   let devices = $state<Device[] | null>(null);
   let error = $state('');
@@ -17,7 +18,6 @@
     windows: 'Windows',
     android: 'Android',
     '3ds': '3DS',
-    other: 'Autre',
   };
 
   async function load() {
@@ -51,7 +51,7 @@
   }
 
   async function revoke(d: Device) {
-    if (!confirm(`Révoquer « ${d.name} » ? L’appareil devra être appairé à nouveau.`)) return;
+    if (!confirm(t('devices.confirmRevoke', { name: d.name }))) return;
     try {
       await api.revokeDevice(d.id);
       await load();
@@ -62,49 +62,50 @@
 </script>
 
 <div class="spread">
-  <h1>Appareils</h1>
-  <button class="primary" onclick={newCode}>Ajouter un appareil</button>
+  <h1>{t('devices.title')}</h1>
+  <button class="primary" onclick={newCode}>{t('devices.add')}</button>
 </div>
 
 {#if pair}
   <div class="card stack pair">
     {#if remaining > 0}
-      <p>Sur l’appareil, saisis l’adresse du serveur et ce code, puis donne-lui un nom :</p>
+      <p>{t('devices.pairHelp')}</p>
       <p class="code mono">{pair.code}</p>
       <p class="muted">
-        Serveur : <code>{location.origin}</code> · expire dans {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
+        {t('devices.server')} <code>{location.origin}</code> ·
+        {t('devices.expiresIn', { time: `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}` })}
       </p>
     {:else}
-      <p class="muted">Ce code a expiré.</p>
+      <p class="muted">{t('devices.expired')}</p>
     {/if}
-    <div><button onclick={() => (pair = null)}>Fermer</button></div>
+    <div><button onclick={() => (pair = null)}>{t('common.close')}</button></div>
   </div>
 {/if}
 
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if devices && devices.length === 0}
-  <p class="muted">Aucun appareil appairé.</p>
+  <p class="muted">{t('devices.none')}</p>
 {:else if devices}
   <div class="card table-wrap">
     <table class="responsive">
-      <thead><tr><th>Nom</th><th>Plateforme</th><th>Vu</th><th>Appairé le</th><th></th></tr></thead>
+      <thead><tr><th>{t('devices.col.name')}</th><th>{t('devices.col.platform')}</th><th>{t('devices.col.seen')}</th><th>{t('devices.col.paired')}</th><th></th></tr></thead>
       <tbody>
         {#each devices as d (d.id)}
           <tr class:revoked={d.revoked_at}>
             <td>
               <strong>{d.name}</strong>
-              {#if d.revoked_at}<span class="badge danger">révoqué</span>{/if}
+              {#if d.revoked_at}<span class="badge danger">{t('devices.revoked')}</span>{/if}
               {#if d.clock_skew_at && !d.revoked_at}
                 <div class="notice small">
-                  Horloge en avance détectée le {formatDate(d.clock_skew_at)} : la date de ses saves a été corrigée. Vérifie l’heure de cet appareil.
+                  {t('devices.clockSkew', { date: formatDate(d.clock_skew_at) })}
                 </div>
               {/if}
             </td>
-            <td>{PLATFORMS[d.platform] ?? d.platform}</td>
+            <td>{PLATFORMS[d.platform] ?? (d.platform === 'other' ? t('platform.other') : d.platform)}</td>
             <td title={formatDate(d.last_seen_at)}>{relativeDate(d.last_seen_at)}</td>
             <td>{formatDate(d.created_at)}</td>
-            <td>{#if !d.revoked_at}<button class="danger" onclick={() => revoke(d)}>Révoquer</button>{/if}</td>
+            <td>{#if !d.revoked_at}<button class="danger" onclick={() => revoke(d)}>{t('devices.revoke')}</button>{/if}</td>
           </tr>
         {/each}
       </tbody>

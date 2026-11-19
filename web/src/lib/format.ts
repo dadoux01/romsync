@@ -1,14 +1,23 @@
-const dateFmt = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+import { locale, t } from './i18n/index.svelte';
+
+// Formatters per locale, built once each.
+const cache = new Map<string, Intl.DateTimeFormat | Intl.RelativeTimeFormat | Intl.NumberFormat>();
+function cached<T extends Intl.DateTimeFormat | Intl.RelativeTimeFormat | Intl.NumberFormat>(key: string, make: () => T): T {
+  let f = cache.get(key);
+  if (!f) cache.set(key, (f = make()));
+  return f as T;
+}
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
-  return dateFmt.format(new Date(iso));
+  const l = locale();
+  return cached(`date:${l}`, () => new Intl.DateTimeFormat(l, { dateStyle: 'medium', timeStyle: 'short' })).format(new Date(iso));
 }
 
-const rtf = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' });
-
 export function relativeDate(iso: string | null | undefined, now = Date.now()): string {
-  if (!iso) return 'jamais';
+  if (!iso) return t('common.never');
+  const l = locale();
+  const rtf = cached(`rel:${l}`, () => new Intl.RelativeTimeFormat(l, { numeric: 'auto' }));
   const diff = (new Date(iso).getTime() - now) / 1000;
   const abs = Math.abs(diff);
   if (abs < 60) return rtf.format(Math.round(diff), 'second');
@@ -18,22 +27,26 @@ export function relativeDate(iso: string | null | undefined, now = Date.now()): 
   return formatDate(iso);
 }
 
+/** Binary units, with the decimal separator of the language ("1,5 Kio", "1.5 KiB"). */
 export function formatSize(bytes: number | null | undefined): string {
   if (bytes == null) return '—';
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${+(bytes / 1024).toFixed(1)} Kio`;
-  return `${+(bytes / 1024 / 1024).toFixed(1)} Mio`;
+  const l = locale();
+  const num = cached(`num:${l}`, () => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }));
+  if (bytes < 1024) return t('size.bytes', { n: num.format(bytes) });
+  if (bytes < 1024 * 1024) return t('size.kib', { n: num.format(bytes / 1024) });
+  return t('size.mib', { n: num.format(bytes / 1024 / 1024) });
 }
 
 /** Describes the size event of a version, for the history. */
 export function describeSizeEvent(e: { type: string; from: number }, size: number): string {
+  const params = { from: formatSize(e.from), size: formatSize(size) };
   switch (e.type) {
     case 'trimmed':
-      return `Reçue en ${formatSize(e.from)} : le remplissage a été coupé à ${formatSize(size)}.`;
+      return t('sizeEvent.trimmed', params);
     case 'shrunk':
-      return `Taille de save du jeu passée de ${formatSize(e.from)} à ${formatSize(size)} (le reste de la version active n’était que du remplissage).`;
+      return t('sizeEvent.shrunk', params);
     case 'forced':
-      return `Taille forcée depuis le site (avant : ${formatSize(e.from)}).`;
+      return t('sizeEvent.forced', params);
     default:
       return '';
   }
@@ -46,12 +59,12 @@ export function shortHash(hash: string): string {
 export function describePolicy(p: { mode: string; n?: number }): string {
   switch (p.mode) {
     case 'all':
-      return 'tout garder';
+      return t('policy.all');
     case 'last_n':
-      return `les ${p.n} dernières versions`;
+      return t('policy.lastN', { n: p.n ?? 0 });
     case 'days':
-      return `les versions de moins de ${p.n} jours`;
+      return t('policy.days', { n: p.n ?? 0 });
     default:
-      return 'intelligente';
+      return t('policy.smart');
   }
 }

@@ -1,3 +1,5 @@
+import { hasKey, t } from './i18n/index.svelte';
+
 // Detection of save formats and NDS ROM headers, done locally in the browser.
 
 const DESMUME_COOKIE = '|-DESMUME SAVE-|';
@@ -46,16 +48,8 @@ export function isValidGameCode(code: string): boolean {
   return GAME_CODE_RE.test(code);
 }
 
-/** Region names for the fourth character of a cartridge code. */
-export const REGIONS: Record<string, string> = {
-  E: 'USA',
-  P: 'Europe',
-  F: 'France',
-  D: 'Allemagne',
-  S: 'Espagne',
-  I: 'Italie',
-  J: 'Japon',
-  K: 'Corée',
-  U: 'Australie',
-  O: 'International',
-};
+/** Region name for the fourth character of a cartridge code, or null. */
+export function regionName(region: string | null | undefined): string | null {
+  const key = `region.${region}`;
+  return region && hasKey(key) ? t(key) : null;
+}

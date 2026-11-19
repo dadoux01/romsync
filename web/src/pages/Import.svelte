@@ -4,6 +4,7 @@
   import { describeSizeEvent, formatDate, formatSize } from '../lib/format';
   import { isDeSmuME, isValidGameCode, parseRomHeader, rawSize } from '../lib/saves';
   import { randomId } from '../lib/sha256';
+  import { t } from '../lib/i18n/index.svelte';
 
   let games = $state<Game[]>([]);
   let file = $state<File | null>(null);
@@ -56,7 +57,7 @@
     // Only the header is read, locally: the ROM never leaves the browser.
     const header = parseRomHeader(new Uint8Array(await f.slice(0, 512).arrayBuffer()));
     if (!header) {
-      error = 'Cette ROM n’a pas de code de jeu valide (homebrew ?) : saisis un identifiant x:nom.';
+      error = t('import.romNoCode');
       return;
     }
     error = '';
@@ -74,7 +75,7 @@
     e?.preventDefault();
     if (!data || !file) return;
     if (!isValidGameCode(code)) {
-      error = 'Identifiant de jeu invalide : 4 caractères (ex. IRBF), h:<sha1> ou x:nom-en-minuscules.';
+      error = t('import.invalidCode');
       return;
     }
     busy = true;
@@ -103,78 +104,72 @@
   }
 </script>
 
-<h1>Importer une save</h1>
-<p class="muted">
-  Pour une DS avec flashcard (DSTT, R4…) ou en dépannage : envoie un fichier <code>.sav</code> (brut) ou <code>.dsv</code>
-  (DeSmuME). Pour récupérer une save dans un format donné, ouvre le jeu et télécharge la version voulue.
-</p>
+<h1>{t('import.title')}</h1>
+<p class="muted">{@html t('import.intro.html')}</p>
 
 {#if result}
   <div class="card stack">
     {#if result.created}
-      <p class="success">Version importée{result.active ? ' et active' : ''}.</p>
-      {#if result.conflict}<p class="muted small">Elle ne partait pas de la version active : elle est marquée divergente.</p>{/if}
+      <p class="success">{result.active ? t('import.doneActive') : t('import.done')}</p>
+      {#if result.conflict}<p class="muted small">{t('import.divergent')}</p>{/if}
       {#if result.version.size_event}<p class="muted small">{describeSizeEvent(result.version.size_event, result.version.size)}</p>{/if}
     {:else}
-      <p>Cette save est identique à la version active : rien n’a été créé.</p>
+      <p>{t('import.identical')}</p>
     {/if}
     <div class="row">
-      <a class="button primary" href={`/games/${encodeURIComponent(result.version.game_code)}`}>Voir le jeu</a>
-      <button onclick={() => ((result = null), (file = null), (data = null))}>Importer une autre save</button>
+      <a class="button primary" href={`/games/${encodeURIComponent(result.version.game_code)}`}>{t('import.viewGame')}</a>
+      <button onclick={() => ((result = null), (file = null), (data = null))}>{t('import.another')}</button>
     </div>
   </div>
 {:else}
   <form class="card stack" onsubmit={(e) => submit(e)}>
     <label>
-      Fichier de save
+      {t('import.file')}
       <input type="file" accept=".sav,.dsv,.srm,application/octet-stream" onchange={pickSave} required />
     </label>
     {#if data}
       <p class="muted small">
-        Format détecté : <strong>{profile === 'desmume' ? 'DeSmuME (.dsv)' : 'brut (.sav)'}</strong> · save de
-        {formatSize(rawSize(data, profile))}
+        {t('import.detected')} <strong>{profile === 'desmume' ? t('import.format.desmume') : t('import.format.raw')}</strong> ·
+        {t('import.saveOf', { size: formatSize(rawSize(data, profile)) })}
       </p>
 
       <label>
-        Jeu
+        {t('import.game')}
         <select bind:value={target}>
-          {#if games.length > 0}<option value="" disabled>Choisir un jeu…</option>{/if}
+          {#if games.length > 0}<option value="" disabled>{t('import.chooseGame')}</option>{/if}
           {#each games as g (g.code)}
             <option value={g.code}>{g.title} ({g.code})</option>
           {/each}
-          <option value="__new__">Nouveau jeu…</option>
+          <option value="__new__">{t('import.newGame')}</option>
         </select>
       </label>
 
       {#if isNew}
         <div class="row">
-          <label>Identifiant <input bind:value={newCode} placeholder="IRBF" required class="mono" /></label>
-          <label style="flex: 1">Titre <input bind:value={newTitle} placeholder="Pokémon Noire" maxlength="128" /></label>
+          <label>{t('import.code')} <input bind:value={newCode} placeholder="IRBF" required class="mono" /></label>
+          <label style="flex: 1">{t('import.titleLabel')} <input bind:value={newTitle} placeholder={t('import.titlePlaceholder')} maxlength="128" /></label>
         </div>
       {/if}
       <label>
-        <span>Ou désigne la ROM <span class="muted small">(seul l’en-tête est lu, dans le navigateur ; rien n’est envoyé)</span></span>
+        <span>{t('import.rom')} <span class="muted small">{t('import.romHelp')}</span></span>
         <input type="file" accept=".nds,.dsi,.srl" onchange={pickRom} />
       </label>
 
       <label>
-        Date de la save
+        {t('import.date')}
         <input type="datetime-local" bind:value={savedAt} required />
       </label>
       {#if selected?.active_version}
-        <p class="muted small">Version active actuelle : {formatDate(selected.active_version.saved_at)}.</p>
+        <p class="muted small">{t('import.currentActive', { date: formatDate(selected.active_version.saved_at) })}</p>
       {/if}
-      <label class="inline"><input type="checkbox" bind:checked={makeActive} /> Rendre cette version active même si elle est plus ancienne</label>
+      <label class="inline"><input type="checkbox" bind:checked={makeActive} /> {t('import.makeActive')}</label>
 
       {#if error}<p class="error">{error}</p>{/if}
       {#if sizeMismatch}
-        <p class="notice">
-          La taille ne correspond pas à celle des saves de ce jeu ({formatSize(selected?.chip_size)}), et la différence
-          contient des données : ce n’est pas du simple remplissage. Vérifie que c’est le bon jeu avant de forcer.
-        </p>
-        <div><button type="button" class="danger" disabled={busy} onclick={(e) => submit(e as unknown as SubmitEvent, true)}>Forcer la nouvelle taille</button></div>
+        <p class="notice">{t('import.sizeMismatch', { size: formatSize(selected?.chip_size) })}</p>
+        <div><button type="button" class="danger" disabled={busy} onclick={(e) => submit(e as unknown as SubmitEvent, true)}>{t('import.force')}</button></div>
       {/if}
-      <div><button class="primary" disabled={busy || !code}>Importer</button></div>
+      <div><button class="primary" disabled={busy || !code}>{t('import.submit')}</button></div>
     {/if}
   </form>
 {/if}

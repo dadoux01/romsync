@@ -14,19 +14,21 @@
   import Admin from './pages/Admin.svelte';
   import NotFound from './pages/NotFound.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
+  import { syncDocumentLanguage, t } from './lib/i18n/index.svelte';
 
   onMount(loadSession);
+  $effect(syncDocumentLanguage);
 
   const invite = $derived(match('/invite/:token', route.path));
   const game = $derived(match('/games/:code', route.path));
   const path = $derived(route.path.replace(/\/+$/, '') || '/');
 
-  const nav = [
-    { href: '/', label: 'Jeux' },
-    { href: '/import', label: 'Importer' },
-    { href: '/devices', label: 'Appareils' },
-    { href: '/settings', label: 'Réglages' },
-  ];
+  const nav = $derived([
+    { href: '/', label: t('nav.games') },
+    { href: '/import', label: t('nav.import') },
+    { href: '/devices', label: t('nav.devices') },
+    { href: '/settings', label: t('nav.settings') },
+  ]);
 
   function isCurrent(href: string) {
     return href === '/' ? path === '/' || path.startsWith('/games') : path.startsWith(href);
@@ -43,7 +45,7 @@
 </script>
 
 {#if !session.ready}
-  <div class="auth-page"><p class="muted">Chargement…</p></div>
+  <div class="auth-page"><p class="muted">{t('common.loading')}</p></div>
 {:else if session.setupNeeded}
   <Setup />
 {:else if invite}
@@ -59,12 +61,12 @@
           <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>{item.label}</a>
         {/each}
         {#if session.user.role === 'admin'}
-          <a href="/admin" aria-current={isCurrent('/admin') ? 'page' : undefined}>Administration</a>
+          <a href="/admin" aria-current={isCurrent('/admin') ? 'page' : undefined}>{t('nav.admin')}</a>
         {/if}
       </nav>
       <div class="row user">
         <span class="muted small">{session.user.username}</span>
-        <button class="link small" onclick={logout}>Se déconnecter</button>
+        <button class="link small" onclick={logout}>{t('nav.logout')}</button>
       </div>
     </div>
   </header>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sha256Pure } from './sha256';
 import { isDeSmuME, parseRomHeader, isValidGameCode, rawSize } from './saves';
 import { formatSize } from './format';
+import { setLanguage } from './i18n/index.svelte';
 import { createHash } from 'node:crypto';
 
 const enc = new TextEncoder();
@@ -53,6 +54,7 @@ describe('save detection', () => {
 
 describe('formatSize', () => {
   it('uses binary units', () => {
+    setLanguage('fr');
     expect(formatSize(512)).toBe('512 o');
     expect(formatSize(8192)).toBe('8 Kio');
     expect(formatSize(524288)).toBe('512 Kio');

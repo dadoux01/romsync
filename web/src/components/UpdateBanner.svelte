@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import { isNewer } from '../lib/version';
+  import { t } from '../lib/i18n/index.svelte';
 
   // A discreet notice for the administrator when a newer release exists.
   // The server does not update itself: the image is updated by its owner
@@ -39,10 +40,10 @@
 {#if latest}
   <p class="notice small row update-banner">
     <span>
-      RomSync {latest.version} est disponible (serveur en {current}). Mets à jour l’image du serveur avant les applis.
-      <a href={latest.url} target="_blank" rel="noopener noreferrer">Notes de version</a>
+      {t('update.available', { latest: latest.version, current })}
+      <a href={latest.url} target="_blank" rel="noopener noreferrer">{t('update.notes')}</a>
     </span>
-    <button class="link small" onclick={dismiss}>Masquer</button>
+    <button class="link small" onclick={dismiss}>{t('update.hide')}</button>
   </p>
 {/if}
 

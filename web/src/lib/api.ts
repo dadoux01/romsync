@@ -1,5 +1,6 @@
 // Typed client of the RomSync API (see api/openapi.yaml).
 
+import { hasKey, t } from './i18n/index.svelte';
 import { randomId, sha256Hex } from './sha256';
 
 export interface RetentionPolicy {
@@ -94,16 +95,6 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
-const MESSAGES: Record<string, string> = {
-  unauthorized: 'Session expirée ou identifiants incorrects.',
-  forbidden: 'Action non autorisée.',
-  not_found: 'Introuvable.',
-  rate_limited: 'Trop de tentatives : réessaie dans une minute.',
-  too_large: 'Fichier trop volumineux.',
-  hash_mismatch: 'Le fichier a été altéré pendant l’envoi.',
-  expired: 'Ce lien ou ce code a expiré ou a déjà été utilisé.',
-  already_setup: 'Le serveur est déjà configuré.',
-};
 
 async function request<T>(method: string, path: string, init: { json?: unknown; body?: BodyInit; headers?: Record<string, string> } = {}): Promise<T> {
   const headers: Record<string, string> = { ...init.headers };
@@ -115,11 +106,13 @@ async function request<T>(method: string, path: string, init: { json?: unknown; 
   const res = await fetch(`/api/v1${path}`, { method, headers, body, credentials: 'same-origin' });
   if (!res.ok) {
     let code = 'internal';
-    let message = `Erreur ${res.status}`;
+    let message = t('error.http', { status: res.status });
     try {
       const err = (await res.json()).error;
       code = err.code;
-      message = MESSAGES[code] ?? err.message;
+      // The server's message is technical English: shown for unknown codes only.
+      const key = `error.${code}`;
+      message = hasKey(key) ? t(key) : err.message;
     } catch {
       /* not JSON */
     }
