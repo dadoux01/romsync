@@ -85,8 +85,8 @@
     "Set aside")
 #define RS_MSG_SEND(L) L("Envoyer", \
     "Send")
-#define RS_MSG_DIVERGENCE_TEXT(L) L("%s\n\nDeux appareils ont joué sans se synchroniser.\n- Serveur : save du %.10s à %.5s (%s).\n- Console : save modifiée depuis la dernière synchro, qui ne part pas de celle du serveur.\n\nEnvoyer la tienne : elle devient la save active.\nPrendre celle du serveur : la tienne reste dans l'historique du site et dans .backup.\nPlus tard : rien n'est envoyé ni écrasé.", \
-    "%s\n\nTwo devices played without syncing.\n- Server: save of %.10s at %.5s (%s).\n- Console: save changed since the last sync, which does not start from the server one.\n\nSend yours: it becomes the active save.\nTake the server one: yours stays in the website history and in .backup.\nLater: nothing is sent nor overwritten.")
+#define RS_MSG_DIVERGENCE_TEXT(L) L("%s\n\nDeux appareils ont joué sans se synchroniser.\n- Serveur : save du %.10s à %.5s (%s).\n- Console : save modifiée depuis la dernière synchro, qui ne part pas de celle du serveur.\n\nEnvoyer la tienne : elle devient la save active.\nPrendre celle du serveur : la tienne est quand même envoyée, comme ancienne version inactive (restaurable depuis le site), et copiée dans .backup.\nPlus tard : rien n'est envoyé ni écrasé.", \
+    "%s\n\nTwo devices played without syncing.\n- Server: save of %.10s at %.5s (%s).\n- Console: save changed since the last sync, which does not start from the server one.\n\nSend yours: it becomes the active save.\nTake the server one: yours is still sent, as an inactive old version (restorable from the website), and copied into .backup.\nLater: nothing is sent nor overwritten.")
 #define RS_MSG_WEBSITE(L) L("site web", \
     "website")
 #define RS_MSG_CHOICE_NEEDED(L) L("Choix à faire", \
