@@ -441,6 +441,15 @@ Trois façons d'accéder aux saves, avec la même logique de synchro : l'appli F
 - Import : glisser un `.sav` ou `.dsv` ; le site détecte le format (cookie DeSmuME en fin de fichier) et l'envoie avec `?profile=desmume` le cas échéant. Le nom d'un fichier de save ne donne pas le code du jeu : l'utilisateur choisit un jeu existant ou saisit un code. En option, il peut désigner le `.nds` correspondant : le navigateur lit localement les 512 premiers octets pour en tirer le code et le titre, et la ROM n'est jamais envoyée.
 - Export : télécharger la version active ou une ancienne version dans le format de la cible choisie (brut, DeSmuME, ou flashcard : brut complété à max(512 Kio, taille de puce), format à vérifier par modèle).
 
+**Langues**
+
+- Le site, l'appli et le homebrew 3DS existent en français et en anglais. Par défaut, chacun suit la langue de son environnement : celle du navigateur (`navigator.languages`), du système (appli) ou de la console (3DS). Une langue non prise en charge donne l'anglais.
+- L'utilisateur peut imposer une langue dans les réglages (« Langue du système » ou une langue précise) : gardée dans le navigateur pour le site (`localStorage`, choisie aussi depuis la page de connexion), dans `config.json` pour l'appli et le homebrew. Changer de langue s'applique tout de suite, sans redémarrer.
+- Le serveur ne traduit rien : il renvoie des codes d'erreur (`error.code`), que chaque interface traduit ; `error.message` reste un texte technique en anglais, affiché seulement pour un code inconnu.
+- Les cœurs (`romsync_core`, `3ds/core`) ne produisent pas de phrases : ils décrivent un problème ou un état par un code et ses paramètres (nom du jeu, chemin…), et l'interface en fait une phrase dans la langue choisie.
+- Chaque langue a toutes les clés de la langue de référence (le français) : un test le vérifie pour chaque interface. Sur 3DS, les textes ne contiennent que des caractères de la page de code CP437 de la console (le test le vérifie aussi).
+- Dates, heures et tailles sont formatées selon la langue (« 1,5 Mio » en français, « 1.5 MiB » en anglais).
+
 ## Dépôt, roadmap et questions ouvertes
 
 Un seul dépôt (monorepo) contient le serveur, le site, l'appli et le homebrew, pour que l'API et les profils de conversion restent alignés.
