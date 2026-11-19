@@ -17,7 +17,9 @@ import (
 //
 //	2: X-Activate (choice after a divergence), chip_size on GET /active,
 //	   DELETE /versions/{id}, update relay.
-const APILevel = 2
+//	3: consoles other than the DS (prefixed game identifiers, "system" of
+//	   each game, ?system= on GET /games, the mgba profile).
+const APILevel = 3
 
 // MinClientVersion is the oldest client this server works with.
 const MinClientVersion = "0.4.0"

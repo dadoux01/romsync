@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"testing"
+
+	"github.com/dadoux01/romsync/server/internal/systems"
 )
 
 const (
@@ -27,16 +29,19 @@ func padded(data []byte, total int, fill byte) []byte {
 
 func noActive() ([]byte, error) { return nil, nil }
 
+// nds tells the valid chip sizes of the Nintendo DS.
+var nds = systems.NDS.IsValidChipSize
+
 func activeIs(b []byte) func() ([]byte, error) { return func() ([]byte, error) { return b, nil } }
 
 func TestIsValidChipSize(t *testing.T) {
 	for _, n := range []int64{512, 8192, 32768, 65536, 524288, 1 << 20, 8 << 20, 64 << 20} {
-		if !IsValidChipSize(n) {
+		if !nds(n) {
 			t.Errorf("%d must be valid", n)
 		}
 	}
 	for _, n := range []int64{0, 511, 40000, 100000, 3 << 20} {
-		if IsValidChipSize(n) {
+		if nds(n) {
 			t.Errorf("%d must be invalid", n)
 		}
 	}
@@ -60,7 +65,7 @@ func TestIsPadding(t *testing.T) {
 }
 
 func TestFirstSaveSetsChipSize(t *testing.T) {
-	r, err := ResolveSize(game(k512), 0, noActive, false)
+	r, err := ResolveSize(game(k512), 0, noActive, false, nds)
 	if err != nil || r.ChipSize != k512 || r.Event != nil || len(r.Data) != k512 {
 		t.Fatalf("got %+v %v", r, err)
 	}
@@ -70,11 +75,11 @@ func TestFirstSaveSetsChipSize(t *testing.T) {
 // never be cut without a smaller upload.
 func TestHalfBlankSaveIsNeverCut(t *testing.T) {
 	half := padded(game(k512/2), k512, 0xFF)
-	r, err := ResolveSize(half, 0, noActive, false)
+	r, err := ResolveSize(half, 0, noActive, false, nds)
 	if err != nil || r.ChipSize != k512 || len(r.Data) != k512 || r.Event != nil {
 		t.Fatalf("first upload: %+v %v", r, err)
 	}
-	r, err = ResolveSize(half, k512, activeIs(half), false)
+	r, err = ResolveSize(half, k512, activeIs(half), false, nds)
 	if err != nil || r.ChipSize != k512 || len(r.Data) != k512 || r.Event != nil {
 		t.Fatalf("same-size upload: %+v %v", r, err)
 	}
@@ -83,7 +88,7 @@ func TestHalfBlankSaveIsNeverCut(t *testing.T) {
 func TestLargerUploadWithPaddingIsTrimmed(t *testing.T) {
 	for _, fill := range []byte{0xFF, 0x00} {
 		data := game(k64)
-		r, err := ResolveSize(padded(data, k512, fill), k64, nil, false)
+		r, err := ResolveSize(padded(data, k512, fill), k64, nil, false, nds)
 		if err != nil || !bytes.Equal(r.Data, data) || r.ChipSize != k64 ||
 			r.Event == nil || *r.Event != (SizeEvent{Type: SizeTrimmed, From: k512}) {
 			t.Fatalf("fill %#x: %+v %v", fill, r, err)
@@ -92,10 +97,10 @@ func TestLargerUploadWithPaddingIsTrimmed(t *testing.T) {
 }
 
 func TestLargerUploadWithDataIsRefused(t *testing.T) {
-	if _, err := ResolveSize(game(k512), k64, nil, false); !errors.Is(err, ErrSizeMismatch) {
+	if _, err := ResolveSize(game(k512), k64, nil, false, nds); !errors.Is(err, ErrSizeMismatch) {
 		t.Fatalf("got %v", err)
 	}
-	r, err := ResolveSize(game(k512), k64, nil, true)
+	r, err := ResolveSize(game(k512), k64, nil, true, nds)
 	if err != nil || r.ChipSize != k512 || *r.Event != (SizeEvent{Type: SizeForced, From: k64}) {
 		t.Fatalf("forced: %+v %v", r, err)
 	}
@@ -104,21 +109,21 @@ func TestLargerUploadWithDataIsRefused(t *testing.T) {
 func TestSmallerUpload(t *testing.T) {
 	// The active version's excess is padding: the chip size shrinks.
 	active := padded(game(k64), k512, 0xFF)
-	r, err := ResolveSize(game(k64), k512, activeIs(active), false)
+	r, err := ResolveSize(game(k64), k512, activeIs(active), false, nds)
 	if err != nil || r.ChipSize != k64 || *r.Event != (SizeEvent{Type: SizeShrunk, From: k512}) {
 		t.Fatalf("got %+v %v", r, err)
 	}
 	// The active version has data beyond the new size: refused.
-	if _, err := ResolveSize(game(k64), k512, activeIs(game(k512)), false); !errors.Is(err, ErrSizeMismatch) {
+	if _, err := ResolveSize(game(k64), k512, activeIs(game(k512)), false, nds); !errors.Is(err, ErrSizeMismatch) {
 		t.Fatalf("got %v", err)
 	}
 	// No active version yet (size from the database): accepted when the
 	// new size is a real chip size, and traced.
-	r, err = ResolveSize(game(32<<10), k64, noActive, false)
+	r, err = ResolveSize(game(32<<10), k64, noActive, false, nds)
 	if err != nil || r.ChipSize != 32<<10 || *r.Event != (SizeEvent{Type: SizeShrunk, From: k64}) {
 		t.Fatalf("got %+v %v", r, err)
 	}
-	if _, err := ResolveSize(game(40000), k64, noActive, false); !errors.Is(err, ErrSizeMismatch) {
+	if _, err := ResolveSize(game(40000), k64, noActive, false, nds); !errors.Is(err, ErrSizeMismatch) {
 		t.Fatalf("40000 bytes is not a chip size: %v", err)
 	}
 }
@@ -129,16 +134,27 @@ func TestFlashcardThenEmulatorConverges(t *testing.T) {
 	save := game(k64)
 	dstt := padded(save, k512, 0xFF)
 
-	r1, err := ResolveSize(dstt, 0, noActive, false)
+	r1, err := ResolveSize(dstt, 0, noActive, false, nds)
 	if err != nil || r1.ChipSize != k512 {
 		t.Fatalf("DSTT first: %+v %v", r1, err)
 	}
-	r2, err := ResolveSize(game(k64), r1.ChipSize, activeIs(r1.Data), false)
+	r2, err := ResolveSize(game(k64), r1.ChipSize, activeIs(r1.Data), false, nds)
 	if err != nil || r2.ChipSize != k64 || r2.Event.Type != SizeShrunk {
 		t.Fatalf("melonDS: %+v %v", r2, err)
 	}
-	r3, err := ResolveSize(dstt, r2.ChipSize, activeIs(r2.Data), false)
+	r3, err := ResolveSize(dstt, r2.ChipSize, activeIs(r2.Data), false, nds)
 	if err != nil || r3.ChipSize != k64 || !bytes.Equal(r3.Data, save) || r3.Event.Type != SizeTrimmed {
 		t.Fatalf("DSTT again: %+v %v", r3, err)
+	}
+}
+
+func TestGBAChipSizes(t *testing.T) {
+	// A GBA save without an active version is accepted only at a GBA chip size.
+	gba := systems.GBA.IsValidChipSize
+	if _, err := ResolveSize(game(32<<10), 128<<10, noActive, false, gba); err != nil {
+		t.Errorf("32 KiB SRAM: %v", err)
+	}
+	if _, err := ResolveSize(game(256<<10), 512<<10, noActive, false, gba); !errors.Is(err, ErrSizeMismatch) {
+		t.Errorf("256 KiB is not a GBA chip: %v", err)
 	}
 }

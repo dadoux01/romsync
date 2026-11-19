@@ -8,40 +8,24 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/dadoux01/romsync/server/internal/retention"
+	"github.com/dadoux01/romsync/server/internal/systems"
 )
 
-// Accepted game identifiers (see docs/SPEC.md, "Identification des jeux").
-var (
-	cartridgeCodeRE = regexp.MustCompile(`^[A-Z0-9]{4}$`)
-	romHashCodeRE   = regexp.MustCompile(`^h:[0-9a-f]{40}$`)
-	customCodeRE    = regexp.MustCompile(`^x:[a-z0-9-]{1,32}$`)
-)
-
-func validGameCode(code string) bool {
-	return cartridgeCodeRE.MatchString(code) || romHashCodeRE.MatchString(code) || customCodeRE.MatchString(code)
-}
-
-// gameRegion returns the region letter of a cartridge code, or nil.
-func gameRegion(code string) *string {
-	if !cartridgeCodeRE.MatchString(code) {
-		return nil
-	}
-	r := code[3:]
-	return &r
-}
-
-// gameCodeParam returns the decoded and validated {code} path parameter.
+// gameCodeParam returns the decoded and validated {code} path parameter
+// (docs/SPEC.md, "Identification des jeux" and "Multi-consoles").
 func gameCodeParam(r *http.Request) (string, error) {
 	code, err := url.PathUnescape(chi.URLParam(r, "code"))
-	if err != nil || !validGameCode(code) {
-		return "", errInvalid("invalid game identifier (expected ABCD, h:<sha1> or x:<name>)")
+	if err != nil {
+		return "", errInvalid("invalid game identifier")
+	}
+	if _, _, ok := systems.Parse(code); !ok {
+		return "", errInvalid("invalid game identifier (expected ABCD, h:<sha1> or x:<name>, prefixed by the console: gba:ABCD)")
 	}
 	return code, nil
 }
@@ -59,6 +43,7 @@ func validTitle(t string) (string, error) {
 // gameJSON is the public representation of a game.
 type gameJSON struct {
 	Code            string            `json:"code"`
+	System          string            `json:"system"`
 	Title           string            `json:"title"`
 	Region          *string           `json:"region"`
 	ChipSize        *int64            `json:"chip_size"`
@@ -75,7 +60,7 @@ type gameRow struct {
 	gameJSON
 }
 
-const gameSelect = `SELECT g.id, g.game_code, g.title, g.region, g.chip_size, g.first_seen_at, g.retention_policy,
+const gameSelect = `SELECT g.id, g.game_code, g.system, g.title, g.region, g.chip_size, g.first_seen_at, g.retention_policy,
 	(SELECT COUNT(*) FROM save_versions v WHERE v.game_id = g.id),
 	COALESCE((SELECT v.conflict FROM save_versions v WHERE v.game_id = g.id ORDER BY v.uploaded_at DESC, v.id DESC LIMIT 1), 0)
 	FROM games g`
@@ -83,7 +68,7 @@ const gameSelect = `SELECT g.id, g.game_code, g.title, g.region, g.chip_size, g.
 func scanGame(row interface{ Scan(...any) error }) (gameRow, error) {
 	var g gameRow
 	var policy *string
-	if err := row.Scan(&g.ID, &g.Code, &g.Title, &g.Region, &g.ChipSize, &g.FirstSeenAt, &policy,
+	if err := row.Scan(&g.ID, &g.Code, &g.System, &g.Title, &g.Region, &g.ChipSize, &g.FirstSeenAt, &policy,
 		&g.VersionCount, &g.Conflict); err != nil {
 		return g, err
 	}
@@ -109,10 +94,12 @@ func (s *Server) loadGame(ctx context.Context, q execer, userID int64, code stri
 	return g, err
 }
 
-// queryGames lists the user's games. The rows are closed before returning:
-// the single database connection is needed for the next queries.
-func (s *Server) queryGames(ctx context.Context, userID int64) ([]gameRow, error) {
-	rows, err := s.db.QueryContext(ctx, gameSelect+` WHERE g.user_id = ? ORDER BY g.title COLLATE NOCASE, g.game_code`, userID)
+// queryGames lists the user's games, of one console when system is not
+// empty. The rows are closed before returning: the single database
+// connection is needed for the next queries.
+func (s *Server) queryGames(ctx context.Context, userID int64, system string) ([]gameRow, error) {
+	rows, err := s.db.QueryContext(ctx, gameSelect+` WHERE g.user_id = ? AND (? = '' OR g.system = ?)
+		ORDER BY g.title COLLATE NOCASE, g.game_code`, userID, system, system)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +119,11 @@ func (s *Server) queryGames(ctx context.Context, userID int64) ([]gameRow, error
 func (s *Server) listGames(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	p := principalFrom(ctx)
-	games, err := s.queryGames(ctx, p.UserID)
+	system := r.URL.Query().Get("system")
+	if _, ok := systems.ByID(system); system != "" && !ok {
+		return errInvalid("unknown system")
+	}
+	games, err := s.queryGames(ctx, p.UserID, system)
 	if err != nil {
 		return err
 	}

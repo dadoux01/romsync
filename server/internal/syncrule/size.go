@@ -31,23 +31,6 @@ type SizeResult struct {
 	Event    *SizeEvent // nil when nothing was cut or changed
 }
 
-// ValidChipSizes are the save sizes of DS cartridges: the sizes known to
-// DeSmuME and melonDS (EEPROM, FRAM, flash and NAND).
-var ValidChipSizes = []int64{
-	512, 8 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10, 512 << 10,
-	1 << 20, 2 << 20, 4 << 20, 8 << 20, 16 << 20, 32 << 20, 64 << 20,
-}
-
-// IsValidChipSize reports whether n is the size of a DS save chip.
-func IsValidChipSize(n int64) bool {
-	for _, s := range ValidChipSizes {
-		if s == n {
-			return true
-		}
-	}
-	return false
-}
-
 // IsPadding reports whether b is non-empty and made of a single 0xFF or 0x00
 // byte value.
 func IsPadding(b []byte) bool {
@@ -67,11 +50,12 @@ func IsPadding(b []byte) bool {
 
 // ResolveSize reconciles an upload with the game's chip size (0 when not
 // known yet). active returns the content of the active version, or nil when
-// the game has none; it is only called when the upload is smaller.
+// the game has none; it is only called when the upload is smaller. valid
+// tells whether a size is a save chip size of the game's console.
 //
 // A save is never cut on the sole basis of its padding: it is only cut down
 // to a chip size that is already known.
-func ResolveSize(data []byte, chip int64, active func() ([]byte, error), force bool) (SizeResult, error) {
+func ResolveSize(data []byte, chip int64, active func() ([]byte, error), force bool, valid func(int64) bool) (SizeResult, error) {
 	n := int64(len(data))
 	switch {
 	case chip == 0 || n == chip:
@@ -90,7 +74,7 @@ func ResolveSize(data []byte, chip int64, active func() ([]byte, error), force b
 		// Without an active version (chip size from the database, first
 		// save), nothing can be lost by accepting the smaller size, provided
 		// it is a real chip size.
-		if (act == nil && IsValidChipSize(n)) || (act != nil && int64(len(act)) > n && IsPadding(act[n:])) {
+		if (act == nil && valid(n)) || (act != nil && int64(len(act)) > n && IsPadding(act[n:])) {
 			return SizeResult{Data: data, ChipSize: n, Event: &SizeEvent{Type: SizeShrunk, From: chip}}, nil
 		}
 	}

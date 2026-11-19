@@ -19,6 +19,7 @@ import (
 	"github.com/dadoux01/romsync/server/internal/convert"
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/syncrule"
+	"github.com/dadoux01/romsync/server/internal/systems"
 )
 
 // versionJSON is the public representation of a save version.
@@ -297,7 +298,7 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 	if blobs.Sum(body) != req.sha256 {
 		return errHashMismatch()
 	}
-	data, err := s.decodeUpload(r, body)
+	data, err := s.decodeUpload(r, body, code)
 	if err != nil {
 		return err
 	}
@@ -349,7 +350,8 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 				}
 				return s.blobs.Read(g.ActiveVersion.SHA256)
 			}
-			sized, err := syncrule.ResolveSize(data, chip, activeData, req.forceSize)
+			sys, _, _ := systems.Parse(code)
+			sized, err := syncrule.ResolveSize(data, chip, activeData, req.forceSize, sys.IsValidChipSize)
 			if errors.Is(err, syncrule.ErrSizeMismatch) {
 				return errSizeMismatch(fmt.Sprintf("this game's saves are %d bytes, got %d", chip, len(data)))
 			}
@@ -433,8 +435,9 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// profileParam returns the conversion profile of ?profile= (raw by default).
-func profileParam(r *http.Request) (convert.Profile, error) {
+// profileParam returns the conversion profile of ?profile= (raw by default),
+// which must convert saves of the console of game code.
+func profileParam(r *http.Request, code string) (convert.Profile, error) {
 	id := r.URL.Query().Get("profile")
 	if id == "" {
 		id = "raw"
@@ -443,12 +446,15 @@ func profileParam(r *http.Request) (convert.Profile, error) {
 	if !ok {
 		return nil, errInvalid("unknown profile (expected one of " + strings.Join(convert.IDs(), ", ") + ")")
 	}
+	if sys, _, _ := systems.Parse(code); !convert.Supports(id, sys.ID) {
+		return nil, errInvalid("the " + id + " profile does not convert " + sys.ID + " saves")
+	}
 	return p, nil
 }
 
 // decodeUpload converts the uploaded file to the canonical raw format.
-func (s *Server) decodeUpload(r *http.Request, body []byte) ([]byte, error) {
-	p, err := profileParam(r)
+func (s *Server) decodeUpload(r *http.Request, body []byte, code string) ([]byte, error) {
+	p, err := profileParam(r, code)
 	if err != nil {
 		return nil, err
 	}
@@ -461,11 +467,11 @@ func (s *Server) decodeUpload(r *http.Request, body []byte) ([]byte, error) {
 
 // GET /versions/{id}/export?profile=desmume
 func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
-	prof, err := profileParam(r)
+	v, gameID, err := s.versionParam(r)
 	if err != nil {
 		return err
 	}
-	v, gameID, err := s.versionParam(r)
+	prof, err := profileParam(r, v.GameCode)
 	if err != nil {
 		return err
 	}
@@ -509,13 +515,15 @@ func (s *Server) loadOrCreateGame(ctx context.Context, tx *sql.Tx, userID int64,
 	if title == "" {
 		title = code
 	}
-	// The save size database, when it knows the game, sets the chip size.
+	// The save size database of the DS, when it knows the game, sets the
+	// chip size; other consoles take the size of their first save.
+	sys, _, _ := systems.Parse(code)
 	var chip any
-	if n, ok := chipdb.Size(code); ok {
+	if n, ok := chipdb.Size(code); ok && sys == systems.NDS {
 		chip = n
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO games (user_id, game_code, title, region, chip_size, first_seen_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		userID, code, title, gameRegion(code), chip, db.FormatTime(now)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO games (user_id, game_code, system, title, region, chip_size, first_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		userID, code, sys.ID, title, systems.Region(code), chip, db.FormatTime(now)); err != nil {
 		return g, err
 	}
 	return s.loadGame(ctx, tx, userID, code)

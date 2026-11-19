@@ -388,6 +388,12 @@ paths:
       operationId: listGames
       summary: List games and their active version
       security: [{ session: [] }, { device: [] }]
+      parameters:
+        - name: system
+          in: query
+          required: false
+          description: Only the games of this console (API level 3).
+          schema: { $ref: "#/components/schemas/System" }
       responses:
         "200":
           description: Games, sorted by title
@@ -1000,25 +1006,32 @@ components:
 
     GameCode:
       type: string
-      pattern: "^([A-Z0-9]{4}|h:[0-9a-f]{40}|x:[a-z0-9-]{1,32})$"
-      examples: ["IRBF"]
+      description: A cartridge code, `h:<SHA-1 of the ROM>` or `x:<name>`; prefixed by the console except for the Nintendo DS (`gba:BPEF`, API level 3).
+      pattern: "^(gba:)?([A-Z0-9]{4}|h:[0-9a-f]{40}|x:[a-z0-9-]{1,32})$"
+      examples: ["IRBF", "gba:BPEF"]
+
+    System:
+      type: string
+      enum: [nds, gba]
+      description: Console of a game (docs/SPEC.md, "Multi-consoles").
 
     ProfileID:
       type: string
-      enum: [raw, desmume, flashcard]
+      enum: [raw, desmume, flashcard, mgba]
       default: raw
-      description: "`raw`: the save chip content (melonDS). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to max(512 KiB, chip size), never cut (to verify per flashcard model)."
+      description: "`raw`: the save chip content (melonDS, RetroArch). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to max(512 KiB, chip size), never cut (to verify per flashcard model). `mgba` (GBA): mGBA's `.sav`, whose 16-byte cartridge clock is removed on upload and not written on export. A profile only converts the saves of its consoles (`desmume` and `flashcard`: DS; `mgba`: GBA; `raw`: both)."
 
     Game:
       type: object
-      required: [code, title, region, chip_size, first_seen_at, retention_policy, version_count, conflict, active_version]
+      required: [code, system, title, region, chip_size, first_seen_at, retention_policy, version_count, conflict, active_version]
       properties:
         code: { $ref: "#/components/schemas/GameCode" }
+        system: { $ref: "#/components/schemas/System" }
         title: { type: string }
         region:
           type: [string, "null"]
           description: Fourth character of a cartridge code (F France, E USA, P Europe, J Japan…).
-        chip_size: { type: [integer, "null"], description: "Save size in bytes: from the save size database, else from the first save; changed by the size rules." }
+        chip_size: { type: [integer, "null"], description: "Save size in bytes: from the save size database (DS), else from the first save; changed by the size rules." }
         first_seen_at: { $ref: "#/components/schemas/Timestamp" }
         retention_policy:
           description: "`null` when the game inherits the account policy."
