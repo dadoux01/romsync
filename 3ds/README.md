@@ -243,14 +243,17 @@ decisions. The differences are 3DS rules: the date of a save
   against the official test vectors) rather than taken from mbedtls: one
   dependency less on Linux, and they are a good read.
 - **Errors**: every function that can fail returns an `rs_status` and fills
-  an optional `rs_error` with a French message for the user. No global
-  error state.
+  an optional `rs_error` with a message for the user, in the language set by
+  `rs_set_language` (texts in `core/msg.h` and `app/text.h`, each a macro
+  holding the French and English versions, so that GCC checks the printf
+  arguments of both). No global error state.
 - **Memory**: growable buffers (`rs_buf`) and small `realloc`'ed arrays;
   every structure has its `_free`/`_close`. Tests run under AddressSanitizer
   in CI and under valgrind locally without leaks.
 - **Text console** (libctru's `PrintConsole`) rather than graphics: simple to
   read and change. Its 8x8 font is code page 437, so `ui_print` converts the
-  French accents from UTF-8 (`app/ui.c`).
+  French accents from UTF-8 (`core/cp437.c`; `tests/test_msg.c` checks that
+  every text can be shown).
 - **Files**: plain `stdio`. Writes go through a temporary file then a rename;
   the 3DS refuses to rename over an existing file, so the old one is removed
   first (`rs_write_file_atomic`).

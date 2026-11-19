@@ -17,7 +17,10 @@ et un homebrew 3DS (C). Les phases 1 à 4 de la roadmap sont livrées.
 ## Méthode de travail
 
 - Communiquer en français (accents compris) ; code, commentaires, README et
-  CONTRIBUTING en anglais ; interfaces (site, appli) en français.
+  CONTRIBUTING en anglais ; interfaces (site, appli, 3DS) en français et en
+  anglais (section « Langues » de la spec) : tout nouveau texte s'ajoute dans
+  les deux langues (`web/src/lib/i18n/`, `client/app/lib/l10n/app_*.arb` puis
+  `flutter gen-l10n`, `3ds/core/msg.h` ou `3ds/app/text.h`).
 - Nouvelle phase : présenter un plan découpé en étapes et **attendre la
   validation** avant de coder.
 - Un commit par étape, au format Conventional Commits (`feat(server): …`,
@@ -148,6 +151,12 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
   clients (`requiredServerApiLevel`, `RS_REQUIRED_API_LEVEL`).
 - Les fichiers de test réels (pieds de `.dsv`) ne contiennent que des tailles
   et le cookie : ne jamais versionner de save de jeu commercial.
+- Langues : `romsync_core` ne renvoie que des `CoreMessage` (code + paramètres) ;
+  un nouveau code de `Msg` demande une clé `core…` dans les ARB et une ligne
+  dans `coreText` (le `switch` exhaustif le signale). Les tests de l'appli et
+  du site qui cherchent un texte fixent la langue (`app(..., locale:)`,
+  `setLanguage`), le système de la machine de test pouvant être en anglais.
+  Sur 3DS, un texte n'utilise que des caractères CP437 (pas de « — »).
 
 ## En attente
 

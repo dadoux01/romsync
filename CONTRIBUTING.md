@@ -97,6 +97,23 @@ content of the save chip (see [`profiles/README.md`](profiles/README.md)):
 4. Switch the status to `confirmed` once the round trip has been verified with
    the real emulator.
 
+## Texts and languages
+
+Every interface exists in French and English (`docs/SPEC.md`, "Langues").
+French is the reference: add a text to both languages at once.
+
+- Web interface: `web/src/lib/i18n/fr.ts` and `en.ts`, used with `t('key')`.
+- Desktop app: `client/app/lib/l10n/app_fr.arb` and `app_en.arb`, then
+  `flutter gen-l10n` in `client/app` (the generated files are committed).
+  `romsync_core` never builds sentences: it returns a `CoreMessage` (a `Msg`
+  code and its parameters), translated by `coreText` in `lib/src/l10n.dart`.
+- 3DS homebrew: `3ds/core/msg.h` (core) or `3ds/app/text.h` (screens), used
+  with `RS_TR(ID)`. Only characters of code page 437 can be shown.
+
+To add a language, add a file next to each of these (and its entry in the
+lists of languages: `LANGUAGES` on the web, `appLanguages` in the app,
+`rs_lang` on the 3DS); the tests check that it has every key.
+
 ## Commits and pull requests
 
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):

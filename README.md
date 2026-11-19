@@ -38,6 +38,9 @@ stays in the history and can be restored, within a retention policy you choose.
   a revocable token.
 - **Manual import/export** in the web interface, for a DS with a flashcard
   (DSTT, R4…) or for troubleshooting.
+- **French and English**: the web interface, the desktop app and the 3DS
+  homebrew follow the language of the browser, the system or the console,
+  and can be switched in their settings.
 
 Not in scope: hosting or distributing ROMs (they stay on your devices), save
 states, other consoles.
