@@ -2,6 +2,7 @@
   "id": "retroarch-melondsds",
   "name": "melonDS DS (RetroArch)",
   "status": "confirmed",
+  "systems": ["nds"],
   "extension": ".srm",
   "location": "RetroArch savefile_directory (or next to the ROM), plus the ROM folder name and/or \"melonDS DS\" depending on sort_savefiles_by_content_enable and sort_savefiles_enable",
   "header": null,

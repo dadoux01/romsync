@@ -1,0 +1,23 @@
+{
+  "id": "mgba",
+  "name": "mGBA",
+  "status": "to_verify",
+  "systems": ["gba"],
+  "extension": ".sav",
+  "location": "Next to the ROM, or in mGBA's savegamePath",
+  "header": null,
+  "footer": {
+    "length": 16,
+    "optional": true,
+    "size_modulo": 256,
+    "prefix": "",
+    "fields": [],
+    "cookie": ""
+  },
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "Raw save, followed for games with a cartridge clock by the 16 bytes of struct GBASavedataRTCBuffer (mGBA src/gba/savedata.c, GBASavedataRTCWrite), written at the save size rounded down to 256 bytes: the footer is there when the file size modulo 256 is 16. It is removed on read and never written: mGBA adds it again, from the clock of the device."
+}

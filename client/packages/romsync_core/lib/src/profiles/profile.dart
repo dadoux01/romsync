@@ -31,12 +31,24 @@ class ProfileField {
 
 /// Bytes added by an emulator after the raw save.
 class ProfileFooter {
-  ProfileFooter({required this.length, required this.prefix, required this.fields, required this.cookie});
+  ProfileFooter({
+    required this.length,
+    required this.prefix,
+    required this.fields,
+    required this.cookie,
+    this.optional = false,
+    this.sizeModulo = 0,
+  });
 
   final int length;
   final String prefix;
   final List<ProfileField> fields;
   final String cookie;
+
+  /// Opaque bytes only there when the file size modulo [sizeModulo] is
+  /// [length] (mGBA's cartridge clock): removed on read, never written.
+  final bool optional;
+  final int sizeModulo;
 
   factory ProfileFooter.fromJson(Map<String, Object?> j) => ProfileFooter(
     length: j['length']! as int,
@@ -45,7 +57,13 @@ class ProfileFooter {
       for (final f in (j['fields'] as List<Object?>?) ?? const []) ProfileField.fromJson(f! as Map<String, Object?>),
     ],
     cookie: (j['cookie'] as String?) ?? '',
+    optional: (j['optional'] as bool?) ?? false,
+    sizeModulo: (j['size_modulo'] as int?) ?? 0,
   );
+
+  /// Whether a file of [fileLength] bytes ends with this footer.
+  bool presentIn(int fileLength) =>
+      !optional || (fileLength > length && sizeModulo > 0 && fileLength % sizeModulo == length);
 }
 
 /// A conversion profile, read from the same `profiles/*.json` files as the
@@ -63,10 +81,14 @@ class ConversionProfile {
     required this.sizeOutput,
     required this.padTo,
     required this.padByte,
+    this.systems = const ['nds'],
   });
 
   final String id;
   final String name;
+
+  /// Consoles whose saves this profile converts (`nds`, `gba`).
+  final List<String> systems;
 
   /// `confirmed` or `to_verify`.
   final String status;
@@ -96,13 +118,15 @@ class ConversionProfile {
       sizeOutput: (size['output'] as String?) ?? 'exact',
       padTo: size['pad_to'] as int?,
       padByte: size['pad_byte'] as int?,
+      systems: [for (final s in (j['systems'] as List<Object?>?) ?? const ['nds']) s! as String],
     );
   }
 
   /// Turns a file of this profile into raw save data, removing the footer.
   Uint8List decode(Uint8List file) {
     final f = footer;
-    if (f == null) return file;
+    if (f == null || !f.presentIn(file.length)) return file;
+    if (f.optional) return Uint8List.sublistView(file, 0, file.length - f.length);
     if (file.length < f.length) {
       throw ProfileFormatException('$name: file too short for its ${f.length}-byte footer');
     }
@@ -137,7 +161,7 @@ class ConversionProfile {
       }
     }
     final f = footer;
-    if (f != null) {
+    if (f != null && !f.optional) {
       out.add(latin1.encode(f.prefix));
       for (final field in f.fields) {
         final v = ByteData(4)..setUint32(0, _fieldValue(field, raw.length), Endian.little);

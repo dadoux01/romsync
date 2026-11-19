@@ -21,6 +21,23 @@ void main() {
     expect(profiles['flashcard']!.confirmed, isFalse);
   });
 
+  test('profiles name their consoles', () {
+    expect(profiles['raw']!.systems, ['nds', 'gba']);
+    expect(profiles['desmume']!.systems, ['nds']);
+    expect(profiles['mgba']!.systems, ['gba']);
+    expect(profiles['retroarch-mgba']!.systems, ['gba']);
+  });
+
+  test("mGBA's cartridge clock is removed, never written", () {
+    final mgba = profiles['mgba']!;
+    final file = pattern(32768 + 16);
+    expect(mgba.decode(file), Uint8List.sublistView(file, 0, 32768));
+    expect(mgba.decode(Uint8List.sublistView(file, 0, 512 + 16)).length, 512);
+    expect(mgba.decode(Uint8List.sublistView(file, 0, 32768)).length, 32768, reason: 'no clock');
+    expect(mgba.decode(Uint8List.sublistView(file, 0, 16)).length, 16, reason: 'too short to hold one');
+    expect(mgba.encode(Uint8List.sublistView(file, 0, 32768)).length, 32768);
+  });
+
   test('raw is the identity', () {
     final raw = pattern(8192);
     expect(profiles['raw']!.decode(raw), raw);

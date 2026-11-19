@@ -21,8 +21,8 @@ static void loads_the_repository_profiles(void)
 {
     rs_error err;
     CHECK_INT(rs_profiles_load_dir(&profiles, t_repo("profiles"), &err), RS_OK);
-    const char *ids[] = {"raw", "desmume", "flashcard", "retroarch-melondsds", "twilight"};
-    for (int i = 0; i < 5; i++)
+    const char *ids[] = {"raw", "desmume", "flashcard", "retroarch-melondsds", "twilight", "mgba", "retroarch-mgba"};
+    for (int i = 0; i < 7; i++)
         CHECK(rs_profiles_find(&profiles, ids[i]) != NULL);
     CHECK_STR(rs_profiles_find(&profiles, "raw")->extension, ".sav");
     CHECK_STR(rs_profiles_find(&profiles, "desmume")->extension, ".dsv");
@@ -172,9 +172,36 @@ static void rejects_malformed_profiles(void)
               RS_ERR_FORMAT);
 }
 
+/* mGBA's cartridge clock: 16 bytes after the save, only when the file
+ * size modulo 256 is 16; removed on read, never written. */
+static void mgba_removes_the_clock(void)
+{
+    const rs_profile *p = rs_profiles_find(&profiles, "mgba");
+    CHECK(p != NULL && p->footer_optional && p->footer_size_modulo == 256);
+    if (!p)
+        return;
+    rs_buf out = {0};
+    rs_error err;
+    uint8_t *save = pattern(32768 + 16);
+    CHECK_INT(rs_profile_decode(p, save, 32768 + 16, &out, &err), RS_OK);
+    CHECK_INT(out.len, 32768);
+    CHECK(memcmp(out.data, save, 32768) == 0);
+    CHECK_INT(rs_profile_decode(p, save, 512 + 16, &out, &err), RS_OK);
+    CHECK_INT(out.len, 512);
+    CHECK_INT(rs_profile_decode(p, save, 32768, &out, &err), RS_OK); /* no clock */
+    CHECK_INT(out.len, 32768);
+    CHECK_INT(rs_profile_decode(p, save, 16, &out, &err), RS_OK); /* too short to hold one */
+    CHECK_INT(out.len, 16);
+    CHECK_INT(rs_profile_encode(p, save, 32768, 0, &out, &err), RS_OK);
+    CHECK_INT(out.len, 32768);
+    rs_buf_free(&out);
+    free(save);
+}
+
 void run_profile_tests(void)
 {
     RUN(loads_the_repository_profiles);
+    RUN(mgba_removes_the_clock);
     RUN(raw_and_twilight_are_the_identity);
     RUN(desmume_footer_is_byte_identical);
     RUN(desmume_decode_ignores_type_and_checks_the_rest);

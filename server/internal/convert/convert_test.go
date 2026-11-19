@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -193,16 +194,19 @@ func TestFlashcardPadsToFixedSize(t *testing.T) {
 
 // profileFile is the declarative profile format of profiles/*.json.
 type profileFile struct {
-	ID        string `json:"id"`
-	Extension string `json:"extension"`
+	ID        string   `json:"id"`
+	Extension string   `json:"extension"`
+	Systems   []string `json:"systems"`
 	Size      struct {
 		Output string `json:"output"`
 		PadTo  int    `json:"pad_to"`
 	} `json:"size"`
 	Footer *struct {
-		Length int    `json:"length"`
-		Prefix string `json:"prefix"`
-		Cookie string `json:"cookie"`
+		Length     int    `json:"length"`
+		Prefix     string `json:"prefix"`
+		Cookie     string `json:"cookie"`
+		Optional   bool   `json:"optional"`
+		SizeModulo int    `json:"size_modulo"`
 	} `json:"footer"`
 }
 
@@ -221,6 +225,9 @@ func TestProfilesMatchCode(t *testing.T) {
 		if pf.ID != p.ID() || pf.Extension != p.Extension() {
 			t.Errorf("profile %s: id/extension %s %s vs %s %s", id, pf.ID, pf.Extension, p.ID(), p.Extension())
 		}
+		if strings.Join(pf.Systems, ",") != strings.Join(Systems(id), ",") {
+			t.Errorf("profile %s: systems %v vs %v", id, pf.Systems, Systems(id))
+		}
 		switch id {
 		case "flashcard":
 			if pf.Size.Output != "pad_min" || pf.Size.PadTo != FlashcardSize || pf.Footer != nil {
@@ -230,11 +237,39 @@ func TestProfilesMatchCode(t *testing.T) {
 			if pf.Footer != nil {
 				t.Errorf("raw must not declare a footer")
 			}
+		case "mgba":
+			if pf.Footer == nil || pf.Footer.Length != MGBARTCLength || !pf.Footer.Optional || pf.Footer.SizeModulo != 256 {
+				t.Errorf("mgba footer differs from the code: %+v", pf.Footer)
+			}
 		case "desmume":
 			if pf.Footer == nil || pf.Footer.Length != DeSmuMEFooterLength ||
 				pf.Footer.Prefix != DeSmuMEFooterText || pf.Footer.Cookie != DeSmuMECookie {
 				t.Errorf("desmume footer differs from the code: %+v", pf.Footer)
 			}
 		}
+	}
+}
+
+func TestMGBAClock(t *testing.T) {
+	save := pattern(32 << 10)
+	withClock := append(bytes.Clone(save), pattern(MGBARTCLength)...)
+	got, err := MGBA{}.Decode(withClock)
+	if err != nil || !bytes.Equal(got, save) {
+		t.Fatalf("the clock must be removed (%d bytes, %v)", len(got), err)
+	}
+	// EEPROM 512 B: the clock sits right after the save (512 & ~0xFF = 512).
+	small := append(pattern(512), pattern(MGBARTCLength)...)
+	if got, _ := (MGBA{}).Decode(small); len(got) != 512 {
+		t.Errorf("512 B save with clock gives %d bytes", len(got))
+	}
+	// Without a clock, nothing is removed; nothing is ever added.
+	if got, _ := (MGBA{}).Decode(save); !bytes.Equal(got, save) {
+		t.Error("a save without clock must be unchanged")
+	}
+	if out, _ := (MGBA{}).Encode(save); !bytes.Equal(out, save) {
+		t.Error("the clock is never written")
+	}
+	if !Supports("mgba", "gba") || Supports("mgba", "nds") || !Supports("raw", "gba") || Supports("desmume", "gba") {
+		t.Error("profiles and consoles")
 	}
 }

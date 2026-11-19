@@ -77,6 +77,17 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
         p->footer_length = (size_t)len->valuedouble;
         p->footer_prefix = rs_strdup(cJSON_IsString(prefix) ? prefix->valuestring : "");
         p->footer_cookie = rs_strdup(cJSON_IsString(cookie) ? cookie->valuestring : "");
+        p->footer_optional = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(footer, "optional"));
+        if (p->footer_optional) {
+            /* Opaque bytes: nothing is declared inside, nothing is checked. */
+            const cJSON *modulo = cJSON_GetObjectItemCaseSensitive(footer, "size_modulo");
+            if (!cJSON_IsNumber(modulo) || modulo->valuedouble <= (double)p->footer_length) {
+                st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_FOOTER_LENGTH), p->id);
+                goto done;
+            }
+            p->footer_size_modulo = (size_t)modulo->valuedouble;
+            goto footer_done;
+        }
         const cJSON *f;
         cJSON_ArrayForEach(f, fields)
         {
@@ -95,6 +106,7 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
             goto done;
         }
     }
+footer_done:
 
     const cJSON *size = cJSON_GetObjectItemCaseSensitive(j, "size");
     const cJSON *output = cJSON_GetObjectItemCaseSensitive(size, "output");
@@ -159,8 +171,12 @@ rs_status rs_profile_decode(const rs_profile *p, const uint8_t *file, size_t len
                             rs_error *err)
 {
     out->len = 0;
-    if (!p->has_footer)
+    bool absent = p->footer_optional &&
+                  (len <= p->footer_length || len % p->footer_size_modulo != p->footer_length);
+    if (!p->has_footer || absent)
         return rs_buf_append(out, file, len) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
+    if (p->footer_optional)
+        return rs_buf_append(out, file, len - p->footer_length) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     if (len < p->footer_length)
         return rs_fail(err, RS_ERR_FORMAT, RS_TR(FILE_TOO_SHORT), p->name,
                        p->footer_length);
@@ -193,7 +209,7 @@ rs_status rs_profile_encode(const rs_profile *p, const uint8_t *raw, size_t len,
         if (len < target)
             ok = ok && rs_buf_fill(out, p->pad_byte, target - len);
     }
-    if (p->has_footer) {
+    if (p->has_footer && !p->footer_optional) {
         ok = ok && rs_buf_append(out, p->footer_prefix, strlen(p->footer_prefix));
         for (int i = 0; i < p->field_count; i++) {
             uint32_t v = field_value(&p->fields[i], len);

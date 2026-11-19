@@ -2,6 +2,7 @@
   "id": "desmume",
   "name": "DeSmuME",
   "status": "confirmed",
+  "systems": ["nds"],
   "extension": ".dsv",
   "location": "DeSmuME Battery folder",
   "header": null,

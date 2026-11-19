@@ -2,6 +2,7 @@
   "id": "twilight",
   "name": "TWiLight Menu++ / nds-bootstrap (3DS)",
   "status": "to_verify",
+  "systems": ["nds"],
   "extension": ".sav",
   "location": "<ROM folder>/saves/ by default; next to the ROM or sd:/_nds/TWiLightMenu/saves/ depending on SAVE_LOCATION in sd:/_nds/TWiLightMenu/settings.ini; .sav1 to .sav9 for the per-game save slot (SAVE_NUMBER)",
   "header": null,

@@ -1,0 +1,16 @@
+{
+  "id": "retroarch-mgba",
+  "name": "RetroArch (mGBA)",
+  "status": "to_verify",
+  "systems": ["gba"],
+  "extension": ".srm",
+  "location": "RetroArch save folder (savefile_directory, sorted by core or content when enabled)",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "The mGBA core exposes the save chip as RETRO_MEMORY_SAVE_RAM at its exact size (retro_get_memory_size, src/platform/libretro/libretro.c), without the clock; 128 KiB of 0xFF until the game has saved once."
+}

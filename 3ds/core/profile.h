@@ -43,6 +43,11 @@ typedef struct {
     char *footer_cookie; /* malloc'ed, may be "" */
     rs_profile_field fields[RS_PROFILE_MAX_FIELDS];
     int field_count;
+    /* Opaque footer, only there when the file size modulo size_modulo is
+     * footer_length (mGBA's cartridge clock): removed on read, never
+     * written. */
+    bool footer_optional;
+    size_t footer_size_modulo;
 
     bool pad_min;     /* size.output: false = "exact", true = "pad_min" */
     size_t pad_to;    /* pad_min: minimum size */

@@ -2,6 +2,7 @@
   "id": "flashcard",
   "name": "Flashcard (DSTT, R4…)",
   "status": "to_verify",
+  "systems": ["nds"],
   "extension": ".sav",
   "location": "Next to the ROM on the flashcard's microSD card",
   "header": null,

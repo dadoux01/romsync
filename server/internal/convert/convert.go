@@ -27,7 +27,29 @@ var profiles = map[string]Profile{
 	"raw":       Raw{},
 	"desmume":   DeSmuME{},
 	"flashcard": Flashcard{Size: FlashcardSize},
+	"mgba":      MGBA{},
 }
+
+// systems lists the consoles of each profile (the "systems" of its JSON).
+var systems = map[string][]string{
+	"raw":       {"nds", "gba"},
+	"desmume":   {"nds"},
+	"flashcard": {"nds"},
+	"mgba":      {"gba"},
+}
+
+// Supports reports whether profile id converts saves of the console system.
+func Supports(id, system string) bool {
+	for _, s := range systems[id] {
+		if s == system {
+			return true
+		}
+	}
+	return false
+}
+
+// Systems returns the consoles of profile id.
+func Systems(id string) []string { return systems[id] }
 
 // Get returns the profile with the given id.
 func Get(id string) (Profile, bool) {
@@ -36,7 +58,7 @@ func Get(id string) (Profile, bool) {
 }
 
 // IDs lists the available profiles.
-func IDs() []string { return []string{"raw", "desmume", "flashcard"} }
+func IDs() []string { return []string{"raw", "desmume", "flashcard", "mgba"} }
 
 // Raw is the canonical format: the content of the save chip, unchanged.
 // It is what melonDS writes in its .sav files.
@@ -182,4 +204,27 @@ func (DeSmuME) Decode(file []byte) ([]byte, error) {
 		return nil, fmt.Errorf("convert: DeSmuME footer announces %d bytes, file holds %d", padSize, dataLen)
 	}
 	return bytes.Clone(file[:dataLen]), nil
+}
+
+// MGBARTCLength is the length of the cartridge clock mGBA writes after the
+// save of a game with a real-time clock (struct GBASavedataRTCBuffer of
+// mGBA: 7 bytes of BCD time, a control byte and a 64-bit latch).
+const MGBARTCLength = 16
+
+// MGBA is mGBA's .sav: the raw save, followed by the cartridge clock for
+// games that have one. mGBA writes the clock at the save size rounded down
+// to 256 bytes, so a file holds it when its size modulo 256 is 16. The clock
+// is not part of the save chip: it is removed, and never written back.
+type MGBA struct{}
+
+func (MGBA) ID() string        { return "mgba" }
+func (MGBA) Extension() string { return ".sav" }
+
+func (MGBA) Encode(raw []byte) ([]byte, error) { return bytes.Clone(raw), nil }
+
+func (MGBA) Decode(file []byte) ([]byte, error) {
+	if len(file) > MGBARTCLength && len(file)%256 == MGBARTCLength {
+		return bytes.Clone(file[:len(file)-MGBARTCLength]), nil
+	}
+	return bytes.Clone(file), nil
 }
