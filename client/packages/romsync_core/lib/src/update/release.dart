@@ -160,6 +160,11 @@ String? sumFor(String sums, String name) {
 /// X-Activate, the user's choice after a divergence.
 const requiredServerApiLevel = 2;
 
+/// Server level needed to sync the saves of other consoles than the DS
+/// (docs/SPEC.md, "Multi-consoles"). Their uploads wait in the queue on an
+/// older server, which would refuse their identifiers for good.
+const consolesServerApiLevel = 3;
+
 enum Compatibility {
   ok,
 

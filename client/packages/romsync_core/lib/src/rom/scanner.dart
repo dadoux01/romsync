@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 
 import '../message.dart';
 import 'game_id.dart';
+import 'game_system.dart';
 import 'nds_header.dart';
 import 'rom_file.dart';
 import 'seven_zip.dart';
@@ -16,7 +17,10 @@ class ScannedRom {
   final RomFile file;
 
   /// Parsed header, or null when the ROM is too short to have one.
-  final NdsHeader? header;
+  final RomHeader? header;
+
+  /// Console of the ROM, from its extension (`.nds`, `.gba`).
+  GameSystem get system => GameSystem.ofRomName(file.romName) ?? GameSystem.nds;
 
   /// Identifier derived from the ROM: its cartridge code, or `h:<sha1>` when
   /// it has no valid code (docs/SPEC.md, "Identification des jeux").
@@ -44,8 +48,9 @@ class ScanResult {
   final List<ScanIssue> issues;
 }
 
-/// Finds the DS ROMs in folders: .nds files, and .nds inside .zip (read in
-/// pure Dart) and .7z archives (read with an external 7-Zip program).
+/// Finds the ROMs of every console in folders (.nds, .gba…), also inside
+/// .zip (read in pure Dart) and .7z archives (read with an external 7-Zip
+/// program).
 class RomScanner {
   RomScanner({SevenZip? sevenZip, bool findSevenZip = true})
     : sevenZip = sevenZip ?? (findSevenZip ? SevenZip.find() : null);
@@ -72,12 +77,12 @@ class RomScanner {
         final ext = p.extension(entity.path).toLowerCase();
         try {
           switch (ext) {
-            case '.nds':
+            case _ when GameSystem.ofRomName(entity.path) != null:
               roms.add(await identify(PlainRomFile(entity.path)));
             case '.zip':
               final zip = await ZipReader.open(entity.path);
               for (final e in zip.entries) {
-                if (p.extension(e.name).toLowerCase() != '.nds') continue;
+                if (GameSystem.ofRomName(e.name) == null) continue;
                 if (!e.isSupported) {
                   issues.add(ScanIssue('${entity.path}#${e.name}', const CoreMessage(Msg.scanUnsupportedCompression)));
                   continue;
@@ -91,7 +96,7 @@ class RomScanner {
                 continue;
               }
               for (final name in await tool.list(entity.path)) {
-                if (p.extension(name).toLowerCase() != '.nds') continue;
+                if (GameSystem.ofRomName(name) == null) continue;
                 roms.add(await identify(SevenZipRomFile(entity.path, tool, name)));
               }
           }
@@ -107,8 +112,14 @@ class RomScanner {
   /// Reads the header of [file] and derives its identifier. The SHA-1 of the
   /// whole ROM is only computed when the header has no valid code.
   static Future<ScannedRom> identify(RomFile file) async {
-    final header = NdsHeader.parse(await file.readStart(NdsHeader.length));
-    final id = header != null && header.hasValidCode ? header.gameCode : GameId.fromRomSha1(await file.sha1Hex());
+    final system = GameSystem.ofRomName(file.romName) ?? GameSystem.nds;
+    final RomHeader? header = switch (system) {
+      GameSystem.nds => NdsHeader.parse(await file.readStart(NdsHeader.length)),
+      GameSystem.gba => GbaHeader.parse(await file.readStart(GbaHeader.length)),
+    };
+    final id = header != null && header.hasValidCode
+        ? system.gameId(header.gameCode)
+        : GameId.fromRomSha1(await file.sha1Hex(), system);
     return ScannedRom(file: file, header: header, detectedId: id);
   }
 }

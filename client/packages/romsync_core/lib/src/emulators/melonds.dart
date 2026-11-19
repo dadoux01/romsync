@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:toml/toml.dart';
 
 import '../message.dart';
+import '../rom/game_system.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -21,6 +22,8 @@ class MelonDS extends EmulatorBase {
   String get id => 'melonds';
   @override
   String get name => 'melonDS';
+  @override
+  List<GameSystem> get systems => const [GameSystem.nds];
   @override
   String get conversionProfileId => 'raw';
 
@@ -79,7 +82,9 @@ class MelonDS extends EmulatorBase {
           warning: CoreMessage(Msg.melonConfigUnreadable, {'detail': '$e'}),
         );
       }
-      if (value == null || value.isEmpty) return SaveLocation(dir: null, source: CoreMessage(Msg.sourcePath, {'path': path}));
+      if (value == null || value.isEmpty) {
+        return SaveLocation(dir: null, source: CoreMessage(Msg.sourcePath, {'path': path}));
+      }
       if (!p.isAbsolute(value)) {
         return SaveLocation(
           dir: null,

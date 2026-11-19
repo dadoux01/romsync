@@ -26,7 +26,8 @@ class CoreMessage {
 
   /// For logs: the code and its parameters, in no particular language.
   @override
-  String toString() => args.isEmpty ? code.name : '${code.name}(${args.entries.map((e) => '${e.key}: ${e.value}').join(', ')})';
+  String toString() =>
+      args.isEmpty ? code.name : '${code.name}(${args.entries.map((e) => '${e.key}: ${e.value}').join(', ')})';
 }
 
 /// Codes of [CoreMessage]; the parameters of each are listed after it.
@@ -76,6 +77,10 @@ enum Msg {
 
   /// `version` (absent: older than 0.5.0): the server cannot apply the choice.
   syncServerTooOld,
+
+  /// `version` (absent: older than 0.5.0): the server does not know the
+  /// consoles other than the DS yet; their saves wait.
+  syncServerTooOldForConsole,
 
   /// `file`, `reason` (a [CoreMessage]).
   fileProblem,
@@ -173,10 +178,11 @@ enum Msg {
   /// RetroArch's save folder is unknown.
   retroarchSaveDirUnknown,
 
-  /// The melonDS DS core is not installed.
+  /// `core`, `entry` (name in RetroArch's core downloader): the core is not
+  /// installed.
   retroarchCoreMissing,
 
-  /// `path`: the melonDS DS core is not at this path.
+  /// `core`, `entry`, `path`: the core is not at this path.
   retroarchCoreMissingAt,
 
   // Where a save folder comes from.
@@ -188,6 +194,9 @@ enum Msg {
 
   /// melonDS's default: next to the ROM.
   sourceMelonDefault,
+
+  /// mGBA's default: next to the ROM.
+  sourceMgbaDefault,
 
   /// `path`: a configuration file or folder.
   sourcePath,

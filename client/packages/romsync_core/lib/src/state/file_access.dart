@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+
 import '../message.dart';
 
 /// Whether [e] is a temporary access conflict: a file kept open by another

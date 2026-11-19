@@ -392,6 +392,31 @@ void main() {
     expect(copies.first.readAsBytesSync(), save(13), reason: 'newest first');
   });
 
+  group('other consoles than the DS', () {
+    test('wait in the queue while the server is older than level 3', () async {
+      server.apiLevel = 2;
+      final gba = h.entry(gameId: 'gba:BPEF');
+      h.writeLocal(save(5, 32768), h.now);
+      final local = (await SyncEngine.readLocal(gba.savePath, gba.profile))!;
+      await h.engine.enqueue(gba, local);
+      final flush = await h.engine.flushQueue();
+      expect(flush.waitingForServer, isTrue);
+      expect(flush.failures, isEmpty, reason: 'never refused for good');
+      expect(h.queue.length, 1);
+      expect(server.versions, isEmpty);
+      await expectLater(
+        h.engine.prepare(gba, chipSize: null),
+        throwsA(isA<SyncException>().having((e) => e.message.code, 'code', Msg.syncServerTooOldForConsole)),
+      );
+
+      // Once the server is updated, the save leaves.
+      server.apiLevel = 3;
+      final again = await h.engine.flushQueue();
+      expect((again.waitingForServer, again.sent, h.queue.length), (false, 1, 0));
+      expect(server.versions.single.code, 'gba:BPEF');
+    });
+  });
+
   group('ROMs sharing an identifier', () {
     ScannedRom rom(String name, String id) =>
         ScannedRom(file: PlainRomFile('/roms/$name.nds'), header: null, detectedId: id);

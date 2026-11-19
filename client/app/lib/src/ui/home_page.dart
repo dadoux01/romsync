@@ -229,8 +229,23 @@ class _HomePageState extends State<HomePage> {
                   onTap: () =>
                       Navigator.push(context, MaterialPageRoute<void>(builder: (_) => SettingsPage(controller: c))),
                 ),
-              for (final row in c.rows)
-                _GameTile(row: row, controller: c, onLaunch: _launch, onChoose: _choose, onEmulator: _chooseEmulator),
+              // Grouped by console when the library has more than one.
+              for (final system in GameSystem.values)
+                if (c.rows.any((r) => r.entry.rom.system == system)) ...[
+                  if (c.rows.any((r) => r.entry.rom.system != system))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(systemName(l, system), style: Theme.of(context).textTheme.titleSmall),
+                    ),
+                  for (final row in c.rows.where((r) => r.entry.rom.system == system))
+                    _GameTile(
+                      row: row,
+                      controller: c,
+                      onLaunch: _launch,
+                      onChoose: _choose,
+                      onEmulator: _chooseEmulator,
+                    ),
+                ],
               if (c.scanIssues.isNotEmpty)
                 ExpansionTile(
                   leading: const Icon(Icons.report_problem_outlined),
@@ -311,7 +326,7 @@ class _GameTile extends StatelessWidget {
               enabled: controller.runningGame == null,
               onSelected: (id) => onEmulator(context, e, id),
               itemBuilder: (context) => [
-                for (final id in emulatorIds)
+                for (final id in emulatorIdsFor(e.rom.system))
                   CheckedPopupMenuItem(value: id, checked: id == e.emulator, child: Text(_emulatorLabel(l, id, e))),
               ],
               child: Padding(
@@ -351,8 +366,10 @@ class _GameTile extends StatelessWidget {
   /// launch this ROM (archive).
   String _emulatorLabel(AppLocalizations l, String id, LibraryEntry e) {
     var label = emulatorName(id);
-    if (id == controller.config.defaultEmulator) label = l.emulatorDefault(label);
-    if (id != 'melonds' && e.rom.file.innerName != null) label = l.emulatorNoArchives(label);
+    if (id == controller.config.defaultEmulatorFor(e.rom.system)) label = l.emulatorDefault(label);
+    if (!controller.emulatorOf(id).supportsArchives && e.rom.file.innerName != null) {
+      label = l.emulatorNoArchives(label);
+    }
     return label;
   }
 }

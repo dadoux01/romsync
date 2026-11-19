@@ -9,6 +9,7 @@ import '../api/api_client.dart';
 import '../api/models.dart';
 import '../message.dart';
 import '../profiles/profile.dart';
+import '../rom/game_system.dart';
 import '../state/file_access.dart';
 import '../state/json_file.dart';
 import '../state/save_state.dart';
@@ -74,6 +75,10 @@ class FlushResult {
   bool offline = false;
   bool unauthorized = false;
 
+  /// Uploads of another console than the DS kept in the queue: the server
+  /// is too old for them (see [consolesServerApiLevel]).
+  bool waitingForServer = false;
+
   /// Uploads refused by the server (moved to the `failed` folder).
   final List<CoreMessage> failures = [];
 
@@ -122,8 +127,7 @@ class SyncException implements Exception {
 /// The server is too old to apply the user's choice after a divergence
 /// (no X-Activate): nothing was sent, the server must be updated first.
 class ServerTooOldException extends SyncException {
-  ServerTooOldException(this.serverVersion)
-    : super(CoreMessage(Msg.syncServerTooOld, {'version': ?serverVersion}));
+  ServerTooOldException(this.serverVersion) : super(CoreMessage(Msg.syncServerTooOld, {'version': ?serverVersion}));
 
   /// Null for a server older than 0.5.0.
   final String? serverVersion;
@@ -158,12 +162,22 @@ class SyncEngine {
   bool _serverInfoKnown = false;
 
   /// The server's version and level, read once (null: before 0.5.0).
-  Future<ServerInfo?> serverInfo() async {
-    if (!_serverInfoKnown) {
+  /// [again] reads it again, after an update of the server.
+  Future<ServerInfo?> serverInfo({bool again = false}) async {
+    if (!_serverInfoKnown || again) {
       _serverInfo = await api.serverInfo();
       _serverInfoKnown = true;
     }
     return _serverInfo;
+  }
+
+  /// Whether the server takes the saves of other consoles than the DS. A
+  /// server below that level is asked again (it may have been updated).
+  Future<bool> _knowsConsoles() async {
+    final known = (_serverInfo?.apiLevel ?? 0) >= consolesServerApiLevel;
+    if (known) return true;
+    final info = await serverInfo(again: _serverInfoKnown);
+    return (info?.apiLevel ?? 1) >= consolesServerApiLevel;
   }
 
   Future<T> _serial<T>(Future<T> Function() fn) {
@@ -212,9 +226,23 @@ class SyncEngine {
     // an upload of that game.
     final actives = <String, (RemoteVersion?, int?)>{};
     final heldSaves = <String>{};
+    bool? knowsConsoles;
     for (final u in queue.items) {
       // The uploads after a held one wait too: the queue keeps its order.
       if (heldSaves.contains(u.savePath)) continue;
+      if (GameSystem.ofGameId(u.gameId) != GameSystem.nds) {
+        try {
+          knowsConsoles ??= await _knowsConsoles();
+        } on ServerUnreachableException {
+          res.offline = true;
+          break;
+        }
+        if (!knowsConsoles) {
+          heldSaves.add(u.savePath);
+          res.waitingForServer = true;
+          continue;
+        }
+      }
       final data = await queue.content(u);
       final st = states[u.savePath];
       final base = st != null && st.gameId == u.gameId ? st.lastSyncedVersionId : null;
@@ -235,11 +263,7 @@ class SyncEngine {
             res.held.add(Divergence(gameId: u.gameId, savePath: u.savePath, server: active, localModified: u.savedAt));
             if (!u.held) {
               await queue.update(u.savePath, (x) => x.mode == UploadMode.auto ? x.copyWith(held: true) : x);
-              _emit(
-                SyncEventKind.needsChoice,
-                const CoreMessage(Msg.syncNeedsChoice),
-                u.gameId,
-              );
+              _emit(SyncEventKind.needsChoice, const CoreMessage(Msg.syncNeedsChoice), u.gameId);
             }
             continue;
           }
@@ -332,6 +356,18 @@ class SyncEngine {
     if (entry.unavailable != null) throw SyncException(entry.unavailable!);
     if (entry.needsChoice) {
       throw SyncException(CoreMessage(Msg.syncSharedId, {'gameId': entry.gameId}));
+    }
+    if (GameSystem.ofGameId(entry.gameId) != GameSystem.nds) {
+      try {
+        if (!await _knowsConsoles()) {
+          throw SyncException(
+            CoreMessage(Msg.syncServerTooOldForConsole, {'version': ?_serverInfo?.version}),
+          );
+        }
+      } on ServerUnreachableException {
+        final local = await readLocal(entry.savePath, entry.profile);
+        return _offline(entry, local);
+      }
     }
     // 1. Empty the queue if the server answers.
     var flush = await flushQueue();
@@ -436,10 +472,7 @@ class SyncEngine {
 
   Future<PrepareResult> _offline(LibraryEntry entry, LocalSave? local) async {
     if (local != null && local.hash != stateOf(entry)?.lastSyncedHash) await enqueue(entry, local);
-    return PrepareResult(
-      offline: true,
-      message: const CoreMessage(Msg.syncOfflineLaunch),
-    );
+    return PrepareResult(offline: true, message: const CoreMessage(Msg.syncOfflineLaunch));
   }
 
   /// Replaces the local save with [version], after copying the current one

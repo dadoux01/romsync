@@ -4,13 +4,6 @@ import 'package:crypto/crypto.dart';
 
 import '../api/models.dart';
 
-/// Sizes of DS save chips: the copy of `ValidChipSizes` in
-/// server/internal/syncrule/size.go.
-const validChipSizes = [
-  512, 8 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10, 512 << 10, //
-  1 << 20, 2 << 20, 4 << 20, 8 << 20, 16 << 20, 32 << 20, 64 << 20,
-];
-
 /// Whether [b] is non-empty and made of a single 0xFF or 0x00 byte value
 /// (`IsPadding` on the server).
 bool isPadding(List<int> b) {

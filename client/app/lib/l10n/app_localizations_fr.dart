@@ -79,8 +79,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pairTitle => 'Appairer cet appareil';
 
   @override
-  String get pairIntro =>
-      'Sur le site RomSync : Appareils → Ajouter un appareil, puis saisis le code ici.';
+  String get pairIntro => 'Sur le site RomSync : Appareils → Ajouter un appareil, puis saisis le code ici.';
 
   @override
   String get pairServer => 'Adresse du serveur';
@@ -121,19 +120,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pairUseFile => 'Stocker le jeton dans un fichier';
 
   @override
-  String get pairCodeExpired =>
-      'Ce code a expiré ou a déjà été utilisé : génère-en un nouveau sur le site.';
+  String get pairCodeExpired => 'Ce code a expiré ou a déjà été utilisé : génère-en un nouveau sur le site.';
 
   @override
-  String get pairCodeUnknown =>
-      'Code inconnu : vérifie-le, ou génère-en un nouveau sur le site.';
+  String get pairCodeUnknown => 'Code inconnu : vérifie-le, ou génère-en un nouveau sur le site.';
 
   @override
   String get rateLimited => 'Trop de tentatives : réessaie dans une minute.';
 
   @override
-  String get pairUnreachable =>
-      'Serveur injoignable : vérifie l’adresse et ta connexion (Tailscale ?).';
+  String get pairUnreachable => 'Serveur injoignable : vérifie l’adresse et ta connexion (Tailscale ?).';
 
   @override
   String get homeRescan => 'Rescanner et synchroniser';
@@ -142,15 +138,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settings => 'Réglages';
 
   @override
-  String get homeUnauthorized =>
-      'Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.';
+  String get homeUnauthorized => 'Cet appareil a été révoqué ou son jeton n’est plus valide : appaire-le à nouveau.';
 
   @override
   String get homePairAgain => 'Appairer à nouveau';
 
   @override
-  String get homeOffline =>
-      'Serveur injoignable : les parties se lancent avec les saves locales.';
+  String get homeOffline => 'Serveur injoignable : les parties se lancent avec les saves locales.';
 
   @override
   String homeOfflineQueued(int count) {
@@ -191,12 +185,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get homeActivity => 'Activité récente';
 
   @override
-  String get divergenceLocalSent =>
-      'Save locale envoyée : c’est la save active.';
+  String get divergenceLocalSent => 'Save locale envoyée : c’est la save active.';
 
   @override
-  String get divergenceServerTaken =>
-      'Save du serveur récupérée ; ta save locale est dans l’historique.';
+  String get divergenceServerTaken => 'Save du serveur récupérée ; ta save locale est dans l’historique.';
 
   @override
   String divergenceServerTakenBackup(String path) {
@@ -274,8 +266,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get notPaired => 'Appareil non appairé.';
 
   @override
-  String get closeGameFirst =>
-      'Ferme d’abord le jeu en cours : RomSync téléchargera ensuite la save du serveur.';
+  String get closeGameFirst => 'Ferme d’abord le jeu en cours : RomSync téléchargera ensuite la save du serveur.';
 
   @override
   String gameAlreadyRunning(String game) {
@@ -381,8 +372,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get romFolders => 'Dossiers de ROMs';
 
   @override
-  String get romFoldersHelp =>
-      'Les .nds sont lus, y compris dans les .zip et les .7z (programme 7z, 7zz ou 7za).';
+  String get romFoldersHelp => 'Les .nds sont lus, y compris dans les .zip et les .7z (programme 7z, 7zz ou 7za).';
 
   @override
   String get addFolder => 'Ajouter un dossier';
@@ -391,18 +381,27 @@ class AppLocalizationsFr extends AppLocalizations {
   String get emulators => 'Émulateurs';
 
   @override
+  String get systemNds => 'Nintendo DS';
+
+  @override
+  String get systemGba => 'Game Boy Advance';
+
+  @override
+  String defaultEmulatorOf(String system) {
+    return 'Émulateur par défaut ($system)';
+  }
+
+  @override
   String get defaultEmulator => 'Émulateur par défaut';
 
   @override
-  String get defaultEmulatorHelp =>
-      'Chaque jeu peut avoir le sien, depuis la liste des jeux.';
+  String get defaultEmulatorHelp => 'Chaque jeu peut avoir le sien, depuis la liste des jeux.';
 
   @override
   String get tray => 'Barre système';
 
   @override
-  String get keepInTray =>
-      'Garder RomSync dans la barre système à la fermeture';
+  String get keepInTray => 'Garder RomSync dans la barre système à la fermeture';
 
   @override
   String get keepInTrayHelp =>
@@ -415,8 +414,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get backupCount => 'Copies .backup gardées par save';
 
   @override
-  String get backupHelp =>
-      'Copie de la save locale remplacée par un téléchargement, dans un dossier .backup à côté.';
+  String get backupHelp => 'Copie de la save locale remplacée par un téléchargement, dans un dossier .backup à côté.';
 
   @override
   String get updates => 'Mises à jour';
@@ -545,15 +543,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get choiceNotSynced =>
-      'Tant que tu n’as pas choisi, cette ROM n’est pas synchronisée.';
+  String get choiceNotSynced => 'Tant que tu n’as pas choisi, cette ROM n’est pas synchronisée.';
 
   @override
   String get choiceShare => 'Partager la save';
 
   @override
-  String get choiceShareHelp =>
-      'Même progression que les autres ROMs de ce jeu (ROM patchée ou traduite).';
+  String get choiceShareHelp => 'Même progression que les autres ROMs de ce jeu (ROM patchée ou traduite).';
 
   @override
   String get choiceSeparate => 'Séparer';
@@ -566,8 +562,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get choiceIdName => 'Nom de l’identifiant';
 
   @override
-  String get choiceIdHelp =>
-      'Lettres, chiffres et tirets, 32 caractères au plus';
+  String get choiceIdHelp => 'Lettres, chiffres et tirets, 32 caractères au plus';
 
   @override
   String choiceIdPreview(String id) {
@@ -575,8 +570,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get choiceIdInvalid =>
-      'Nom invalide : lettres sans accents, chiffres et tirets';
+  String get choiceIdInvalid => 'Nom invalide : lettres sans accents, chiffres et tirets';
 
   @override
   String get validate => 'Valider';
@@ -593,8 +587,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get divFromWebsite => 'l’import sur le site';
 
   @override
-  String get divLocalUnknown =>
-      '• Sur cet appareil : une autre save, modifiée depuis la dernière synchronisation.';
+  String get divLocalUnknown => '• Sur cet appareil : une autre save, modifiée depuis la dernière synchronisation.';
 
   @override
   String divLocal(String date) {
@@ -606,12 +599,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Envoyer ma save locale : elle devient la save active et les autres appareils la téléchargeront.\nPrendre celle du serveur : ta save locale est quand même envoyée, comme ancienne version (restaurable sur le site), puis remplacée par celle du serveur ; une copie reste dans le dossier .backup.';
 
   @override
-  String get divCloseEmulator =>
-      'Ferme d’abord l’émulateur s’il a encore ce jeu ouvert.';
+  String get divCloseEmulator => 'Ferme d’abord l’émulateur s’il a encore ce jeu ouvert.';
 
   @override
-  String get divLaterLaunch =>
-      'Plus tard : rien n’est envoyé ni écrasé, et le jeu ne se lance pas.';
+  String get divLaterLaunch => 'Plus tard : rien n’est envoyé ni écrasé, et le jeu ne se lance pas.';
 
   @override
   String get divLater => 'Plus tard : rien n’est envoyé ni écrasé.';
@@ -669,8 +660,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get updDev =>
-      'Version de développement : pas de mise à jour automatique.';
+  String get updDev => 'Version de développement : pas de mise à jour automatique.';
 
   @override
   String get updNoPlatform => 'Pas de mise à jour pour ce système.';
@@ -689,8 +679,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get updNoticeBody =>
-      'Ouvre RomSync pour lire les notes de version et installer la mise à jour.';
+  String get updNoticeBody => 'Ouvre RomSync pour lire les notes de version et installer la mise à jour.';
 
   @override
   String get updNoRelay =>
@@ -728,8 +717,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get updUnreachableDownload =>
-      'Serveur injoignable pendant le téléchargement.';
+  String get updUnreachableDownload => 'Serveur injoignable pendant le téléchargement.';
 
   @override
   String updDownloadFailed(String detail) {
@@ -753,8 +741,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get updUpdaterMissing => 'romsync-updater.exe est introuvable.';
 
   @override
-  String get coreSyncNeedsChoice =>
-      'Deux appareils ont joué sans se synchroniser : choix à faire';
+  String get coreSyncNeedsChoice => 'Deux appareils ont joué sans se synchroniser : choix à faire';
 
   @override
   String get coreSyncIdentical => 'Save identique à la version active';
@@ -769,8 +756,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coreSyncUploadedDivergent => 'Save envoyée (divergence)';
 
   @override
-  String get coreSyncUploadedNotActive =>
-      'Save envoyée, mais une version plus récente reste active';
+  String get coreSyncUploadedNotActive => 'Save envoyée, mais une version plus récente reste active';
 
   @override
   String coreSyncOffline(int count) {
@@ -784,8 +770,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get coreSyncUnauthorized =>
-      'Appareil non autorisé : appaire-le à nouveau.';
+  String get coreSyncUnauthorized => 'Appareil non autorisé : appaire-le à nouveau.';
 
   @override
   String coreSyncRefused(String code, String detail, String copy) {
@@ -816,6 +801,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String coreSyncServerTooOldForConsole(String version) {
+    return 'Le serveur RomSync ($version) ne connaît pas encore cette console : la save attend dans la file. Mets d’abord à jour le serveur.';
+  }
+
+  @override
   String coreFileProblem(String file, String reason) {
     return '$file : $reason';
   }
@@ -829,8 +819,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coreFileChanging => 'le fichier change pendant la lecture';
 
   @override
-  String get coreFileStillWriting =>
-      'le fichier est encore en cours d’écriture';
+  String get coreFileStillWriting => 'le fichier est encore en cours d’écriture';
 
   @override
   String coreFileLocked(String detail) {
@@ -849,12 +838,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coreScanFolderNotFound => 'dossier introuvable';
 
   @override
-  String get coreScanUnsupportedCompression =>
-      'compression non prise en charge';
+  String get coreScanUnsupportedCompression => 'compression non prise en charge';
 
   @override
-  String get coreScanInstallSevenZip =>
-      'Installer 7zip (paquet p7zip ou 7zip) pour lire les archives .7z.';
+  String get coreScanInstallSevenZip => 'Installer 7zip (paquet p7zip ou 7zip) pour lire les archives .7z.';
 
   @override
   String coreScanUnreadable(String detail) {
@@ -893,8 +880,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get coreEmuFlatpakMissing =>
-      'Flatpak n’est pas installé sur ce système.';
+  String get coreEmuFlatpakMissing => 'Flatpak n’est pas installé sur ce système.';
 
   @override
   String coreEmuFlatpakAppMissing(String id) {
@@ -946,16 +932,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'RetroArch utilise son dossier de saves par défaut, qui dépend de son paquet : vérifie où il écrit les .srm.';
 
   @override
-  String get coreRetroarchSaveDirUnknown =>
-      'Dossier des saves de RetroArch inconnu.';
+  String get coreRetroarchSaveDirUnknown => 'Dossier des saves de RetroArch inconnu.';
 
   @override
-  String get coreRetroarchCoreMissing =>
-      'Cœur melonDS DS introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).';
+  String coreRetroarchCoreMissing(String core, String entry) {
+    return 'Cœur $core introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « $entry »).';
+  }
 
   @override
-  String coreRetroarchCoreMissingAt(String path) {
-    return 'Cœur melonDS DS introuvable ($path) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).';
+  String coreRetroarchCoreMissingAt(String core, String entry, String path) {
+    return 'Cœur $core introuvable ($path) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « $entry »).';
   }
 
   @override
@@ -965,8 +951,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coreSourceDesmumeLinux => 'dossier fixe de DeSmuME sous Linux';
 
   @override
-  String get coreSourceMelonDefault =>
-      'valeur par défaut de melonDS (à côté de la ROM)';
+  String get coreSourceMelonDefault => 'valeur par défaut de melonDS (à côté de la ROM)';
+
+  @override
+  String get coreSourceMgbaDefault => 'valeur par défaut de mGBA (à côté de la ROM)';
 
   @override
   String coreSourcePath(String path) {
@@ -984,8 +972,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get coreUpdateSignatureUnreadable =>
-      'Signature illisible : mise à jour refusée.';
+  String get coreUpdateSignatureUnreadable => 'Signature illisible : mise à jour refusée.';
 
   @override
   String get coreUpdateSignatureInvalid =>
@@ -997,6 +984,5 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get coreUpdateHashMismatch =>
-      'Le fichier téléchargé est altéré (hash différent) : mise à jour refusée.';
+  String get coreUpdateHashMismatch => 'Le fichier téléchargé est altéré (hash différent) : mise à jour refusée.';
 }

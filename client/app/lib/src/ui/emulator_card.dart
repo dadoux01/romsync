@@ -60,13 +60,14 @@ class _EmulatorCardState extends State<EmulatorCard> {
     final issues = c.emulatorIssues[widget.emulatorId] ?? const <EmulatorIssue>[];
     final inUse = c.emulatorsInUse.contains(widget.emulatorId);
     final profile = c.profiles[c.emulatorOf(widget.emulatorId).conversionProfileId];
+    final isDefault = widget.emulatorId == c.config.defaultEmulatorFor(systemOfEmulator(widget.emulatorId));
     return Card(
       child: ExpansionTile(
-        initiallyExpanded: widget.emulatorId == c.config.defaultEmulator,
+        initiallyExpanded: isDefault && inUse,
         title: Text(emulatorName(widget.emulatorId)),
         subtitle: Text(
           [
-            if (widget.emulatorId == c.config.defaultEmulator) l.emuDefault else if (inUse) l.emuInUse,
+            if (isDefault) l.emuDefault else if (inUse) l.emuInUse,
             if (profile != null && !profile.confirmed) l.emuFormatToCheck,
             if (inUse && issues.any((i) => i.blocking)) l.emuToConfigure,
           ].join(' · '),

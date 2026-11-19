@@ -88,17 +88,24 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const Divider(),
               Text(l.emulators, style: text.titleMedium),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l.defaultEmulator),
-                subtitle: Text(l.defaultEmulatorHelp),
-                trailing: DropdownButton<String>(
-                  value: c.config.defaultEmulator,
-                  items: [for (final id in emulatorIds) DropdownMenuItem(value: id, child: Text(emulatorName(id)))],
-                  onChanged: (id) => c.setDefaultEmulator(id!),
+              Text(l.defaultEmulatorHelp),
+              // One block per console: its default emulator, then each of its emulators.
+              for (final system in GameSystem.values) ...[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(systemName(l, system), style: text.titleSmall),
+                  subtitle: Text(l.defaultEmulatorOf(systemName(l, system))),
+                  trailing: DropdownButton<String>(
+                    value: c.config.defaultEmulatorFor(system),
+                    items: [
+                      for (final id in emulatorIdsFor(system))
+                        DropdownMenuItem(value: id, child: Text(emulatorName(id))),
+                    ],
+                    onChanged: (id) => c.setDefaultEmulator(id!),
+                  ),
                 ),
-              ),
-              for (final id in emulatorIds) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
+                for (final id in emulatorIdsFor(system)) EmulatorCard(key: ValueKey(id), controller: c, emulatorId: id),
+              ],
               const Divider(),
               Text(l.tray, style: text.titleMedium),
               SwitchListTile(

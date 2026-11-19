@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../message.dart';
+import '../rom/game_system.dart';
 import '../rom/scanner.dart';
 import '../state/config.dart';
 import 'flatpak.dart';
@@ -61,6 +62,9 @@ abstract class EmulatorProfile {
   /// Identifier sent with uploads (`X-Emulator`).
   String get id;
   String get name;
+
+  /// Consoles it emulates.
+  List<GameSystem> get systems;
 
   /// Conversion profile of its save files (`profiles/<id>.json`).
   String get conversionProfileId;

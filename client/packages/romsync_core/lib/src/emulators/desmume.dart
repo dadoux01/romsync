@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../message.dart';
+import '../rom/game_system.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -29,6 +30,8 @@ class DeSmuME extends EmulatorBase {
   String get id => 'desmume';
   @override
   String get name => 'DeSmuME';
+  @override
+  List<GameSystem> get systems => const [GameSystem.nds];
   @override
   String get conversionProfileId => 'desmume';
 

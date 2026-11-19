@@ -13,6 +13,20 @@ Uint8List fakeRom({String title = 'TEST GAME', String code = 'ABCE', int size = 
   return b;
 }
 
+/// Builds a fake Game Boy Advance ROM of [size] bytes with the given header
+/// fields (title at 0xA0, code at 0xAC, fixed byte 0x96 at 0xB2).
+Uint8List fakeGbaRom({String title = 'TEST GBA', String code = 'BPEF', int size = 4096, int seed = 0}) {
+  final b = Uint8List(size);
+  for (var i = 0xC0; i < size; i++) {
+    b[i] = (i * 17 + seed) & 0xFF;
+  }
+  b.setRange(0xA0, 0xA0 + title.length, title.codeUnits);
+  b.setRange(0xAC, 0xB0, code.codeUnits);
+  b.setRange(0xB0, 0xB2, '01'.codeUnits);
+  b[0xB2] = 0x96;
+  return b;
+}
+
 int _crc32(List<int> data) {
   var crc = 0xFFFFFFFF;
   for (final byte in data) {

@@ -79,8 +79,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairTitle => 'Pair this device';
 
   @override
-  String get pairIntro =>
-      'On the RomSync website: Devices → Add a device, then enter the code here.';
+  String get pairIntro => 'On the RomSync website: Devices → Add a device, then enter the code here.';
 
   @override
   String get pairServer => 'Server address';
@@ -121,19 +120,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pairUseFile => 'Store the token in a file';
 
   @override
-  String get pairCodeExpired =>
-      'This code has expired or was already used: generate a new one on the website.';
+  String get pairCodeExpired => 'This code has expired or was already used: generate a new one on the website.';
 
   @override
-  String get pairCodeUnknown =>
-      'Unknown code: check it, or generate a new one on the website.';
+  String get pairCodeUnknown => 'Unknown code: check it, or generate a new one on the website.';
 
   @override
   String get rateLimited => 'Too many attempts: try again in a minute.';
 
   @override
-  String get pairUnreachable =>
-      'Server unreachable: check the address and your connection (Tailscale?).';
+  String get pairUnreachable => 'Server unreachable: check the address and your connection (Tailscale?).';
 
   @override
   String get homeRescan => 'Rescan and sync';
@@ -142,15 +138,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
-  String get homeUnauthorized =>
-      'This device was revoked or its token is no longer valid: pair it again.';
+  String get homeUnauthorized => 'This device was revoked or its token is no longer valid: pair it again.';
 
   @override
   String get homePairAgain => 'Pair again';
 
   @override
-  String get homeOffline =>
-      'Server unreachable: games start with the local saves.';
+  String get homeOffline => 'Server unreachable: games start with the local saves.';
 
   @override
   String homeOfflineQueued(int count) {
@@ -194,8 +188,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get divergenceLocalSent => 'Local save sent: it is the active save.';
 
   @override
-  String get divergenceServerTaken =>
-      'Server save retrieved; your local save is in the history.';
+  String get divergenceServerTaken => 'Server save retrieved; your local save is in the history.';
 
   @override
   String divergenceServerTakenBackup(String path) {
@@ -273,8 +266,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notPaired => 'Device not paired.';
 
   @override
-  String get closeGameFirst =>
-      'Close the running game first: RomSync will then download the server save.';
+  String get closeGameFirst => 'Close the running game first: RomSync will then download the server save.';
 
   @override
   String gameAlreadyRunning(String game) {
@@ -380,8 +372,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get romFolders => 'ROM folders';
 
   @override
-  String get romFoldersHelp =>
-      '.nds files are read, including inside .zip and .7z archives (7z, 7zz or 7za program).';
+  String get romFoldersHelp => '.nds files are read, including inside .zip and .7z archives (7z, 7zz or 7za program).';
 
   @override
   String get addFolder => 'Add a folder';
@@ -390,11 +381,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emulators => 'Emulators';
 
   @override
+  String get systemNds => 'Nintendo DS';
+
+  @override
+  String get systemGba => 'Game Boy Advance';
+
+  @override
+  String defaultEmulatorOf(String system) {
+    return 'Default emulator ($system)';
+  }
+
+  @override
   String get defaultEmulator => 'Default emulator';
 
   @override
-  String get defaultEmulatorHelp =>
-      'Each game can have its own, from the game list.';
+  String get defaultEmulatorHelp => 'Each game can have its own, from the game list.';
 
   @override
   String get tray => 'System tray';
@@ -413,8 +414,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backupCount => '.backup copies kept per save';
 
   @override
-  String get backupHelp =>
-      'Copy of the local save replaced by a download, in a .backup folder next to it.';
+  String get backupHelp => 'Copy of the local save replaced by a download, in a .backup folder next to it.';
 
   @override
   String get updates => 'Updates';
@@ -549,8 +549,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get choiceShare => 'Share the save';
 
   @override
-  String get choiceShareHelp =>
-      'Same progress as the other ROMs of this game (patched or translated ROM).';
+  String get choiceShareHelp => 'Same progress as the other ROMs of this game (patched or translated ROM).';
 
   @override
   String get choiceSeparate => 'Separate';
@@ -563,8 +562,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get choiceIdName => 'Identifier name';
 
   @override
-  String get choiceIdHelp =>
-      'Letters, digits and dashes, 32 characters at most';
+  String get choiceIdHelp => 'Letters, digits and dashes, 32 characters at most';
 
   @override
   String choiceIdPreview(String id) {
@@ -572,8 +570,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get choiceIdInvalid =>
-      'Invalid name: letters without accents, digits and dashes';
+  String get choiceIdInvalid => 'Invalid name: letters without accents, digits and dashes';
 
   @override
   String get validate => 'Confirm';
@@ -590,8 +587,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get divFromWebsite => 'the website import';
 
   @override
-  String get divLocalUnknown =>
-      '• On this device: another save, changed since the last sync.';
+  String get divLocalUnknown => '• On this device: another save, changed since the last sync.';
 
   @override
   String divLocal(String date) {
@@ -603,12 +599,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Send my local save: it becomes the active save and the other devices will download it.\nTake the server’s: your local save is still sent, as an old version (restorable on the website), then replaced by the server’s; a copy stays in the .backup folder.';
 
   @override
-  String get divCloseEmulator =>
-      'Close the emulator first if it still has this game open.';
+  String get divCloseEmulator => 'Close the emulator first if it still has this game open.';
 
   @override
-  String get divLaterLaunch =>
-      'Later: nothing is sent nor overwritten, and the game does not start.';
+  String get divLaterLaunch => 'Later: nothing is sent nor overwritten, and the game does not start.';
 
   @override
   String get divLater => 'Later: nothing is sent nor overwritten.';
@@ -685,12 +679,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updNoticeBody =>
-      'Open RomSync to read the release notes and install the update.';
+  String get updNoticeBody => 'Open RomSync to read the release notes and install the update.';
 
   @override
-  String get updNoRelay =>
-      'The server offers no update (relay disabled, server too old or no release published).';
+  String get updNoRelay => 'The server offers no update (relay disabled, server too old or no release published).';
 
   @override
   String updUpToDate(String version) {
@@ -724,8 +716,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updUnreachableDownload =>
-      'Server unreachable during the download.';
+  String get updUnreachableDownload => 'Server unreachable during the download.';
 
   @override
   String updDownloadFailed(String detail) {
@@ -749,8 +740,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updUpdaterMissing => 'romsync-updater.exe was not found.';
 
   @override
-  String get coreSyncNeedsChoice =>
-      'Two devices played without syncing: choice needed';
+  String get coreSyncNeedsChoice => 'Two devices played without syncing: choice needed';
 
   @override
   String get coreSyncIdentical => 'Save identical to the active version';
@@ -765,8 +755,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreSyncUploadedDivergent => 'Save uploaded (divergence)';
 
   @override
-  String get coreSyncUploadedNotActive =>
-      'Save uploaded, but a more recent version stays active';
+  String get coreSyncUploadedNotActive => 'Save uploaded, but a more recent version stays active';
 
   @override
   String coreSyncOffline(int count) {
@@ -811,6 +800,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String coreSyncServerTooOldForConsole(String version) {
+    return 'The RomSync server ($version) does not know this console yet: the save waits in the queue. Update the server first.';
+  }
+
+  @override
   String coreFileProblem(String file, String reason) {
     return '$file: $reason';
   }
@@ -846,8 +840,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreScanUnsupportedCompression => 'unsupported compression';
 
   @override
-  String get coreScanInstallSevenZip =>
-      'Install 7zip (p7zip or 7zip package) to read .7z archives.';
+  String get coreScanInstallSevenZip => 'Install 7zip (p7zip or 7zip package) to read .7z archives.';
 
   @override
   String coreScanUnreadable(String detail) {
@@ -886,8 +879,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get coreEmuFlatpakMissing =>
-      'Flatpak is not installed on this system.';
+  String get coreEmuFlatpakMissing => 'Flatpak is not installed on this system.';
 
   @override
   String coreEmuFlatpakAppMissing(String id) {
@@ -918,8 +910,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get coreDesmumeBatteryUnknown =>
-      'DeSmuME’s Battery folder is unknown.';
+  String get coreDesmumeBatteryUnknown => 'DeSmuME’s Battery folder is unknown.';
 
   @override
   String coreMelonConfigUnreadable(String detail) {
@@ -940,16 +931,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'RetroArch uses its default save folder, which depends on its package: check where it writes the .srm files.';
 
   @override
-  String get coreRetroarchSaveDirUnknown =>
-      'RetroArch’s save folder is unknown.';
+  String get coreRetroarchSaveDirUnknown => 'RetroArch’s save folder is unknown.';
 
   @override
-  String get coreRetroarchCoreMissing =>
-      'melonDS DS core not found: install it from RetroArch (Main Menu > Load Core > Download a Core > “Nintendo - DS (melonDS DS)”).';
+  String coreRetroarchCoreMissing(String core, String entry) {
+    return '$core core not found: install it from RetroArch (Main Menu > Load Core > Download a Core > “$entry”).';
+  }
 
   @override
-  String coreRetroarchCoreMissingAt(String path) {
-    return 'melonDS DS core not found ($path): install it from RetroArch (Main Menu > Load Core > Download a Core > “Nintendo - DS (melonDS DS)”).';
+  String coreRetroarchCoreMissingAt(String core, String entry, String path) {
+    return '$core core not found ($path): install it from RetroArch (Main Menu > Load Core > Download a Core > “$entry”).';
   }
 
   @override
@@ -960,6 +951,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coreSourceMelonDefault => 'melonDS default (next to the ROM)';
+
+  @override
+  String get coreSourceMgbaDefault => 'mGBA default (next to the ROM)';
 
   @override
   String coreSourcePath(String path) {
@@ -977,12 +971,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get coreUpdateSignatureUnreadable =>
-      'Unreadable signature: update refused.';
+  String get coreUpdateSignatureUnreadable => 'Unreadable signature: update refused.';
 
   @override
-  String get coreUpdateSignatureInvalid =>
-      'Invalid signature: this update does not come from RomSync, it is refused.';
+  String get coreUpdateSignatureInvalid => 'Invalid signature: this update does not come from RomSync, it is refused.';
 
   @override
   String coreUpdateNotListed(String file) {
@@ -990,6 +982,5 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get coreUpdateHashMismatch =>
-      'The downloaded file is altered (different hash): update refused.';
+  String get coreUpdateHashMismatch => 'The downloaded file is altered (different hash): update refused.';
 }

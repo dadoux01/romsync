@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../message.dart';
+import '../rom/game_system.dart';
 import '../rom/scanner.dart';
 import 'emulator.dart';
 
@@ -35,47 +36,43 @@ class RetroArchConfig {
   }
 }
 
-/// melonDS DS, the libretro core, run by RetroArch.
+/// A libretro core run by RetroArch: melonDS DS (DS) or mGBA (GBA).
 ///
-/// The `.srm` is the raw SRAM buffer the core exposes through
+/// The `.srm` is the raw save buffer the core exposes through
 /// `retro_get_memory_data(RETRO_MEMORY_SAVE_RAM)` (melonds-ds
-/// `src/libretro/sram.cpp`); RetroArch writes it as is. Its folder follows
-/// RetroArch's `runloop.c`:
+/// `src/libretro/sram.cpp`, mGBA `src/platform/libretro/libretro.c`);
+/// RetroArch writes it as is. Its folder follows RetroArch's `runloop.c`:
 /// 1. `savefile_directory`, or the ROM's folder when it is empty or
 ///    `savefiles_in_content_dir` is set (`default` means RetroArch's
 ///    built-in folder: `<exe>\saves` on Windows,
 ///    `~/Library/Application Support/RetroArch/saves` on macOS, the ROM's
 ///    folder on Linux);
 /// 2. plus the name of the ROM's folder when `sort_savefiles_by_content_enable`;
-/// 3. plus the core's library name, `melonDS DS`, when `sort_savefiles_enable`.
+/// 3. plus the core's library name (`melonDS DS`, `mGBA`) when
+///    `sort_savefiles_enable`.
 ///
 /// The file is named after the ROM without its extension, plus `.srm`.
-/// Overrides in `<config>/config/melonDS DS/` (core, content folder, game)
-/// are applied in RetroArch's order.
-class RetroArchMelonDSDS extends EmulatorBase {
-  RetroArchMelonDSDS({
-    required super.settings,
-    super.platform,
-    super.home,
-    super.environment,
-    super.run,
-    super.searchPath,
-  });
+/// Overrides in `<config>/config/<library name>/` (core, content folder,
+/// game) are applied in RetroArch's order.
+abstract class RetroArch extends EmulatorBase {
+  RetroArch({required super.settings, super.platform, super.home, super.environment, super.run, super.searchPath});
 
-  /// `library_name` of the core (CMake project name of melonds-ds).
-  static const libraryName = 'melonDS DS';
+  /// `library_name` of the core.
+  String get libraryName;
+
+  /// Core file name without its extension (`melondsds_libretro`).
+  String get coreBaseName;
+
+  /// Entry of the core in RetroArch's core downloader.
+  String get coreDownloadEntry;
 
   @override
-  String get id => 'retroarch-melondsds';
-  @override
-  String get name => 'RetroArch (melonDS DS)';
-  @override
-  String get conversionProfileId => 'retroarch-melondsds';
+  String get conversionProfileId => id;
 
   String get _coreFile => switch (platform) {
-    HostPlatform.windows => 'melondsds_libretro.dll',
-    HostPlatform.macos => 'melondsds_libretro.dylib',
-    HostPlatform.linux => 'melondsds_libretro.so',
+    HostPlatform.windows => '$coreBaseName.dll',
+    HostPlatform.macos => '$coreBaseName.dylib',
+    HostPlatform.linux => '$coreBaseName.so',
   };
 
   /// Folder of RetroArch's executable (for `:` paths on Windows).
@@ -176,7 +173,12 @@ class RetroArchMelonDSDS extends EmulatorBase {
     final raw = cfg.values['savefile_directory'];
     CoreMessage? warning;
     if (raw == 'default' && platform == HostPlatform.linux) warning = const CoreMessage(Msg.retroarchDefaultDir);
-    return SaveLocation(dir: null, source: CoreMessage(Msg.sourcePath, {'path': cfg.path}), warning: warning, data: cfg);
+    return SaveLocation(
+      dir: null,
+      source: CoreMessage(Msg.sourcePath, {'path': cfg.path}),
+      warning: warning,
+      data: cfg,
+    );
   }
 
   @override
@@ -208,8 +210,8 @@ class RetroArchMelonDSDS extends EmulatorBase {
   String savePathFor(ScannedRom rom, SaveLocation location) =>
       paths.join(saveDirFor(rom, location), '${_stem(rom)}.srm');
 
-  /// Path of the melonDS DS core (`libretro_directory`, else RetroArch's
-  /// default cores folder).
+  /// Path of the core (`libretro_directory`, else RetroArch's default cores
+  /// folder).
   Future<String?> corePath() async {
     final cfg = await _readConfig();
     final dir =
@@ -234,8 +236,12 @@ class RetroArchMelonDSDS extends EmulatorBase {
       issues.add(
         EmulatorIssue(
           _core == null
-              ? const CoreMessage(Msg.retroarchCoreMissing)
-              : CoreMessage(Msg.retroarchCoreMissingAt, {'path': _core!}),
+              ? CoreMessage(Msg.retroarchCoreMissing, {'core': libraryName, 'entry': coreDownloadEntry})
+              : CoreMessage(Msg.retroarchCoreMissingAt, {
+                  'core': libraryName,
+                  'entry': coreDownloadEntry,
+                  'path': _core!,
+                }),
           blocking: true,
         ),
       );
@@ -246,4 +252,53 @@ class RetroArchMelonDSDS extends EmulatorBase {
       ...await installationIssues(readFolders: romFolders, writeFolders: [?forced]),
     ];
   }
+}
+
+/// melonDS DS (Nintendo DS).
+class RetroArchMelonDSDS extends RetroArch {
+  RetroArchMelonDSDS({
+    required super.settings,
+    super.platform,
+    super.home,
+    super.environment,
+    super.run,
+    super.searchPath,
+  });
+
+  @override
+  String get id => 'retroarch-melondsds';
+  @override
+  String get name => 'RetroArch (melonDS DS)';
+  @override
+  List<GameSystem> get systems => const [GameSystem.nds];
+
+  /// CMake project name of melonds-ds.
+  @override
+  String get libraryName => 'melonDS DS';
+  @override
+  String get coreBaseName => 'melondsds_libretro';
+  @override
+  String get coreDownloadEntry => 'Nintendo - DS (melonDS DS)';
+}
+
+/// mGBA (Game Boy Advance). Its `.srm` holds the save chip at its exact
+/// size, without the cartridge clock; 128 KiB of 0xFF until the game has
+/// saved once (docs/SPEC.md, "Game Boy Advance").
+class RetroArchMGBA extends RetroArch {
+  RetroArchMGBA({required super.settings, super.platform, super.home, super.environment, super.run, super.searchPath});
+
+  @override
+  String get id => 'retroarch-mgba';
+  @override
+  String get name => 'RetroArch (mGBA)';
+  @override
+  List<GameSystem> get systems => const [GameSystem.gba];
+
+  /// mGBA's project name (`library_name = projectName`).
+  @override
+  String get libraryName => 'mGBA';
+  @override
+  String get coreBaseName => 'mgba_libretro';
+  @override
+  String get coreDownloadEntry => 'Nintendo - Game Boy Advance (mGBA)';
 }

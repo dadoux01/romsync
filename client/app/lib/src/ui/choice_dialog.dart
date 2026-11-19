@@ -22,7 +22,7 @@ class _ChoiceDialogState extends State<ChoiceDialog> {
   Widget build(BuildContext context) {
     final e = widget.entry;
     final l = AppLocalizations.of(context);
-    final preview = GameId.custom(_name.text);
+    final preview = GameId.custom(_name.text, e.rom.system);
     return AlertDialog(
       title: Text(l.choiceTitle),
       content: SizedBox(
@@ -64,7 +64,7 @@ class _ChoiceDialogState extends State<ChoiceDialog> {
         FilledButton(
           onPressed: () {
             if (!_separate) return Navigator.pop(context, const RomChoice.share());
-            final id = GameId.custom(_name.text);
+            final id = GameId.custom(_name.text, widget.entry.rom.system);
             if (id == null) {
               setState(() => _error = l.choiceIdInvalid);
               return;

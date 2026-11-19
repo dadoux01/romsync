@@ -1,3 +1,4 @@
+import '../rom/game_system.dart';
 import 'json_file.dart';
 
 /// How the device token is stored.
@@ -102,6 +103,7 @@ class ClientConfig {
     List<String>? romFolders,
     Map<String, EmulatorSettings>? emulators,
     this.defaultEmulator = 'melonds',
+    Map<String, String>? defaultEmulators,
     Map<String, String>? gameEmulators,
     this.backupCount = 10,
     this.tokenStorage = TokenStorage.keyring,
@@ -112,6 +114,7 @@ class ClientConfig {
     this.language,
   }) : romFolders = romFolders ?? [],
        emulators = emulators ?? {},
+       defaultEmulators = defaultEmulators ?? {},
        gameEmulators = gameEmulators ?? {},
        romChoices = romChoices ?? {};
 
@@ -127,11 +130,27 @@ class ClientConfig {
   /// Emulator used for games without their own choice.
   String defaultEmulator;
 
+  /// Emulator used for the games of the other consoles, by console id
+  /// (`gba`); [defaultEmulator] stays the one of the DS.
+  final Map<String, String> defaultEmulators;
+
+  /// Emulator used for the games of [system] without their own choice.
+  String defaultEmulatorFor(GameSystem system) =>
+      system == GameSystem.nds ? defaultEmulator : defaultEmulators[system.id] ?? system.defaultEmulator;
+
+  void setDefaultEmulator(GameSystem system, String id) {
+    if (system == GameSystem.nds) {
+      defaultEmulator = id;
+    } else {
+      defaultEmulators[system.id] = id;
+    }
+  }
+
   /// Emulator chosen for a game, by game identifier.
   final Map<String, String> gameEmulators;
 
   /// Emulator of [gameId].
-  String emulatorFor(String gameId) => gameEmulators[gameId] ?? defaultEmulator;
+  String emulatorFor(String gameId) => gameEmulators[gameId] ?? defaultEmulatorFor(GameSystem.ofGameId(gameId));
 
   /// Number of `.backup` copies kept per save file.
   int backupCount;
@@ -163,6 +182,7 @@ class ClientConfig {
     'rom_folders': romFolders,
     'emulators': {for (final e in emulators.entries) e.key: e.value.toJson()},
     'default_emulator': defaultEmulator,
+    'default_emulators': defaultEmulators,
     'game_emulators': gameEmulators,
     'backup_count': backupCount,
     'token_storage': tokenStorage.name,
@@ -186,6 +206,10 @@ class ClientConfig {
         'melonds': EmulatorSettings.fromJson(j['emulator']! as Map<String, Object?>),
     },
     defaultEmulator: (j['default_emulator'] as String?) ?? 'melonds',
+    defaultEmulators: {
+      for (final e in ((j['default_emulators'] as Map<String, Object?>?) ?? const {}).entries)
+        e.key: e.value! as String,
+    },
     gameEmulators: {
       for (final e in ((j['game_emulators'] as Map<String, Object?>?) ?? const {}).entries) e.key: e.value! as String,
     },

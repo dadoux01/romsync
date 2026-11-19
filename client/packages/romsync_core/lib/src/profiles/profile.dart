@@ -118,7 +118,9 @@ class ConversionProfile {
       sizeOutput: (size['output'] as String?) ?? 'exact',
       padTo: size['pad_to'] as int?,
       padByte: size['pad_byte'] as int?,
-      systems: [for (final s in (j['systems'] as List<Object?>?) ?? const ['nds']) s! as String],
+      systems: [
+        for (final s in (j['systems'] as List<Object?>?) ?? const ['nds']) s! as String,
+      ],
     );
   }
 

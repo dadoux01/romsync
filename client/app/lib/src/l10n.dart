@@ -74,6 +74,9 @@ String coreText(AppLocalizations l, CoreMessage m) {
     Msg.syncOfflineLaunch => l.coreSyncOfflineLaunch,
     Msg.syncSharedId => l.coreSyncSharedId(a('gameId')),
     Msg.syncServerTooOld => l.coreSyncServerTooOld(m.args.containsKey('version') ? a('version') : l.compatOldVersion),
+    Msg.syncServerTooOldForConsole => l.coreSyncServerTooOldForConsole(
+      m.args.containsKey('version') ? a('version') : l.compatOldVersion,
+    ),
     Msg.fileProblem => l.coreFileProblem(a('file'), a('reason')),
     Msg.fileBadFormat => l.coreFileBadFormat(a('file'), a('detail')),
     Msg.fileChanging => l.coreFileChanging,
@@ -105,11 +108,12 @@ String coreText(AppLocalizations l, CoreMessage m) {
     Msg.retroarchConfigNotFound => l.coreRetroarchConfigNotFound,
     Msg.retroarchDefaultDir => l.coreRetroarchDefaultDir,
     Msg.retroarchSaveDirUnknown => l.coreRetroarchSaveDirUnknown,
-    Msg.retroarchCoreMissing => l.coreRetroarchCoreMissing,
-    Msg.retroarchCoreMissingAt => l.coreRetroarchCoreMissingAt(a('path')),
+    Msg.retroarchCoreMissing => l.coreRetroarchCoreMissing(a('core'), a('entry')),
+    Msg.retroarchCoreMissingAt => l.coreRetroarchCoreMissingAt(a('core'), a('entry'), a('path')),
     Msg.sourceSetting => l.coreSourceSetting,
     Msg.sourceDesmumeLinux => l.coreSourceDesmumeLinux,
     Msg.sourceMelonDefault => l.coreSourceMelonDefault,
+    Msg.sourceMgbaDefault => l.coreSourceMgbaDefault,
     Msg.sourcePath => l.coreSourcePath(a('path')),
     Msg.noticeNewerSave => l.coreNoticeNewerSave(a('title'), a('device')),
     Msg.noticeNewerSaveWebsite => l.coreNoticeNewerSaveWebsite(a('title')),
@@ -119,6 +123,12 @@ String coreText(AppLocalizations l, CoreMessage m) {
     Msg.updateHashMismatch => l.coreUpdateHashMismatch,
   };
 }
+
+/// Name of a console.
+String systemName(AppLocalizations l, GameSystem s) => switch (s) {
+  GameSystem.nds => l.systemNds,
+  GameSystem.gba => l.systemGba,
+};
 
 /// An error raised by the app itself, already worded for the user.
 class AppException implements Exception {

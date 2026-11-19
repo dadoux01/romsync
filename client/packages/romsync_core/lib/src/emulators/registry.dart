@@ -1,17 +1,36 @@
+import '../rom/game_system.dart';
 import '../state/config.dart';
 import 'desmume.dart';
 import 'emulator.dart';
 import 'melonds.dart';
+import 'mgba.dart';
 import 'retroarch.dart';
 
-/// Emulators supported by the client, in the order shown to the user.
-const emulatorIds = ['melonds', 'desmume', 'retroarch-melondsds'];
+/// Emulators supported by the client, by console, in the order shown to the
+/// user; the first of each console is its default.
+const emulatorIdsBySystem = {
+  GameSystem.nds: ['melonds', 'desmume', 'retroarch-melondsds'],
+  GameSystem.gba: ['mgba', 'retroarch-mgba'],
+};
+
+/// Every emulator, console after console.
+final emulatorIds = [for (final ids in emulatorIdsBySystem.values) ...ids];
+
+/// Emulators of [system].
+List<String> emulatorIdsFor(GameSystem system) => emulatorIdsBySystem[system] ?? const [];
+
+/// Console of an emulator id.
+GameSystem systemOfEmulator(String id) => emulatorIdsBySystem.entries
+    .firstWhere((e) => e.value.contains(id), orElse: () => const MapEntry(GameSystem.nds, []))
+    .key;
 
 /// Display name of an emulator id.
 String emulatorName(String id) => switch (id) {
   'melonds' => 'melonDS',
   'desmume' => 'DeSmuME',
   'retroarch-melondsds' => 'RetroArch (melonDS DS)',
+  'mgba' => 'mGBA',
+  'retroarch-mgba' => 'RetroArch (mGBA)',
   _ => id,
 };
 
@@ -25,9 +44,18 @@ EmulatorSettings defaultEmulatorSettings(String id, HostPlatform platform) {
     ('desmume', HostPlatform.linux) => ('desmume', 'org.desmume.DeSmuME'),
     ('desmume', HostPlatform.macos) => ('/Applications/DeSmuME.app', 'org.desmume.DeSmuME'),
     ('desmume', HostPlatform.windows) => ('DeSmuME.exe', 'org.desmume.DeSmuME'),
-    ('retroarch-melondsds', HostPlatform.linux) => ('retroarch', 'org.libretro.RetroArch'),
-    ('retroarch-melondsds', HostPlatform.macos) => ('/Applications/RetroArch.app', 'org.libretro.RetroArch'),
-    ('retroarch-melondsds', HostPlatform.windows) => (r'C:\RetroArch-Win64\retroarch.exe', 'org.libretro.RetroArch'),
+    ('retroarch-melondsds' || 'retroarch-mgba', HostPlatform.linux) => ('retroarch', 'org.libretro.RetroArch'),
+    ('retroarch-melondsds' || 'retroarch-mgba', HostPlatform.macos) => (
+      '/Applications/RetroArch.app',
+      'org.libretro.RetroArch',
+    ),
+    ('retroarch-melondsds' || 'retroarch-mgba', HostPlatform.windows) => (
+      r'C:\RetroArch-Win64\retroarch.exe',
+      'org.libretro.RetroArch',
+    ),
+    ('mgba', HostPlatform.linux) => ('mgba-qt', 'io.mgba.mGBA'),
+    ('mgba', HostPlatform.macos) => ('/Applications/mGBA.app', 'io.mgba.mGBA'),
+    ('mgba', HostPlatform.windows) => ('mGBA.exe', 'io.mgba.mGBA'),
     _ => throw ArgumentError('unknown emulator $id'),
   };
   return EmulatorSettings(id: id, executable: exe, flatpakId: flatpak);
@@ -63,6 +91,22 @@ EmulatorProfile createEmulator(
     searchPath: searchPath,
   ),
   'retroarch-melondsds' => RetroArchMelonDSDS(
+    settings: settings,
+    platform: platform,
+    home: home,
+    environment: environment,
+    run: run,
+    searchPath: searchPath,
+  ),
+  'mgba' => MGBA(
+    settings: settings,
+    platform: platform,
+    home: home,
+    environment: environment,
+    run: run,
+    searchPath: searchPath,
+  ),
+  'retroarch-mgba' => RetroArchMGBA(
     settings: settings,
     platform: platform,
     home: home,

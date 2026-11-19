@@ -254,6 +254,16 @@
   "romFoldersHelp": "Les .nds sont lus, y compris dans les .zip et les .7z (programme 7z, 7zz ou 7za).",
   "addFolder": "Ajouter un dossier",
   "emulators": "Émulateurs",
+  "systemNds": "Nintendo DS",
+  "systemGba": "Game Boy Advance",
+  "defaultEmulatorOf": "Émulateur par défaut ({system})",
+  "@defaultEmulatorOf": {
+    "placeholders": {
+      "system": {
+        "type": "String"
+      }
+    }
+  },
   "defaultEmulator": "Émulateur par défaut",
   "defaultEmulatorHelp": "Chaque jeu peut avoir le sien, depuis la liste des jeux.",
   "tray": "Barre système",
@@ -590,6 +600,14 @@
       }
     }
   },
+  "coreSyncServerTooOldForConsole": "Le serveur RomSync ({version}) ne connaît pas encore cette console : la save attend dans la file. Mets d’abord à jour le serveur.",
+  "@coreSyncServerTooOldForConsole": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
   "coreFileProblem": "{file} : {reason}",
   "@coreFileProblem": {
     "placeholders": {
@@ -760,10 +778,26 @@
   "coreRetroarchConfigNotFound": "retroarch.cfg introuvable : lance RetroArch une fois, ou indique le dossier des saves dans les réglages.",
   "coreRetroarchDefaultDir": "RetroArch utilise son dossier de saves par défaut, qui dépend de son paquet : vérifie où il écrit les .srm.",
   "coreRetroarchSaveDirUnknown": "Dossier des saves de RetroArch inconnu.",
-  "coreRetroarchCoreMissing": "Cœur melonDS DS introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).",
-  "coreRetroarchCoreMissingAt": "Cœur melonDS DS introuvable ({path}) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).",
+  "coreRetroarchCoreMissing": "Cœur {core} introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « {entry} »).",
+  "@coreRetroarchCoreMissing": {
+    "placeholders": {
+      "core": {
+        "type": "String"
+      },
+      "entry": {
+        "type": "String"
+      }
+    }
+  },
+  "coreRetroarchCoreMissingAt": "Cœur {core} introuvable ({path}) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « {entry} »).",
   "@coreRetroarchCoreMissingAt": {
     "placeholders": {
+      "core": {
+        "type": "String"
+      },
+      "entry": {
+        "type": "String"
+      },
       "path": {
         "type": "String"
       }
@@ -772,6 +806,7 @@
   "coreSourceSetting": "réglage RomSync",
   "coreSourceDesmumeLinux": "dossier fixe de DeSmuME sous Linux",
   "coreSourceMelonDefault": "valeur par défaut de melonDS (à côté de la ROM)",
+  "coreSourceMgbaDefault": "valeur par défaut de mGBA (à côté de la ROM)",
   "coreSourcePath": "{path}",
   "@coreSourcePath": {
     "placeholders": {

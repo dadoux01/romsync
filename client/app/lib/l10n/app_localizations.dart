@@ -62,8 +62,7 @@ import 'app_localizations_fr.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -71,8 +70,7 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate =
-      _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -84,19 +82,15 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
-      <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[
-    Locale('en'),
-    Locale('fr'),
-  ];
+  static const List<Locale> supportedLocales = <Locale>[Locale('en'), Locale('fr')];
 
   /// No description provided for @ok.
   ///
@@ -685,6 +679,24 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'Émulateurs'**
   String get emulators;
+
+  /// No description provided for @systemNds.
+  ///
+  /// In fr, this message translates to:
+  /// **'Nintendo DS'**
+  String get systemNds;
+
+  /// No description provided for @systemGba.
+  ///
+  /// In fr, this message translates to:
+  /// **'Game Boy Advance'**
+  String get systemGba;
+
+  /// No description provided for @defaultEmulatorOf.
+  ///
+  /// In fr, this message translates to:
+  /// **'Émulateur par défaut ({system})'**
+  String defaultEmulatorOf(String system);
 
   /// No description provided for @defaultEmulator.
   ///
@@ -1358,6 +1370,12 @@ abstract class AppLocalizations {
   /// **'Le serveur RomSync ({version}) est trop ancien pour appliquer ce choix : rien n’a été envoyé ni écrasé. Mets d’abord à jour le serveur, puis recommence.'**
   String coreSyncServerTooOld(String version);
 
+  /// No description provided for @coreSyncServerTooOldForConsole.
+  ///
+  /// In fr, this message translates to:
+  /// **'Le serveur RomSync ({version}) ne connaît pas encore cette console : la save attend dans la file. Mets d’abord à jour le serveur.'**
+  String coreSyncServerTooOldForConsole(String version);
+
   /// No description provided for @coreFileProblem.
   ///
   /// In fr, this message translates to:
@@ -1547,14 +1565,14 @@ abstract class AppLocalizations {
   /// No description provided for @coreRetroarchCoreMissing.
   ///
   /// In fr, this message translates to:
-  /// **'Cœur melonDS DS introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).'**
-  String get coreRetroarchCoreMissing;
+  /// **'Cœur {core} introuvable : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « {entry} »).'**
+  String coreRetroarchCoreMissing(String core, String entry);
 
   /// No description provided for @coreRetroarchCoreMissingAt.
   ///
   /// In fr, this message translates to:
-  /// **'Cœur melonDS DS introuvable ({path}) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « Nintendo - DS (melonDS DS) »).'**
-  String coreRetroarchCoreMissingAt(String path);
+  /// **'Cœur {core} introuvable ({path}) : installe-le depuis RetroArch (Menu principal > Charger un cœur > Télécharger un cœur > « {entry} »).'**
+  String coreRetroarchCoreMissingAt(String core, String entry, String path);
 
   /// No description provided for @coreSourceSetting.
   ///
@@ -1573,6 +1591,12 @@ abstract class AppLocalizations {
   /// In fr, this message translates to:
   /// **'valeur par défaut de melonDS (à côté de la ROM)'**
   String get coreSourceMelonDefault;
+
+  /// No description provided for @coreSourceMgbaDefault.
+  ///
+  /// In fr, this message translates to:
+  /// **'valeur par défaut de mGBA (à côté de la ROM)'**
+  String get coreSourceMgbaDefault;
 
   /// No description provided for @coreSourcePath.
   ///
@@ -1617,8 +1641,7 @@ abstract class AppLocalizations {
   String get coreUpdateHashMismatch;
 }
 
-class _AppLocalizationsDelegate
-    extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -1627,8 +1650,7 @@ class _AppLocalizationsDelegate
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['en', 'fr'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>['en', 'fr'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;

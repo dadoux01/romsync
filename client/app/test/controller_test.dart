@@ -31,6 +31,14 @@ List<int> rom(String code) {
   return b;
 }
 
+List<int> gbaRom(String code) {
+  final b = List<int>.filled(1024, 0);
+  b.setRange(0xA0, 0xA4, 'GAME'.codeUnits);
+  b.setRange(0xAC, 0xB0, code.codeUnits);
+  b[0xB2] = 0x96;
+  return b;
+}
+
 void main() {
   late Directory tmp;
   late ClientPaths paths;
@@ -107,6 +115,28 @@ void main() {
     // The choice survives a restart.
     final again = await controller(FakeKeyring(available: false));
     expect(again.isPaired, isTrue);
+  });
+
+  test('GBA ROMs use the GBA emulators, next to the DS ones', () async {
+    final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
+    File(p.join(roms.path, 'Emeraude.gba')).writeAsBytesSync(gbaRom('BPEF'));
+    File(p.join(roms.path, 'Noire.nds')).writeAsBytesSync(rom('IRBF'));
+    final c = await controller(FakeKeyring(available: true));
+    await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora');
+    await c.addFolder(roms.path);
+
+    final byId = {for (final r in c.rows) r.entry.gameId: r.entry};
+    expect(byId.keys, containsAll(['gba:BPEF', 'IRBF']));
+    final gba = byId['gba:BPEF']!;
+    expect((gba.emulator, gba.profile.id), ('mgba', 'mgba'));
+    expect(gba.savePath, p.join(roms.path, 'Emeraude.sav'));
+    expect(byId['IRBF']!.emulator, 'melonds');
+    expect(c.emulatorsInUse, containsAll(['mgba', 'melonds']));
+
+    await c.setDefaultEmulator('retroarch-mgba');
+    expect(c.config.defaultEmulatorFor(GameSystem.gba), 'retroarch-mgba');
+    expect(c.config.defaultEmulator, 'melonds', reason: 'the DS keeps its default');
+    expect(c.rows.firstWhere((r) => r.entry.gameId == 'gba:BPEF').entry.emulator, 'retroarch-mgba');
   });
 
   test('ROMs sharing an identifier wait for a choice, ROM by ROM', () async {

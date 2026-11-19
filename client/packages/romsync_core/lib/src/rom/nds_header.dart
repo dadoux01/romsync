@@ -1,8 +1,26 @@
 import 'dart:typed_data';
 
+/// The part of a ROM header that RomSync uses: the internal title and the
+/// game code.
+abstract interface class RomHeader {
+  String get title;
+  String get gameCode;
+
+  /// Whether [gameCode] identifies a game (homebrew usually has none).
+  bool get hasValidCode;
+}
+
+final _cartridgeCode = RegExp(r'^[A-Z0-9]{4}$');
+
+String _ascii(List<int> bytes, {bool trim = true}) {
+  final s = String.fromCharCodes(bytes.map((c) => c >= 0x20 && c < 0x7F ? c : 0));
+  final noNul = s.replaceAll('\u0000', trim ? '' : '\u0000');
+  return trim ? noNul.trim() : noNul;
+}
+
 /// The part of a Nintendo DS ROM header that RomSync uses
 /// (docs/SPEC.md, "Identification des jeux").
-class NdsHeader {
+class NdsHeader implements RomHeader {
   const NdsHeader({
     required this.title,
     required this.gameCode,
@@ -15,9 +33,11 @@ class NdsHeader {
   static const length = 0x20;
 
   /// Internal title (0x000, 12 bytes), trimmed.
+  @override
   final String title;
 
   /// Game code (0x00C, 4 ASCII bytes), e.g. `IRBF`.
+  @override
   final String gameCode;
 
   /// Maker code (0x010, 2 bytes).
@@ -29,10 +49,9 @@ class NdsHeader {
   /// ROM version (0x01E).
   final int romVersion;
 
-  static final _cartridgeCode = RegExp(r'^[A-Z0-9]{4}$');
-
   /// Whether [gameCode] is a usable cartridge code. Homebrew usually has
   /// `####` or zeros, which do not identify a game.
+  @override
   bool get hasValidCode => _cartridgeCode.hasMatch(gameCode) && gameCode != '0000';
 
   /// Parses the first bytes of a ROM; returns null when there are too few.
@@ -47,10 +66,37 @@ class NdsHeader {
       romVersion: b[0x01E],
     );
   }
+}
 
-  static String _ascii(List<int> bytes, {bool trim = true}) {
-    final s = String.fromCharCodes(bytes.map((c) => c >= 0x20 && c < 0x7F ? c : 0));
-    final noNul = s.replaceAll('\u0000', trim ? '' : '\u0000');
-    return trim ? noNul.trim() : noNul;
+/// The part of a Game Boy Advance ROM header that RomSync uses
+/// (docs/SPEC.md, "Game Boy Advance").
+class GbaHeader implements RomHeader {
+  const GbaHeader({required this.title, required this.gameCode, required this.makerCode});
+
+  /// Number of bytes needed to parse a header.
+  static const length = 0xC0;
+
+  /// Internal title (0x0A0, 12 bytes), trimmed.
+  @override
+  final String title;
+
+  /// Game code (0x0AC, 4 ASCII bytes), e.g. `BPEF`.
+  @override
+  final String gameCode;
+
+  /// Maker code (0x0B0, 2 bytes).
+  final String makerCode;
+
+  @override
+  bool get hasValidCode => _cartridgeCode.hasMatch(gameCode) && gameCode != '0000';
+
+  /// Parses the first bytes of a GBA ROM; returns null when there are too few.
+  static GbaHeader? parse(List<int> bytes) {
+    if (bytes.length < length) return null;
+    return GbaHeader(
+      title: _ascii(bytes.sublist(0x0A0, 0x0AC)),
+      gameCode: _ascii(bytes.sublist(0x0AC, 0x0B0), trim: false),
+      makerCode: _ascii(bytes.sublist(0x0B0, 0x0B2)),
+    );
   }
 }

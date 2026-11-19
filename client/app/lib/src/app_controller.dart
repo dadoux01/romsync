@@ -170,8 +170,15 @@ class AppController extends ChangeNotifier {
   EmulatorProfile emulatorOf(String id) =>
       emulators[id] ?? createEmulator(emulatorSettings(config, id, platform), environment: environment);
 
-  /// Emulators the library uses: the default one and the per-game choices.
-  Set<String> get emulatorsInUse => {config.defaultEmulator, ...config.gameEmulators.values};
+  /// Consoles of the ROMs found, the DS always included.
+  Set<GameSystem> get systemsInLibrary => {GameSystem.nds, for (final r in _roms) r.system};
+
+  /// Emulators the library uses: the default one of each console found and
+  /// the per-game choices.
+  Set<String> get emulatorsInUse => {
+    for (final s in systemsInLibrary) config.defaultEmulatorFor(s),
+    ...config.gameEmulators.values,
+  };
 
   Future<void> init() async {
     config = await ClientConfig.load(paths.configFile);
@@ -319,8 +326,9 @@ class AppController extends ChangeNotifier {
     await rescan();
   }
 
+  /// Makes [id] the default emulator of its console.
   Future<void> setDefaultEmulator(String id) async {
-    config.defaultEmulator = id;
+    config.setDefaultEmulator(systemOfEmulator(id), id);
     await _saveConfig();
     await rescan();
   }
@@ -348,7 +356,7 @@ class AppController extends ChangeNotifier {
     for (final path in setAsideFirst) {
       await setAside(path, Backups(keep: config.backupCount));
     }
-    if (emulatorId == null || emulatorId == config.defaultEmulator) {
+    if (emulatorId == null || emulatorId == config.defaultEmulatorFor(GameSystem.ofGameId(gameId))) {
       config.gameEmulators.remove(gameId);
     } else {
       config.gameEmulators[gameId] = emulatorId;
