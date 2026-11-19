@@ -338,6 +338,28 @@ static void the_game_list_shows_the_game(void)
     free(games);
 }
 
+/* A game of another console (uploaded by a PC, API level 3) is listed with
+ * its full identifier and changes nothing for the DS games of the 3DS
+ * (docs/SPEC.md, "Multi-consoles"). */
+static void a_game_of_another_console_is_ignored(void)
+{
+    const char *gba = "gba:h:0123456789abcdef0123456789abcdef01234567"; /* the longest form */
+    char id[64];
+    snprintf(id, sizeof id, "e2e-gba-%ld", (long)time(NULL));
+    rs_upload_result r;
+    CHECK_INT(rs_api_upload(&pc.api, gba, save(9), SAVE_SIZE, time(NULL), id, 0, "mgba", NULL, RS_ACTIVATE_AUTO, &r, NULL),
+              RS_OK);
+    rs_remote_game *games;
+    int n;
+    CHECK_INT(rs_api_games(&ds.api, &games, &n, NULL), RS_OK);
+    bool found = false;
+    for (int i = 0; i < n; i++)
+        found = found || strcmp(games[i].code, gba) == 0;
+    CHECK(found);
+    free(games);
+    CHECK(!prepare(&ds).needs_choice);
+}
+
 static void the_server_is_compatible_and_its_relay_is_off(void)
 {
     rs_server_info info;
@@ -384,6 +406,7 @@ int main(int argc, char **argv)
         RUN(a_save_padded_with_zeros_with_the_active_content_is_no_divergence);
         RUN(a_divergence_waits_for_the_choice_then_applies_it);
         RUN(the_game_list_shows_the_game);
+        RUN(a_game_of_another_console_is_ignored);
         RUN(the_server_is_compatible_and_its_relay_is_off);
         RUN(a_revoked_or_wrong_token_is_refused);
     }

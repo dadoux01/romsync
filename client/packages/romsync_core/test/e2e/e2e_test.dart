@@ -208,6 +208,36 @@ void _scenario() {
     expect((await a.api.versions(crossId)).versions, hasLength(1));
   });
 
+  test('9. a GBA save: mGBA uploads it with its clock, RetroArch (mGBA) downloads the raw save', () async {
+    final profiles = await ProfileRegistry.loadDirectory(p.join('..', '..', '..', 'profiles'));
+    const gbaId = 'gba:x:e2e-gba';
+    LibraryEntry entryFor(Device d, String emulator, String file) => LibraryEntry(
+      rom: ScannedRom(file: PlainRomFile(p.join(d.dir, 'roms', 'Gba.gba')), header: null, detectedId: gbaId),
+      gameId: gbaId,
+      savePath: p.join(d.dir, emulator, file),
+      profile: profiles[emulator]!,
+      emulator: emulator,
+      sharedWith: const [],
+      choice: null,
+    );
+
+    final raw = Uint8List.fromList(List.generate(32 << 10, (i) => (i * 13 + 5) & 0xFF));
+    final mgba = entryFor(a, 'mgba', 'Gba.sav');
+    File(mgba.savePath)
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([...raw, ...List.filled(16, 0x42)]) // mGBA's cartridge clock
+      ..setLastModifiedSync(base);
+    expect((await a.engine.prepare(mgba, chipSize: null)).uploaded, isTrue);
+    final active = (await a.api.active(gbaId))!;
+    expect(active.size, raw.length, reason: 'the clock is not part of the save');
+
+    final srm = entryFor(b, 'retroarch-mgba', 'Gba.srm');
+    expect((await b.engine.prepare(srm, chipSize: active.size)).downloaded, isTrue);
+    expect(File(srm.savePath).readAsBytesSync(), raw);
+    final game = (await b.api.games()).firstWhere((g) => g.code == gbaId);
+    expect(game.chipSize, 32 << 10);
+  });
+
   test('5. divergence: nothing is sent before the user chooses', () async {
     // B is behind (last synced on save 3) and played without syncing.
     final before = (await history()).length;
