@@ -127,7 +127,7 @@ class _EmulatorCardState extends State<EmulatorCard> {
                 child: TextField(
                   controller: _saveDir,
                   decoration: InputDecoration(
-                    labelText: l.emuSaveDir,
+                    labelText: widget.emulatorId == 'azahar' ? l.emuSdmcDir : l.emuSaveDir,
                     helperText: loc == null
                         ? null
                         : l.emuDetected(

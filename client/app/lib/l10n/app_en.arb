@@ -127,6 +127,7 @@
   "emuExeLinux": "Executable (name in the PATH or full path)",
   "emuArgs": "Extra arguments",
   "emuSaveDir": "Save folder (empty: detected)",
+  "emuSdmcDir": "Virtual SD card “sdmc” (empty: detected)",
   "emuDetected": "Detected: {where} (source: {source})",
   "emuDetectedRetroarch": "from RetroArch’s configuration",
   "emuDetectedUnknown": "unknown",

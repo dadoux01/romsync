@@ -139,6 +139,39 @@ void main() {
     expect(c.rows.firstWhere((r) => r.entry.gameId == 'gba:BPEF').entry.emulator, 'retroarch-mgba');
   });
 
+  test('3DS ROMs use Azahar, whose save is a folder of its virtual SD card', () async {
+    final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
+    final ncsd = List<int>.filled(0x400, 0);
+    ncsd.setRange(0x100, 0x104, 'NCSD'.codeUnits);
+    ncsd.setRange(0x108, 0x110, [0x00, 0x5D, 0x05, 0x00, 0x00, 0x00, 0x04, 0x00]);
+    File(p.join(roms.path, 'Pokemon Y.3ds')).writeAsBytesSync(ncsd);
+    final c = await controller(FakeKeyring(available: true));
+    await c.pair(serverUrl: 'nas:8080', code: 'K7QM-4XPA', deviceName: 'Fedora');
+    await c.addFolder(roms.path);
+
+    final e = c.rows.single.entry;
+    expect((e.gameId, e.emulator, e.profile.id), ('3ds:0004000000055D00', 'azahar', 'tree'));
+    expect(
+      e.savePath,
+      p.join(
+        tmp.path,
+        'home',
+        '.local',
+        'share',
+        'azahar-emu',
+        'sdmc',
+        'Nintendo 3DS',
+        '0' * 32,
+        '0' * 32,
+        'title',
+        '00040000',
+        '00055d00',
+        'data',
+        '00000001',
+      ),
+    );
+  }, testOn: 'linux');
+
   test('ROMs sharing an identifier wait for a choice, ROM by ROM', () async {
     final roms = Directory(p.join(tmp.path, 'roms'))..createSync();
     File(p.join(roms.path, 'Platine.nds')).writeAsBytesSync(rom('CPUF'));

@@ -297,6 +297,7 @@
   "emuExeLinux": "Exécutable (nom dans le PATH ou chemin complet)",
   "emuArgs": "Arguments supplémentaires",
   "emuSaveDir": "Dossier des saves (vide : détecté)",
+  "emuSdmcDir": "Carte SD virtuelle « sdmc » (vide : détectée)",
   "emuDetected": "Détecté : {where} (source : {source})",
   "@emuDetected": {
     "placeholders": {
