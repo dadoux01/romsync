@@ -10,5 +10,6 @@ void run_sync_tests(void);
 void run_library_tests(void);
 void run_update_tests(void);
 void run_msg_tests(void);
+void run_tree_tests(void);
 
 #endif

@@ -90,6 +90,7 @@ func TestRefusals(t *testing.T) {
 		{{Path: "/etc/passwd", Data: []byte("x")}},
 		{{Path: "a/../b", Data: []byte("x")}},
 		{{Path: "a"}, {Path: "a", Data: []byte("y")}},
+		{{Path: "a", Data: []byte("x")}, {Path: "a/b", Data: []byte("y")}}, // "a" a file and a folder
 		{{Path: "a/", Data: []byte("folder with data")}},
 		{{Path: string(bytes.Repeat([]byte("x"), 120))}},
 	} {

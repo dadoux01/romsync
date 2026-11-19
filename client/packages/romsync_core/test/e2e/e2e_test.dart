@@ -266,6 +266,33 @@ void _scenario() {
     expect(File(srm.savePath).readAsBytesSync(), ram);
   });
 
+  test('11. a save made of a folder keeps its hash through the server, and comes back as the same folder', () async {
+    final profiles = await ProfileRegistry.loadDirectory(p.join('..', '..', '..', 'profiles'));
+    const id = '3ds:x:e2e-folder';
+    LibraryEntry entryFor(Device d) => LibraryEntry(
+      rom: ScannedRom(file: PlainRomFile(p.join(d.dir, 'roms', 'Folder.3ds')), header: null, detectedId: id),
+      gameId: id,
+      savePath: p.join(d.dir, 'folder-save'),
+      profile: profiles['tree']!,
+      emulator: 'azahar',
+      sharedWith: const [],
+      choice: null,
+    );
+    final src = entryFor(a);
+    File(p.join(src.savePath, '00000001', 'main'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(List.generate(5000, (i) => i & 0xFF));
+    Directory(p.join(src.savePath, 'empty')).createSync();
+    final local = (await SyncEngine.readLocal(src.savePath, src.profile))!;
+    expect((await a.engine.prepare(src, chipSize: null)).uploaded, isTrue);
+    expect((await a.api.active(id))!.sha256, local.hash, reason: 'the server keeps the canonical archive as is');
+
+    final dst = entryFor(b);
+    expect((await b.engine.prepare(dst, chipSize: null)).downloaded, isTrue);
+    expect((await SyncEngine.readLocal(dst.savePath, dst.profile))!.hash, local.hash);
+    expect(Directory(p.join(dst.savePath, 'empty')).existsSync(), isTrue);
+  });
+
   test('5. divergence: nothing is sent before the user chooses', () async {
     // B is behind (last synced on save 3) and played without syncing.
     final before = (await history()).length;

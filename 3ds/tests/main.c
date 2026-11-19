@@ -81,6 +81,7 @@ int main(void)
     run_library_tests();
     run_update_tests();
     run_msg_tests();
+    run_tree_tests();
     printf("%d checks, %d failures\n", t_checks, t_failures);
     return t_failures ? 1 : 0;
 }

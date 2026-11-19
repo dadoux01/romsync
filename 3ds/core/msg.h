@@ -88,6 +88,12 @@ rs_lang rs_lang_from_code(const char *code);
     "Cannot write %s")
 #define RS_MSG_MOVE_FAILED(L) L("Impossible de déplacer %s", \
     "Cannot move %s")
+#define RS_MSG_TREE_INVALID_PATH(L) L("Chemin invalide dans la save : %s", \
+    "Invalid path in the save: %s")
+#define RS_MSG_TREE_CHANGING(L) L("Le dossier %s change pendant la lecture", \
+    "The folder %s keeps changing while being read")
+#define RS_MSG_TREE_BAD_ARCHIVE(L) L("Archive de save illisible", \
+    "Unreadable save archive")
 #define RS_MSG_SYNC_NEEDS_CHOICE(L) L("Deux appareils ont joué sans se synchroniser : choix à faire", \
     "Two devices played without syncing: choice needed")
 #define RS_MSG_SYNC_IDENTICAL(L) L("Save identique à la version active", \
@@ -191,6 +197,9 @@ rs_lang rs_lang_from_code(const char *code);
     X(PATH_NOT_FOUND) \
     X(WRITE_FAILED) \
     X(MOVE_FAILED) \
+    X(TREE_INVALID_PATH) \
+    X(TREE_CHANGING) \
+    X(TREE_BAD_ARCHIVE) \
     X(SYNC_NEEDS_CHOICE) \
     X(SYNC_IDENTICAL) \
     X(SYNC_ARCHIVED) \

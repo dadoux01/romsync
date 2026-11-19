@@ -55,6 +55,17 @@ void main() {
     }
   });
 
+  test('invalid entries are refused', () {
+    for (final entries in [
+      [TreeEntry('/etc/passwd', Uint8List(1))],
+      [TreeEntry('a/../b', Uint8List(1))],
+      [TreeEntry('a', Uint8List(1)), TreeEntry('a/b', Uint8List(1))],
+      [TreeEntry('x' * 120, Uint8List(1))],
+    ]) {
+      expect(() => SaveTree.canonical(entries), throwsA(isA<TreeFormatException>()), reason: entries.first.path);
+    }
+  });
+
   test('a folder on disk gives the vector archive; a missing folder is no save', () async {
     final dir = p.join(tmp.path, 'save');
     expect(await SaveTree.readStable(dir), isNull);
