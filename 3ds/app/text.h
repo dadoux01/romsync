@@ -215,6 +215,26 @@
     "\nSave slot: %d%s\n")
 #define RS_MSG_DETAIL_STATE(L) L("État : %s%s", \
     "State: %s%s")
+#define RS_MSG_CTR_ON_SD(L) L("Jeu 3DS installé (carte SD)\n", \
+    "3DS game installed (SD card)\n")
+#define RS_MSG_CTR_ON_CARD(L) L("Jeu 3DS en cartouche\n", \
+    "3DS game on cartridge\n")
+#define RS_MSG_CTR_SAVE_READ(L) L("Lecture de la save du jeu impossible (erreur %08lX).", \
+    "Cannot read the game save (error %08lX).")
+#define RS_MSG_CTR_SAVE_WRITE(L) L("Écriture de la save impossible (erreur %08lX). L'ancienne save est copiée dans sd:/3ds/romsync/backup/3ds/.", \
+    "Cannot write the save (error %08lX). The previous save is copied in sd:/3ds/romsync/backup/3ds/.")
+#define RS_MSG_CTR_NO_SAVE(L) L("Ce jeu n'a pas encore de save sur la console : lance-le une fois et sauvegarde, puis synchronise.", \
+    "This game has no save on the console yet: start it once and save, then sync.")
+#define RS_MSG_CTR_SAVE_TOO_BIG(L) L("La save du serveur (%lu Kio) ne tient pas dans celle du jeu (%lu Kio) : rien n'a été écrit.", \
+    "The server's save (%lu KiB) does not fit in the game's (%lu KiB): nothing was written.")
+#define RS_MSG_CTR_SECURE_VALUE(L) L("Save écrite, mais sa valeur de sécurité n'a pas pu être effacée (erreur %08lX) : le jeu pourrait la refuser.", \
+    "Save written, but its secure value could not be cleared (error %08lX): the game may refuse it.")
+#define RS_MSG_CTR_LIST_FAILED(L) L("Jeux 3DS non listés : le service « am » est inaccessible (erreur %08lX).", \
+    "3DS games not listed: the \"am\" service is not available (error %08lX).")
+#define RS_MSG_CTR_NO_TREE_PROFILE(L) L("Profil « tree » introuvable : réinstalle RomSync.", \
+    "Profile \"tree\" not found: reinstall RomSync.")
+#define RS_MSG_CTR_LAUNCH_FAILED(L) L("Lancement du jeu impossible (erreur %08lX).", \
+    "Cannot start the game (error %08lX).")
 #define RS_MSG_DETAIL_LAST_SYNC(L) L("Dernière synchro : %.10s %.5s\n", \
     "Last sync: %.10s %.5s\n")
 #define RS_MSG_DETAIL_PENDING(L) L("%d envoi(s) en attente", \
@@ -405,6 +425,16 @@
     X(DETAIL_SAVE) \
     X(DETAIL_SLOT) \
     X(DETAIL_STATE) \
+    X(CTR_ON_SD) \
+    X(CTR_ON_CARD) \
+    X(CTR_SAVE_READ) \
+    X(CTR_SAVE_WRITE) \
+    X(CTR_NO_SAVE) \
+    X(CTR_SAVE_TOO_BIG) \
+    X(CTR_SECURE_VALUE) \
+    X(CTR_LIST_FAILED) \
+    X(CTR_NO_TREE_PROFILE) \
+    X(CTR_LAUNCH_FAILED) \
     X(DETAIL_LAST_SYNC) \
     X(DETAIL_PENDING) \
     X(DETAIL_CHOICE) \

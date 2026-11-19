@@ -15,11 +15,14 @@
 #include "../core/queue.h"
 #include "../core/state.h"
 #include "../core/sync.h"
+#include "titles.h"
 
 /* Everything RomSync keeps on the SD card is in this folder. */
 #define APP_DIR "sdmc:/3ds/romsync"
 /* The folder that stands for "sd:/" in TWiLight Menu++'s paths. */
 #define SD_ROOT "sdmc:/"
+/* Copies of the 3DS games' saves replaced by a download. */
+#define CTR_BACKUP_DIR APP_DIR "/backup/3ds"
 
 /* What the game list shows for one game. */
 typedef struct {
@@ -39,11 +42,13 @@ typedef struct {
     rs_queue queue;
     rs_profiles profiles;
     const rs_profile *twilight;
+    const rs_profile *tree; /* 3DS games: saves made of a folder */
     rs_api api;
     rs_engine engine;
 
     rs_scan_result scan;
-    rs_library lib;
+    rs_library lib;          /* the DS games, then the 3DS games */
+    ctr_titles titles;       /* the 3DS games of the console */
     game_view *views; /* one per lib.games entry */
 
     bool online;      /* the server answered during the last sync */

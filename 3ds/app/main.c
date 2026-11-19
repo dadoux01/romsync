@@ -72,7 +72,10 @@ static void draw_list(const app *a, int sel, int scroll)
         snprintf(label, sizeof label, "%s%s", v->error ? RS_TR(ERROR_LOWER) : rs_status_label(v->status),
                  v->conflict ? "*" : "");
         ui_print(i == sel ? UI_INVERSE "> " : "  ");
-        ui_print_fit(g->entry.title, 30);
+        /* 3DS games are marked, after the DS ROMs. */
+        char name[80];
+        snprintf(name, sizeof name, "%s%s", titles_of_entry(&g->entry) ? "[3DS] " : "", g->entry.title);
+        ui_print_fit(name, 30);
         ui_print(" %s", status_color(v->status, v->error));
         ui_print_fit(label, 16);
         ui_print(UI_RESET "\n");
@@ -93,11 +96,16 @@ static void draw_details(const app *a, int sel)
         ui_print_fit(g->entry.title, UI_BOTTOM_COLS);
         ui_print(UI_RESET);
         ui_print(RS_TR(DETAIL_ID), g->entry.game_id);
-        ui_print(RS_TR(DETAIL_ROM));
-        ui_print_fit(rs_basename(g->entry.rom_path), UI_BOTTOM_COLS - 7);
-        ui_print(RS_TR(DETAIL_SAVE));
-        ui_print_fit(rs_basename(g->entry.save_path), UI_BOTTOM_COLS - 8);
-        ui_print(RS_TR(DETAIL_SLOT), g->slot, g->slot ? "" : " (.sav)");
+        const ctr_title *title = titles_of_entry(&g->entry);
+        if (title) {
+            ui_print(title->media == MEDIATYPE_GAME_CARD ? RS_TR(CTR_ON_CARD) : RS_TR(CTR_ON_SD));
+        } else {
+            ui_print(RS_TR(DETAIL_ROM));
+            ui_print_fit(rs_basename(g->entry.rom_path), UI_BOTTOM_COLS - 7);
+            ui_print(RS_TR(DETAIL_SAVE));
+            ui_print_fit(rs_basename(g->entry.save_path), UI_BOTTOM_COLS - 8);
+            ui_print(RS_TR(DETAIL_SLOT), g->slot, g->slot ? "" : " (.sav)");
+        }
         ui_print(RS_TR(DETAIL_STATE), status_color(v->status, v->error), rs_status_label(v->status));
         ui_print(UI_RESET "\n");
         if (s) {

@@ -59,6 +59,7 @@ bool app_init(app *a)
     if (rs_dir_exists(APP_DIR "/profiles") && rs_profiles_load_dir(&a->profiles, APP_DIR "/profiles", &err) != RS_OK)
         ui_message(RS_TR(SD_PROFILES_IGNORED), err.message);
     a->twilight = rs_profiles_find(&a->profiles, "twilight");
+    a->tree = rs_profiles_find(&a->profiles, "tree");
 
     read_token(a);
     a->api.send = rs_http_curl_send;
@@ -81,6 +82,7 @@ void app_exit(app *a)
     rs_state_save(&a->states, NULL); /* keeps the measured clock gap */
     free(a->views);
     rs_library_free(&a->lib);
+    titles_free(&a->titles);
     rs_scan_free(&a->scan);
     rs_profiles_free(&a->profiles);
     rs_queue_close(&a->queue);
@@ -185,6 +187,10 @@ void app_rescan(app *a)
     rs_scan(&a->config, &a->scan);
     rs_config_save(&a->config, NULL); /* homebrew identifiers cache */
     rs_build_library(&a->scan, &a->config, &a->states, a->twilight, SD_ROOT, &a->lib);
+    /* The 3DS games of the console, after the DS ROMs. */
+    titles_free(&a->titles);
+    titles_list(&a->titles);
+    titles_add_to_library(&a->titles, a->tree, CTR_BACKUP_DIR, &a->lib);
     a->views = calloc(a->lib.count > 0 ? (size_t)a->lib.count : 1, sizeof *a->views);
     for (int i = 0; i < a->lib.count; i++) {
         const rs_game *g = &a->lib.games[i];
@@ -204,6 +210,10 @@ void app_rescan(app *a)
     if (a->scan.error[0]) {
         size_t n = strlen(msg);
         snprintf(msg + n, sizeof msg - n, "%s\n", a->scan.error);
+    }
+    if (a->titles.error[0]) {
+        size_t n = strlen(msg);
+        snprintf(msg + n, sizeof msg - n, "%s\n", a->titles.error);
     }
     if (msg[0])
         ui_message(RS_TR(ROM_FOLDERS), msg);
@@ -249,6 +259,13 @@ static rs_choice ask_divergence(app *a, const rs_game *g, const rs_divergence *d
     default:
         return RS_CHOICE_NONE;
     }
+}
+
+/* Whether the game has a save on the console. */
+static bool has_local_save(const rs_game *g)
+{
+    const ctr_title *t = titles_of_entry(&g->entry);
+    return t ? t->has_save : rs_file_exists(g->entry.save_path);
 }
 
 /* Syncs one game; *offline becomes true when the server cannot be reached
@@ -301,13 +318,14 @@ static void sync_game(app *a, int i, bool *offline)
             *offline = true; /* no point in trying the next games */
         return;
     }
-    rs_config_set_slot(&a->config, g->entry.rom_path, g->slot);
+    if (!titles_of_entry(&g->entry))
+        rs_config_set_slot(&a->config, g->entry.rom_path, g->slot);
     v->synced = true;
     if (r.offline) {
         *offline = true;
         v->status = rs_queue_count_for(&a->queue, g->entry.save_path) ? RS_STATUS_TO_UPLOAD : RS_STATUS_OFFLINE;
     } else {
-        v->status = rs_file_exists(g->entry.save_path) ? RS_STATUS_UP_TO_DATE : RS_STATUS_NO_SAVE;
+        v->status = has_local_save(g) ? RS_STATUS_UP_TO_DATE : RS_STATUS_NO_SAVE;
         if (asked)
             rs_strlcpy(v->message, choice == RS_CHOICE_SERVER ? RS_TR(SERVER_SAVE_TAKEN) : RS_TR(LOCAL_SAVE_SENT),
                        sizeof v->message);
@@ -401,7 +419,8 @@ bool app_launch(app *a, int index)
         return false;
     }
     char why[600];
-    if (!launch_check(g->entry.rom_path, why, sizeof why)) {
+    const ctr_title *title = titles_of_entry(&g->entry);
+    if (!title && !launch_check(g->entry.rom_path, why, sizeof why)) {
         ui_message(RS_TR(LAUNCH_FAILED), why);
         return false;
     }
@@ -420,7 +439,7 @@ bool app_launch(app *a, int index)
         ui_message(RS_TR(OFFLINE), RS_TR(OFFLINE_LAUNCH));
 
     ui_progress(RS_TR(LAUNCHING), RS_TR(STARTING_GAME));
-    if (!launch_start(g->entry.rom_path, why, sizeof why)) {
+    if (title ? !titles_launch(title, why, sizeof why) : !launch_start(g->entry.rom_path, why, sizeof why)) {
         ui_message(RS_TR(LAUNCH_FAILED), why);
         return false;
     }
