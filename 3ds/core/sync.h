@@ -16,8 +16,21 @@
 #include "queue.h"
 #include "state.h"
 
-/* A local ROM and its save file, ready to be synced. */
+typedef struct rs_entry rs_entry;
+
+/* How a save made of a folder is read and written when it is not a folder
+ * of the SD card (3DS games: a save archive of the system). */
 typedef struct {
+    /* Reads the save as its canonical archive (tree.h); *exists is false
+     * when the game has no save. */
+    rs_status (*read)(void *ctx, const rs_entry *entry, rs_buf *out, bool *exists, rs_error *err);
+    /* Replaces the save by the content of a canonical archive. */
+    rs_status (*write)(void *ctx, const rs_entry *entry, const uint8_t *tar, size_t len, rs_error *err);
+    void *ctx;
+} rs_save_io;
+
+/* A local ROM and its save file, ready to be synced. */
+struct rs_entry {
     char rom_path[RS_PATH_MAX];   /* identifies the ROM (key of the user's choices) */
     char title[64];
     char game_id[RS_GAME_ID_MAX]; /* detected, or forced "x:" identifier */
@@ -29,7 +42,13 @@ typedef struct {
     bool needs_choice;
     /* Why the ROM cannot be synced, or "" when it can. */
     char unavailable[160];
-} rs_entry;
+    /* Saves made of a folder (profile->tree) only: how to reach the save,
+     * NULL for a folder at save_path (save_path is then only the key of
+     * the save's state), and the folder of its copies, "" for .backup next
+     * to save_path. */
+    const rs_save_io *io;
+    char backup_dir[RS_PATH_MAX];
+};
 
 typedef enum {
     RS_EVENT_UPLOADED,
@@ -93,6 +112,9 @@ typedef struct {
      * stay in the queue until the user chooses. */
     int held;
     rs_divergence first_held;
+    /* Uploads of another console than the DS kept in the queue: the server
+     * is older than RS_CONSOLES_API_LEVEL. */
+    bool waiting_for_server;
 } rs_flush_result;
 
 typedef struct {
@@ -106,6 +128,13 @@ typedef struct {
     bool needs_choice;
     rs_divergence divergence;
 } rs_prepare_result;
+
+/* Server level from which other consoles than the DS are synced
+ * (romsync_core's consolesServerApiLevel). */
+#define RS_CONSOLES_API_LEVEL 3
+
+/* Whether game_id is a DS game (no console prefix: "IRBF", "h:…", "x:…"). */
+bool rs_game_is_ds(const char *game_id);
 
 /* Corrected current time: console clock + measured gap with the server. */
 rs_time rs_engine_now(const rs_engine *e);
@@ -167,6 +196,9 @@ rs_status rs_backup(const char *save_path, rs_time now, int keep, char *copy, si
 /* Number of backup copies of save_path; names, when not NULL, receives
  * the newest one's path. */
 int rs_backup_count(const char *save_path, char *newest, size_t newest_size);
+/* Copies of a save made of a folder ("<save>.<date>.tar") in the backup
+ * folder of entry, newest first, as rs_backup_count. */
+int rs_entry_backup_count(const rs_entry *entry, char *newest, size_t newest_size);
 
 /* ---- Changing the save file of a game ---------------------------------- */
 

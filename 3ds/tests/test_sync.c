@@ -13,6 +13,7 @@
 
 #include "../core/sha.h"
 #include "../core/sync.h"
+#include "../core/tree.h"
 #include "fake_server.h"
 #include "suites.h"
 #include "test.h"
@@ -717,6 +718,214 @@ static void a_new_save_slot_with_an_old_file_is_flagged_and_can_be_set_aside(voi
     h_free(h);
 }
 
+/* ---- Saves made of a folder (docs/SPEC.md, "Saves en dossier") ---------- */
+
+#define TID "3ds:0004000000055D00"
+
+static void tree_profile(rs_profile *p)
+{
+    CHECK_INT(rs_profile_parse("{\"id\":\"tree\",\"name\":\"Save folder\",\"status\":\"confirmed\","
+                               "\"kind\":\"tree\",\"extension\":\"\",\"header\":null,\"footer\":null,"
+                               "\"size\":{\"output\":\"exact\"}}",
+                               p, NULL),
+              RS_OK);
+    CHECK(p->tree);
+}
+
+/* The canonical archive of a save holding "main" (512 bytes of seed) and an
+ * empty folder. */
+static void archive_of(int seed, rs_buf *out)
+{
+    rs_tree t = {0};
+    CHECK(rs_tree_add(&t, "main", save(seed), 512));
+    CHECK(rs_tree_add(&t, "empty/", NULL, 0));
+    CHECK_INT(rs_tree_archive(&t, out, NULL), RS_OK);
+    rs_tree_free(&t);
+}
+
+static bool buf_is(const rs_buf *b, const rs_buf *want)
+{
+    return b->len == want->len && memcmp(b->data, want->data, b->len) == 0;
+}
+
+static void a_save_made_of_a_folder_is_uploaded_then_downloaded_with_a_tar_backup(void)
+{
+    harness *h = h_new();
+    h->server.api_level = 3;
+    rs_profile tree;
+    tree_profile(&tree);
+    rs_buf one = {0}, two = {0}, got = {0};
+    archive_of(1, &one);
+    archive_of(2, &two);
+
+    rs_entry a = h_entry(h, TID);
+    a.profile = &tree;
+    snprintf(a.save_path, sizeof a.save_path, "%s/a/00000001", h->dir);
+    CHECK_INT(rs_tree_write_dir(a.save_path, one.data, one.len, NULL), RS_OK);
+    rs_prepare_result r;
+    CHECK_INT(rs_engine_prepare(&h->engine, &a, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.uploaded);
+    const fake_version *v = fake_active(&h->server, TID);
+    CHECK(v && buf_is(&v->data, &one));
+
+    /* Another device's save replaces the folder; the old one is kept as
+     * "<folder>.<date>.tar" in .backup. */
+    h->now += HOUR;
+    fake_add_version(&h->server, TID, two.data, two.len, h->now);
+    CHECK_INT(rs_engine_prepare(&h->engine, &a, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.downloaded);
+    bool exists;
+    long long newest;
+    CHECK_INT(rs_tree_read_dir(a.save_path, &got, &exists, &newest, NULL), RS_OK);
+    CHECK(exists && buf_is(&got, &two));
+    char want[RS_PATH_MAX], copy[RS_PATH_MAX];
+    snprintf(want, sizeof want, "%s/a/.backup/00000001.", h->dir);
+    CHECK(strncmp(r.backup_path, want, strlen(want)) == 0);
+    CHECK_INT((int)strlen(r.backup_path) - 4, (int)(strstr(r.backup_path, ".tar") - r.backup_path));
+    CHECK_INT(rs_entry_backup_count(&a, copy, sizeof copy), 1);
+    CHECK_STR(copy, r.backup_path);
+    rs_buf_free(&got);
+    CHECK_INT(rs_read_file(copy, &got, NULL), RS_OK);
+    CHECK(buf_is(&got, &one));
+
+    /* A missing folder is no save: the active version is downloaded. */
+    rs_entry b = a;
+    snprintf(b.save_path, sizeof b.save_path, "%s/b/00000001", h->dir);
+    CHECK_INT(rs_engine_prepare(&h->engine, &b, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.downloaded);
+    CHECK_STR(r.backup_path, "");
+    rs_buf_free(&got);
+    CHECK_INT(rs_tree_read_dir(b.save_path, &got, &exists, &newest, NULL), RS_OK);
+    CHECK(buf_is(&got, &two));
+
+    rs_buf_free(&one);
+    rs_buf_free(&two);
+    rs_buf_free(&got);
+    rs_profile_free(&tree);
+    h_free(h);
+}
+
+/* A save reached through rs_save_io, as the 3DS app does for the save
+ * archives of the system. */
+typedef struct {
+    bool exists;
+    rs_buf content;
+    int writes;
+} mem_save;
+
+static rs_status mem_read(void *ctx, const rs_entry *entry, rs_buf *out, bool *exists, rs_error *err)
+{
+    (void)entry;
+    mem_save *m = ctx;
+    *exists = m->exists;
+    if (m->exists && !rs_buf_append(out, m->content.data, m->content.len))
+        return rs_fail(err, RS_ERR_NOMEM, "nomem");
+    return RS_OK;
+}
+
+static rs_status mem_write(void *ctx, const rs_entry *entry, const uint8_t *tar, size_t len, rs_error *err)
+{
+    (void)entry;
+    mem_save *m = ctx;
+    rs_buf_free(&m->content);
+    if (!rs_buf_append(&m->content, tar, len))
+        return rs_fail(err, RS_ERR_NOMEM, "nomem");
+    m->exists = true;
+    m->writes++;
+    return RS_OK;
+}
+
+static void a_save_archive_of_the_console_is_synced_through_its_io(void)
+{
+    harness *h = h_new();
+    h->server.api_level = 3;
+    rs_profile tree;
+    tree_profile(&tree);
+    rs_buf two = {0}, got = {0};
+    mem_save m = {.exists = true};
+    archive_of(1, &m.content);
+    archive_of(2, &two);
+    rs_save_io io = {.read = mem_read, .write = mem_write, .ctx = &m};
+
+    rs_entry e = h_entry(h, TID);
+    e.profile = &tree;
+    e.io = &io;
+    rs_strlcpy(e.save_path, "3ds/0004000000055D00", sizeof e.save_path); /* only a key */
+    snprintf(e.backup_dir, sizeof e.backup_dir, "%s/backup/3ds", h->dir);
+    rs_prepare_result r;
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.uploaded);
+    CHECK(buf_is(&fake_active(&h->server, TID)->data, &m.content));
+
+    h->now += HOUR;
+    fake_add_version(&h->server, TID, two.data, two.len, h->now);
+    rs_buf one = m.content;
+    m.content = (rs_buf){0};
+    CHECK(rs_buf_append(&m.content, one.data, one.len));
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.downloaded);
+    CHECK_INT(m.writes, 1);
+    CHECK(buf_is(&m.content, &two));
+    char want[RS_PATH_MAX];
+    snprintf(want, sizeof want, "%s/backup/3ds/0004000000055D00.", h->dir);
+    CHECK(strncmp(r.backup_path, want, strlen(want)) == 0);
+    CHECK_INT(rs_read_file(r.backup_path, &got, NULL), RS_OK);
+    CHECK(buf_is(&got, &one));
+    CHECK_INT(rs_entry_backup_count(&e, NULL, 0), 1);
+
+    /* Up to date: nothing is written again. */
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(!r.downloaded && !r.uploaded);
+    CHECK_INT(m.writes, 1);
+
+    rs_buf_free(&one);
+    rs_buf_free(&two);
+    rs_buf_free(&got);
+    rs_buf_free(&m.content);
+    rs_profile_free(&tree);
+    h_free(h);
+}
+
+static void other_consoles_wait_for_a_server_that_knows_them(void)
+{
+    harness *h = h_new();
+    h->server.api_level = 2;
+    rs_profile tree;
+    tree_profile(&tree);
+    mem_save m = {.exists = true};
+    archive_of(1, &m.content);
+    rs_save_io io = {.read = mem_read, .write = mem_write, .ctx = &m};
+    rs_entry e = h_entry(h, TID);
+    e.profile = &tree;
+    e.io = &io;
+    rs_strlcpy(e.save_path, "3ds/0004000000055D00", sizeof e.save_path);
+
+    rs_prepare_result r;
+    rs_error err = {0};
+    CHECK_INT(rs_engine_prepare(&h->engine, &e, 0, RS_CHOICE_NONE, &r, &err), RS_ERR_REFUSED);
+    CHECK(strstr(err.message, "0.5.0") != NULL);
+
+    /* Queued (offline pass): kept in the queue, while DS saves still go. */
+    CHECK_INT(rs_engine_offline_pass(&h->engine, &e, &r, NULL), RS_OK);
+    write_local(h, save(3));
+    rs_entry ds = h_entry(h, "IRBF");
+    CHECK_INT(rs_engine_offline_pass(&h->engine, &ds, &r, NULL), RS_OK);
+    CHECK_INT(h->queue.count, 2);
+    rs_flush_result f;
+    CHECK_INT(rs_engine_flush(&h->engine, &f, NULL), RS_OK);
+    CHECK(f.waiting_for_server);
+    CHECK_INT(f.sent, 1);
+    CHECK_INT(h->queue.count, 1);
+    CHECK(active_is(h, "IRBF", save(3)));
+    CHECK(!fake_active(&h->server, TID));
+
+    CHECK(rs_game_is_ds("IRBF") && rs_game_is_ds("h:abc") && rs_game_is_ds("x:mine"));
+    CHECK(!rs_game_is_ds(TID) && !rs_game_is_ds("gba:BPEF") && !rs_game_is_ds("gb:h:abc"));
+    rs_buf_free(&m.content);
+    rs_profile_free(&tree);
+    h_free(h);
+}
+
 void run_sync_tests(void)
 {
     RUN(first_save_of_an_unknown_game_is_uploaded);
@@ -747,4 +956,7 @@ void run_sync_tests(void)
     RUN(a_late_console_clock_is_corrected_from_the_server_date);
     RUN(offline_uploads_use_the_last_measured_gap);
     RUN(a_new_save_slot_with_an_old_file_is_flagged_and_can_be_set_aside);
+    RUN(a_save_made_of_a_folder_is_uploaded_then_downloaded_with_a_tar_backup);
+    RUN(a_save_archive_of_the_console_is_synced_through_its_io);
+    RUN(other_consoles_wait_for_a_server_that_knows_them);
 }

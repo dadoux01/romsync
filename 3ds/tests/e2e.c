@@ -16,6 +16,7 @@
 #include "../core/platform.h"
 #include "../core/sha.h"
 #include "../core/sync.h"
+#include "../core/tree.h"
 #include "../core/update.h"
 #include "test.h"
 
@@ -360,6 +361,51 @@ static void a_game_of_another_console_is_ignored(void)
     CHECK(!prepare(&ds).needs_choice);
 }
 
+/* A 3DS game: its save is a folder, kept byte for byte by the server
+ * (docs/SPEC.md, "Saves en dossier" and "Jeux 3DS"). */
+static void a_save_made_of_a_folder_goes_from_the_3ds_to_the_pc(void)
+{
+    rs_profile tree;
+    CHECK_INT(rs_profile_parse("{\"id\":\"tree\",\"name\":\"Save folder\",\"status\":\"confirmed\","
+                               "\"kind\":\"tree\",\"extension\":\"\",\"size\":{\"output\":\"exact\"}}",
+                               &tree, NULL),
+              RS_OK);
+    rs_tree t = {0};
+    rs_buf tar = {0}, got = {0};
+    CHECK(rs_tree_add(&t, "main", save(11), SAVE_SIZE));
+    CHECK(rs_tree_add(&t, "extra/empty/", NULL, 0));
+    CHECK_INT(rs_tree_archive(&t, &tar, NULL), RS_OK);
+    rs_tree_free(&t);
+
+    rs_entry e[2];
+    device *d[2] = {&ds, &pc};
+    for (int i = 0; i < 2; i++) {
+        e[i] = d[i]->entry;
+        snprintf(e[i].game_id, sizeof e[i].game_id, "3ds:x:e2e-folder-%ld", (long)time(NULL));
+        rs_path_join(e[i].save_path, sizeof e[i].save_path, d[i]->dir, "title/00000001");
+        e[i].profile = &tree;
+    }
+    CHECK_INT(rs_tree_write_dir(e[0].save_path, tar.data, tar.len, NULL), RS_OK);
+    rs_prepare_result r;
+    CHECK_INT(rs_engine_prepare(&ds.engine, &e[0], 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.uploaded);
+    rs_version v;
+    bool exists;
+    CHECK_INT(rs_api_active(&pc.api, e[0].game_id, &v, &exists, NULL, NULL), RS_OK);
+    char hash[65];
+    rs_sha256_hex(tar.data, tar.len, hash);
+    CHECK_STR(v.sha256, hash);
+
+    CHECK_INT(rs_engine_prepare(&pc.engine, &e[1], 0, RS_CHOICE_NONE, &r, NULL), RS_OK);
+    CHECK(r.downloaded);
+    long long newest;
+    CHECK_INT(rs_tree_read_dir(e[1].save_path, &got, &exists, &newest, NULL), RS_OK);
+    CHECK(exists && got.len == tar.len && memcmp(got.data, tar.data, tar.len) == 0);
+    rs_buf_free(&tar);
+    rs_buf_free(&got);
+    rs_profile_free(&tree);
+}
+
 static void the_server_is_compatible_and_its_relay_is_off(void)
 {
     rs_server_info info;
@@ -407,6 +453,7 @@ int main(int argc, char **argv)
         RUN(a_divergence_waits_for_the_choice_then_applies_it);
         RUN(the_game_list_shows_the_game);
         RUN(a_game_of_another_console_is_ignored);
+        RUN(a_save_made_of_a_folder_goes_from_the_3ds_to_the_pc);
         RUN(the_server_is_compatible_and_its_relay_is_off);
         RUN(a_revoked_or_wrong_token_is_refused);
     }

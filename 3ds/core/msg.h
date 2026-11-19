@@ -124,6 +124,8 @@ rs_lang rs_lang_from_code(const char *code);
     "older than 0.5.0")
 #define RS_MSG_SYNC_SERVER_TOO_OLD(L) L("Le serveur RomSync (%s) est trop ancien pour appliquer ce choix : rien n'a été envoyé ni écrasé. Mets d'abord à jour le serveur, puis recommence.", \
     "The RomSync server (%s) is too old to apply this choice: nothing was sent nor overwritten. Update the server first, then try again.")
+#define RS_MSG_SYNC_SERVER_TOO_OLD_CONSOLE(L) L("Le serveur RomSync (%s) ne connaît pas encore cette console : mets d'abord à jour le serveur.", \
+    "The RomSync server (%s) does not know this console yet: update the server first.")
 #define RS_MSG_SYNC_UP_TO_DATE(L) L("Save à jour", \
     "Save up to date")
 #define RS_MSG_SYNC_CHOICE_REQUIRED(L) L("Choix requis avant la synchronisation.", \
@@ -215,6 +217,7 @@ rs_lang rs_lang_from_code(const char *code);
     X(SYNC_SHARED_ID) \
     X(SERVER_OLDER) \
     X(SYNC_SERVER_TOO_OLD) \
+    X(SYNC_SERVER_TOO_OLD_CONSOLE) \
     X(SYNC_UP_TO_DATE) \
     X(SYNC_CHOICE_REQUIRED) \
     X(STATUS_UP_TO_DATE) \

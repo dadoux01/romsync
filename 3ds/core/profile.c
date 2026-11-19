@@ -57,6 +57,8 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
         st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_REQUIRED));
         goto done;
     }
+    const cJSON *kind = cJSON_GetObjectItemCaseSensitive(j, "kind");
+    p->tree = cJSON_IsString(kind) && strcmp(kind->valuestring, "tree") == 0;
     const cJSON *header = cJSON_GetObjectItemCaseSensitive(j, "header");
     if (header && !cJSON_IsNull(header)) {
         st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_HEADERS), p->id);

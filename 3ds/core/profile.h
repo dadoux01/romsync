@@ -36,6 +36,9 @@ typedef struct {
     char name[64];
     char status[16];    /* "confirmed" or "to_verify" */
     char extension[16]; /* with its dot, e.g. ".sav" */
+    /* "kind": "tree": the save is a folder, exchanged as its canonical
+     * archive (tree.h); nothing is converted. */
+    bool tree;
 
     bool has_footer;
     size_t footer_length;

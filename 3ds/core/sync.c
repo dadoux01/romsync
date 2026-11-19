@@ -15,6 +15,7 @@
 
 #include "sha.h"
 #include "size_rule.h"
+#include "tree.h"
 #include "update.h"
 
 static void emit(const rs_engine *e, rs_event_kind kind, const char *game_id, const char *message)
@@ -30,9 +31,29 @@ rs_time rs_engine_now(const rs_engine *e)
 
 /* ---- Local saves ------------------------------------------------------- */
 
+/* Reads a save made of a folder as its canonical archive. */
+static rs_status read_tree(const rs_entry *entry, rs_buf *out, bool *exists, rs_error *err)
+{
+    long long newest;
+    rs_status st = entry->io ? entry->io->read(entry->io->ctx, entry, out, exists, err)
+                             : rs_tree_read_dir(entry->save_path, out, exists, &newest, err);
+    if (st != RS_OK || !*exists)
+        rs_buf_free(out);
+    return st;
+}
+
 rs_status rs_read_local_save(const rs_entry *entry, rs_local_save *out, rs_error *err)
 {
     memset(out, 0, sizeof *out);
+    if (entry->profile->tree) {
+        bool exists = false;
+        rs_status st = read_tree(entry, &out->raw, &exists, err);
+        if (st != RS_OK || !exists)
+            return st;
+        out->exists = true;
+        rs_sha256_hex(out->raw.data, out->raw.len, out->hash);
+        return RS_OK;
+    }
     /* On the 3DS no emulator runs while RomSync does, so the file cannot
      * change during the read (the PC client needs a stable-read loop). */
     rs_buf file = {0};
@@ -103,6 +124,28 @@ static rs_status check_divergence(rs_engine *e, const rs_upload *u, const rs_buf
     return st;
 }
 
+bool rs_game_is_ds(const char *game_id)
+{
+    const char *colon = strchr(game_id, ':');
+    return !colon || (colon - game_id == 1 && (game_id[0] == 'h' || game_id[0] == 'x'));
+}
+
+/* Reads the server's level once (GET /server): 1 for a server older than
+ * 0.5.0. RS_ERR_OFFLINE when it cannot be reached. */
+static rs_status read_server_level(rs_engine *e, rs_error *err)
+{
+    if (e->server_api_level)
+        return RS_OK;
+    rs_server_info info;
+    bool exists;
+    rs_status st = rs_api_server(e->api, &info, &exists, err);
+    if (st != RS_OK)
+        return st;
+    e->server_api_level = exists ? info.api_level : 1;
+    rs_strlcpy(e->server_version, exists ? info.version : "", sizeof e->server_version);
+    return RS_OK;
+}
+
 rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
 {
     memset(res, 0, sizeof *res);
@@ -117,6 +160,31 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
         if (in_list(held, n_held, u.save_path)) {
             i++;
             continue;
+        }
+        if (!rs_game_is_ds(u.game_id)) {
+            /* A server below RS_CONSOLES_API_LEVEL only knows the DS: the
+             * saves of other consoles wait in the queue. */
+            rs_status st = read_server_level(e, err);
+            if (st == RS_ERR_OFFLINE) {
+                res->offline = true;
+                break;
+            }
+            if (st != RS_OK) {
+                ret = st;
+                break;
+            }
+            if (e->server_api_level < RS_CONSOLES_API_LEVEL) {
+                char(*grown)[RS_PATH_MAX] = realloc(held, (size_t)(n_held + 1) * sizeof *held);
+                if (!grown) {
+                    ret = rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
+                    break;
+                }
+                held = grown;
+                rs_strlcpy(held[n_held++], u.save_path, RS_PATH_MAX);
+                res->waiting_for_server = true;
+                i++;
+                continue;
+            }
         }
         rs_buf data = {0};
         rs_status st = rs_queue_content(e->queue, &u, &data, err);
@@ -279,19 +347,31 @@ static rs_status go_offline(rs_engine *e, const rs_entry *entry, const rs_local_
     return RS_OK;
 }
 
+static rs_status backup_tree(const rs_entry *entry, rs_time now, int keep, char *copy, size_t copy_size,
+                             rs_error *err);
+
 /* Replaces the local save with version, after a copy into .backup. */
 static rs_status download(rs_engine *e, const rs_entry *entry, const rs_version *v, size_t chip_size,
                           rs_prepare_result *out, rs_error *err)
 {
     rs_buf raw = {0}, file = {0};
     rs_status st = rs_api_download(e->api, v->id, &raw, err);
-    if (st == RS_OK)
-        st = rs_backup(entry->save_path, rs_engine_now(e), e->keep_backups, out->backup_path,
-                       sizeof out->backup_path, err);
-    if (st == RS_OK)
-        st = rs_profile_encode(entry->profile, raw.data, raw.len, chip_size, &file, err);
-    if (st == RS_OK)
-        st = rs_write_file_atomic(entry->save_path, file.data, file.len, err);
+    if (entry->profile->tree) {
+        if (st == RS_OK)
+            st = backup_tree(entry, rs_engine_now(e), e->keep_backups, out->backup_path,
+                             sizeof out->backup_path, err);
+        if (st == RS_OK)
+            st = entry->io ? entry->io->write(entry->io->ctx, entry, raw.data, raw.len, err)
+                           : rs_tree_write_dir(entry->save_path, raw.data, raw.len, err);
+    } else {
+        if (st == RS_OK)
+            st = rs_backup(entry->save_path, rs_engine_now(e), e->keep_backups, out->backup_path,
+                           sizeof out->backup_path, err);
+        if (st == RS_OK)
+            st = rs_profile_encode(entry->profile, raw.data, raw.len, chip_size, &file, err);
+        if (st == RS_OK)
+            st = rs_write_file_atomic(entry->save_path, file.data, file.len, err);
+    }
     if (st == RS_OK) {
         char hash[65];
         rs_sha256_hex(raw.data, raw.len, hash);
@@ -332,10 +412,21 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
         return rs_fail(err, RS_ERR_REFUSED, "%s", entry->unavailable);
     if (entry->needs_choice)
         return rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_SHARED_ID), entry->game_id);
+    rs_status st;
+    if (!rs_game_is_ds(entry->game_id)) {
+        st = read_server_level(e, err);
+        if (st == RS_ERR_OFFLINE)
+            return rs_engine_offline_pass(e, entry, out, err);
+        if (st != RS_OK)
+            return st;
+        if (e->server_api_level < RS_CONSOLES_API_LEVEL)
+            return rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_SERVER_TOO_OLD_CONSOLE),
+                           e->server_version[0] ? e->server_version : RS_TR(SERVER_OLDER));
+    }
 
     /* 1. Empty the queue if the server answers. */
     rs_flush_result flush;
-    rs_status st = rs_engine_flush(e, &flush, err);
+    st = rs_engine_flush(e, &flush, err);
     if (st != RS_OK)
         return st;
     if (flush.unauthorized) {
@@ -403,20 +494,13 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
             if (diverged) {
                 /* The choice relies on X-Activate: never send it to a server
                  * that would ignore it and apply "most recent wins". */
-                if (!e->server_api_level) {
-                    rs_server_info info;
-                    bool exists;
-                    st = rs_api_server(e->api, &info, &exists, err);
-                    if (st == RS_ERR_OFFLINE) {
-                        st = go_offline(e, entry, &local, out, err);
-                        goto done;
-                    }
-                    if (st != RS_OK)
-                        goto done;
-                    e->server_api_level = exists ? info.api_level : 1;
-                    rs_strlcpy(e->server_version, exists ? info.version : "",
-                               sizeof e->server_version);
+                st = read_server_level(e, err);
+                if (st == RS_ERR_OFFLINE) {
+                    st = go_offline(e, entry, &local, out, err);
+                    goto done;
                 }
+                if (st != RS_OK)
+                    goto done;
                 if (e->server_api_level < RS_REQUIRED_API_LEVEL) {
                     st = rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_SERVER_TOO_OLD),
                                  e->server_version[0] ? e->server_version : RS_TR(SERVER_OLDER));
@@ -551,13 +635,22 @@ static int compare_desc(const void *a, const void *b)
     return strcmp(*(char *const *)b, *(char *const *)a);
 }
 
-/* Lists the copies of save_path, newest first (the date in the name sorts
- * chronologically). Returns the number of names; free them with free(). */
-static int list_backups(const char *save_path, char ***names)
+/* The folder of the copies of entry's save. */
+static void entry_backup_dir(const rs_entry *entry, char *out, size_t size)
 {
-    char dir[RS_PATH_MAX], prefix[RS_PATH_MAX];
-    backup_dir(save_path, dir, sizeof dir);
-    snprintf(prefix, sizeof prefix, "%s.", rs_basename(save_path));
+    if (entry->backup_dir[0])
+        rs_strlcpy(out, entry->backup_dir, size);
+    else
+        backup_dir(entry->save_path, out, size);
+}
+
+/* Lists the copies "<name>.<date>…" of dir, newest first (the date in the
+ * name sorts chronologically). Returns the number of names; free them with
+ * free(). */
+static int list_copies(const char *dir, const char *name, char ***names)
+{
+    char prefix[RS_PATH_MAX];
+    snprintf(prefix, sizeof prefix, "%s.", name);
     *names = NULL;
     DIR *d = opendir(dir);
     if (!d)
@@ -582,11 +675,87 @@ static int list_backups(const char *save_path, char ***names)
     return n;
 }
 
+static int list_backups(const char *save_path, char ***names)
+{
+    char dir[RS_PATH_MAX];
+    backup_dir(save_path, dir, sizeof dir);
+    return list_copies(dir, rs_basename(save_path), names);
+}
+
 static void free_names(char **names, int n)
 {
     for (int i = 0; i < n; i++)
         free(names[i]);
     free(names);
+}
+
+/* "<dir>/<name>.2026-11-07T12-00-00Z<ext>": ':' is not allowed in FAT file
+ * names. */
+static void copy_path(const char *dir, const char *name, rs_time now, const char *ext, char *out, size_t size)
+{
+    char stamp[32], file[RS_PATH_MAX];
+    rs_time_format_iso(now, stamp, sizeof stamp);
+    for (char *c = stamp; *c; c++)
+        if (*c == ':')
+            *c = '-';
+    snprintf(file, sizeof file, "%s.%s%s", name, stamp, ext);
+    rs_path_join(out, size, dir, file);
+}
+
+/* Keeps the `keep` newest copies of name in dir. */
+static void prune_copies(const char *dir, const char *name, int keep)
+{
+    char **names, path[RS_PATH_MAX];
+    int n = list_copies(dir, name, &names);
+    for (int i = keep < 0 ? 0 : keep; i < n; i++) {
+        rs_path_join(path, sizeof path, dir, names[i]);
+        remove(path);
+    }
+    free_names(names, n);
+}
+
+/* Copies a save made of a folder, when it exists, as its canonical archive
+ * "<save>.<date>.tar" (docs/SPEC.md, "Saves en dossier"). */
+static rs_status backup_tree(const rs_entry *entry, rs_time now, int keep, char *copy, size_t copy_size,
+                             rs_error *err)
+{
+    if (copy_size)
+        copy[0] = 0;
+    rs_buf tar = {0};
+    bool exists = false;
+    rs_status st = read_tree(entry, &tar, &exists, err);
+    if (st != RS_OK || !exists)
+        return st;
+    char dir[RS_PATH_MAX], path[RS_PATH_MAX];
+    const char *name = rs_basename(entry->save_path);
+    entry_backup_dir(entry, dir, sizeof dir);
+    copy_path(dir, name, now, ".tar", path, sizeof path);
+    st = rs_mkdirs(dir, err);
+    if (st == RS_OK)
+        st = rs_write_file_atomic(path, tar.data, tar.len, err);
+    rs_buf_free(&tar);
+    if (st != RS_OK)
+        return st;
+    if (copy_size)
+        rs_strlcpy(copy, path, copy_size);
+    prune_copies(dir, name, keep);
+    return RS_OK;
+}
+
+int rs_entry_backup_count(const rs_entry *entry, char *newest, size_t newest_size)
+{
+    if (!entry->profile || !entry->profile->tree)
+        return rs_backup_count(entry->save_path, newest, newest_size);
+    char dir[RS_PATH_MAX], **names;
+    entry_backup_dir(entry, dir, sizeof dir);
+    int n = list_copies(dir, rs_basename(entry->save_path), &names);
+    if (newest && newest_size) {
+        newest[0] = 0;
+        if (n > 0)
+            rs_path_join(newest, newest_size, dir, names[0]);
+    }
+    free_names(names, n);
+    return n;
 }
 
 rs_status rs_backup(const char *save_path, rs_time now, int keep, char *copy, size_t copy_size, rs_error *err)
@@ -595,28 +764,15 @@ rs_status rs_backup(const char *save_path, rs_time now, int keep, char *copy, si
         copy[0] = 0;
     if (!rs_file_exists(save_path))
         return RS_OK;
-    char dir[RS_PATH_MAX], stamp[32], name[RS_PATH_MAX], path[RS_PATH_MAX];
+    char dir[RS_PATH_MAX], path[RS_PATH_MAX];
     backup_dir(save_path, dir, sizeof dir);
-    /* "2026-11-07T12-00-00Z": ':' is not allowed in FAT file names. */
-    rs_time_format_iso(now, stamp, sizeof stamp);
-    for (char *c = stamp; *c; c++)
-        if (*c == ':')
-            *c = '-';
-    snprintf(name, sizeof name, "%s.%s", rs_basename(save_path), stamp);
-    rs_path_join(path, sizeof path, dir, name);
+    copy_path(dir, rs_basename(save_path), now, "", path, sizeof path);
     rs_status st = rs_copy_file(save_path, path, err);
     if (st != RS_OK)
         return st;
     if (copy_size)
         rs_strlcpy(copy, path, copy_size);
-
-    char **names;
-    int n = list_backups(save_path, &names);
-    for (int i = keep < 0 ? 0 : keep; i < n; i++) {
-        rs_path_join(path, sizeof path, dir, names[i]);
-        remove(path);
-    }
-    free_names(names, n);
+    prune_copies(dir, rs_basename(save_path), keep);
     return RS_OK;
 }
 
