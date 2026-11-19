@@ -80,7 +80,7 @@ export interface UploadResult {
   conflict: boolean;
 }
 
-export type Profile = 'raw' | 'desmume' | 'flashcard' | 'mgba';
+export type Profile = 'raw' | 'desmume' | 'flashcard' | 'mgba' | 'mgba-gb';
 
 export class ApiError extends Error {
   constructor(

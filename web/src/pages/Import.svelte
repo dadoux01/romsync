@@ -7,13 +7,16 @@
     hasMgbaClock,
     isValidGameCode,
     parseRomHeader,
+    romTitleGb,
     profileFor,
     rawSize,
     systemOf,
+    systemOfRomName,
     withSystem,
     type GameSystem,
   } from '../lib/saves';
   import { randomId } from '../lib/sha256';
+  import { sha1Pure } from '../lib/sha1';
   import { t } from '../lib/i18n/index.svelte';
 
   let games = $state<Game[]>([]);
@@ -67,8 +70,14 @@
   async function pickRom(e: Event) {
     const f = (e.currentTarget as HTMLInputElement).files?.[0];
     if (!f) return;
-    // Only the header is read, locally: the ROM never leaves the browser.
-    const header = parseRomHeader(new Uint8Array(await f.slice(0, 512).arrayBuffer()), f.name);
+    // Read locally: the ROM never leaves the browser. Without a game code
+    // (Game Boy, homebrew), the identifier is the SHA-1 of the whole ROM.
+    let header = parseRomHeader(new Uint8Array(await f.slice(0, 512).arrayBuffer()), f.name);
+    const system = header?.system ?? systemOfRomName(f.name);
+    if (!header && system) {
+      const title = system === 'gb' ? romTitleGb(new Uint8Array(await f.slice(0, 0x150).arrayBuffer())) : '';
+      header = { system, code: `h:${sha1Pure(new Uint8Array(await f.arrayBuffer()))}`, title };
+    }
     if (!header) {
       error = t('import.romNoCode');
       return;
@@ -147,8 +156,8 @@
         <strong
           >{profile === 'desmume'
             ? t('import.format.desmume')
-            : profile === 'mgba'
-              ? hasMgbaClock(data)
+            : profile === 'mgba' || profile === 'mgba-gb'
+              ? hasMgbaClock(data, profile)
                 ? t('import.format.mgbaClock')
                 : t('import.format.mgba')
               : t('import.format.raw')}</strong
@@ -181,7 +190,7 @@
       {/if}
       <label>
         <span>{t('import.rom')} <span class="muted small">{t('import.romHelp')}</span></span>
-        <input type="file" accept=".nds,.dsi,.srl,.gba" onchange={pickRom} />
+        <input type="file" accept=".nds,.dsi,.srl,.gba,.gb,.gbc,.sgb" onchange={pickRom} />
       </label>
 
       <label>

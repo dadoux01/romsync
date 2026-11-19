@@ -4,6 +4,7 @@ import { hasMgbaClock, isDeSmuME, parseRomHeader, isValidGameCode, profileFor, r
 import { formatSize } from './format';
 import { setLanguage } from './i18n/index.svelte';
 import { createHash } from 'node:crypto';
+import { sha1Pure } from './sha1';
 
 const enc = new TextEncoder();
 
@@ -99,5 +100,25 @@ describe('versions', () => {
     expect(isNewer('0.5.0', '0.5.0')).toBe(false);
     expect(isNewer('0.5.0', 'dev')).toBe(false);
     expect(parseVersion('1.02.0')).toBeNull();
+  });
+});
+
+describe('Game Boy', () => {
+  it('computes SHA-1 like node', () => {
+    for (const n of [0, 55, 56, 64, 1000, 32768]) {
+      const data = new Uint8Array(n).map((_, i) => (i * 13) & 0xff);
+      expect(sha1Pure(data)).toBe(createHash('sha1').update(data).digest('hex'));
+    }
+  });
+  it('has no cartridge code', async () => {
+    const { isValidGameCode, systemOf, systemOfRomName, profileFor, rawSize, parseRomHeader } = await import('./saves');
+    expect(isValidGameCode('gb:x:red')).toBe(true);
+    expect(isValidGameCode('gb:APSE')).toBe(false);
+    expect(systemOf('gb:h:' + 'a'.repeat(40))).toBe('gb');
+    expect(systemOfRomName('Cristal.gbc')).toBe('gb');
+    expect(parseRomHeader(new Uint8Array(512), 'Rouge.gb')).toBeNull();
+    const withClock = new Uint8Array(8192 + 48);
+    expect(profileFor('gb', withClock)).toBe('mgba-gb');
+    expect(rawSize(withClock, 'mgba-gb')).toBe(8192);
   });
 });

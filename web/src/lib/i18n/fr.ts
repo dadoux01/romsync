@@ -23,6 +23,7 @@ export const fr = {
   'system.all': 'Toutes les consoles',
   'system.nds': 'DS',
   'system.gba': 'GBA',
+  'system.gb': 'GB',
 
   'nav.games': 'Jeux',
   'nav.import': 'Importer',
