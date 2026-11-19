@@ -17,6 +17,9 @@ type System struct {
 	Prefix string
 	// ChipSizes are the valid save chip sizes, smallest first.
 	ChipSizes []int64
+	// NoCartridgeCode: the ROM header has no reliable game code, so the
+	// identifiers are only h:<sha1> and x:<name> (Game Boy).
+	NoCartridgeCode bool
 }
 
 // Identifier forms after the prefix (docs/SPEC.md, "Identification des jeux").
@@ -36,9 +39,13 @@ var (
 	// GBA is the Game Boy Advance: EEPROM 4 and 64 Kbit, SRAM, flash 512
 	// Kbit (or SRAM 64 KiB) and flash 1 Mbit, as in mGBA's memory.h.
 	GBA = &System{ID: "gba", Prefix: "gba:", ChipSizes: []int64{512, 8 << 10, 32 << 10, 64 << 10, 128 << 10}}
+	// GB is the Game Boy and the Game Boy Color: MBC2 (256 B in mGBA, 512 B
+	// elsewhere), MBC7, and cartridge RAM of 2 to 128 KiB.
+	GB = &System{ID: "gb", Prefix: "gb:", NoCartridgeCode: true,
+		ChipSizes: []int64{256, 512, 2 << 10, 8 << 10, 32 << 10, 64 << 10, 128 << 10}}
 
 	// All lists the consoles, the Nintendo DS first.
-	All = []*System{NDS, GBA}
+	All = []*System{NDS, GBA, GB}
 )
 
 // ByID returns the console with the given ID.
@@ -61,7 +68,7 @@ func Parse(code string) (s *System, local string, ok bool) {
 			break
 		}
 	}
-	ok = cartridgeRE.MatchString(local) || romHashRE.MatchString(local) || customRE.MatchString(local)
+	ok = (!s.NoCartridgeCode && cartridgeRE.MatchString(local)) || romHashRE.MatchString(local) || customRE.MatchString(local)
 	return s, local, ok
 }
 

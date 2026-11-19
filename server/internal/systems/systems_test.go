@@ -19,6 +19,9 @@ func TestParse(t *testing.T) {
 		{"gba:bpef", "gba", "bpef", false},
 		{"snes:ABCD", "nds", "snes:ABCD", false}, // not a console yet
 		{"gba:gba:BPEF", "gba", "gba:BPEF", false},
+		{"gb:h:" + "0123456789012345678901234567890123456789", "gb", "h:0123456789012345678901234567890123456789", true},
+		{"gb:x:red-fr", "gb", "x:red-fr", true},
+		{"gb:APSE", "gb", "APSE", false}, // no cartridge code on the Game Boy
 	}
 	for _, c := range cases {
 		s, local, ok := Parse(c.code)

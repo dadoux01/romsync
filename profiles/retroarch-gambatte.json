@@ -1,0 +1,16 @@
+{
+  "id": "retroarch-gambatte",
+  "name": "RetroArch (Gambatte)",
+  "status": "to_verify",
+  "systems": ["gb"],
+  "extension": ".srm",
+  "location": "RetroArch save folder (savefile_directory, sorted by core or content when enabled)",
+  "header": null,
+  "footer": null,
+  "size": {
+    "output": "exact",
+    "pad_to": null,
+    "pad_byte": null
+  },
+  "notes": "Gambatte exposes the cartridge RAM as RETRO_MEMORY_SAVE_RAM (Cartridge::savedata_size, libgambatte/src/mem/cartridge_libretro.cpp), in 8 KiB banks: a 2 KiB RAM or an MBC2 gives 8 KiB, the RAM size code 5 gives 128 KiB. The clock is RETRO_MEMORY_RTC, a separate .rtc file."
+}

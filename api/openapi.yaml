@@ -1006,20 +1006,20 @@ components:
 
     GameCode:
       type: string
-      description: A cartridge code, `h:<SHA-1 of the ROM>` or `x:<name>`; prefixed by the console except for the Nintendo DS (`gba:BPEF`, API level 3).
-      pattern: "^(gba:)?([A-Z0-9]{4}|h:[0-9a-f]{40}|x:[a-z0-9-]{1,32})$"
-      examples: ["IRBF", "gba:BPEF"]
+      description: A cartridge code, `h:<SHA-1 of the ROM>` or `x:<name>`; prefixed by the console except for the Nintendo DS (`gba:BPEF`, API level 3); the Game Boy has no cartridge code (`gb:h:…`, `gb:x:…`).
+      pattern: "^((gba:)?[A-Z0-9]{4}|((gba|gb):)?(h:[0-9a-f]{40}|x:[a-z0-9-]{1,32}))$"
+      examples: ["IRBF", "gba:BPEF", "gb:x:red"]
 
     System:
       type: string
-      enum: [nds, gba]
+      enum: [nds, gba, gb]
       description: Console of a game (docs/SPEC.md, "Multi-consoles").
 
     ProfileID:
       type: string
-      enum: [raw, desmume, flashcard, mgba]
+      enum: [raw, desmume, flashcard, mgba, mgba-gb]
       default: raw
-      description: "`raw`: the save chip content (melonDS, RetroArch). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to max(512 KiB, chip size), never cut (to verify per flashcard model). `mgba` (GBA): mGBA's `.sav`, whose 16-byte cartridge clock is removed on upload and not written on export. A profile only converts the saves of its consoles (`desmume` and `flashcard`: DS; `mgba`: GBA; `raw`: both)."
+      description: "`raw`: the save chip content (melonDS, RetroArch). `desmume`: `.dsv` with DeSmuME's 122-byte footer. `flashcard`: `.sav` padded with 0xFF to max(512 KiB, chip size), never cut (to verify per flashcard model). `mgba` (GBA) and `mgba-gb` (Game Boy): mGBA's `.sav`, whose cartridge clock (16 and 48 bytes) is removed on upload and not written on export. A profile only converts the saves of its consoles (`desmume` and `flashcard`: DS; `mgba`: GBA; `mgba-gb`: Game Boy; `raw`: all)."
 
     Game:
       type: object

@@ -2,7 +2,7 @@
   "id": "retroarch-mgba",
   "name": "RetroArch (mGBA)",
   "status": "to_verify",
-  "systems": ["gba"],
+  "systems": ["gba", "gb"],
   "extension": ".srm",
   "location": "RetroArch save folder (savefile_directory, sorted by core or content when enabled)",
   "header": null,
@@ -12,5 +12,5 @@
     "pad_to": null,
     "pad_byte": null
   },
-  "notes": "The mGBA core exposes the save chip as RETRO_MEMORY_SAVE_RAM at its exact size (retro_get_memory_size, src/platform/libretro/libretro.c), without the clock; 128 KiB of 0xFF until the game has saved once."
+  "notes": "The mGBA core exposes the save chip as RETRO_MEMORY_SAVE_RAM at its exact size (retro_get_memory_size, src/platform/libretro/libretro.c), without the clock; on the GBA, 128 KiB of 0xFF until the game has saved once. On the Game Boy, the cartridge RAM only (sramSize); the clock is RETRO_MEMORY_RTC, a separate .rtc file."
 }

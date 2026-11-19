@@ -27,15 +27,17 @@ var profiles = map[string]Profile{
 	"raw":       Raw{},
 	"desmume":   DeSmuME{},
 	"flashcard": Flashcard{Size: FlashcardSize},
-	"mgba":      MGBA{},
+	"mgba":      MGBA{id: "mgba", clock: MGBARTCLength},
+	"mgba-gb":   MGBA{id: "mgba-gb", clock: MGBAGBRTCLength},
 }
 
 // systems lists the consoles of each profile (the "systems" of its JSON).
 var systems = map[string][]string{
-	"raw":       {"nds", "gba"},
+	"raw":       {"nds", "gba", "gb"},
 	"desmume":   {"nds"},
 	"flashcard": {"nds"},
 	"mgba":      {"gba"},
+	"mgba-gb":   {"gb"},
 }
 
 // Supports reports whether profile id converts saves of the console system.
@@ -58,7 +60,7 @@ func Get(id string) (Profile, bool) {
 }
 
 // IDs lists the available profiles.
-func IDs() []string { return []string{"raw", "desmume", "flashcard", "mgba"} }
+func IDs() []string { return []string{"raw", "desmume", "flashcard", "mgba", "mgba-gb"} }
 
 // Raw is the canonical format: the content of the save chip, unchanged.
 // It is what melonDS writes in its .sav files.
@@ -211,20 +213,29 @@ func (DeSmuME) Decode(file []byte) ([]byte, error) {
 // mGBA: 7 bytes of BCD time, a control byte and a 64-bit latch).
 const MGBARTCLength = 16
 
-// MGBA is mGBA's .sav: the raw save, followed by the cartridge clock for
-// games that have one. mGBA writes the clock at the save size rounded down
-// to 256 bytes, so a file holds it when its size modulo 256 is 16. The clock
-// is not part of the save chip: it is removed, and never written back.
-type MGBA struct{}
+// MGBAGBRTCLength is the length of the clock mGBA writes after the RAM of a
+// Game Boy cartridge with a real-time clock (struct GBMBCRTCSaveBuffer: ten
+// 32-bit counters and a 64-bit Unix time).
+const MGBAGBRTCLength = 48
 
-func (MGBA) ID() string        { return "mgba" }
+// MGBA is mGBA's .sav: the raw save, followed by the cartridge clock for
+// games that have one (16 bytes on the GBA, 48 on the Game Boy). The save
+// sizes are multiples of 256 bytes, so a file holds a clock when its size
+// modulo 256 is the clock's length. The clock is not part of the save chip:
+// it is removed, and never written back.
+type MGBA struct {
+	id    string
+	clock int
+}
+
+func (m MGBA) ID() string      { return m.id }
 func (MGBA) Extension() string { return ".sav" }
 
 func (MGBA) Encode(raw []byte) ([]byte, error) { return bytes.Clone(raw), nil }
 
-func (MGBA) Decode(file []byte) ([]byte, error) {
-	if len(file) > MGBARTCLength && len(file)%256 == MGBARTCLength {
-		return bytes.Clone(file[:len(file)-MGBARTCLength]), nil
+func (m MGBA) Decode(file []byte) ([]byte, error) {
+	if len(file) > m.clock && len(file)%256 == m.clock {
+		return bytes.Clone(file[:len(file)-m.clock]), nil
 	}
 	return bytes.Clone(file), nil
 }

@@ -2,7 +2,7 @@
   "id": "raw",
   "name": "Raw (melonDS standalone)",
   "status": "confirmed",
-  "systems": ["nds", "gba"],
+  "systems": ["nds", "gba", "gb"],
   "extension": ".sav",
   "location": "Next to the ROM, or in the save folder configured in melonDS",
   "header": null,

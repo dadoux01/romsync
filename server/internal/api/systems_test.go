@@ -83,3 +83,30 @@ func TestMGBAProfileRemovesTheClock(t *testing.T) {
 	expectErr(t, admin.get(fmt.Sprintf("/api/v1/versions/%d/export?profile=desmume", v.ID)), 400, "invalid_request")
 	expectErr(t, admin.upload(upload{code: "IRBF", data: save(1), savedAt: t0, query: "?profile=mgba"}), 400, "invalid_request")
 }
+
+func TestGameBoyGames(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	t0 := e.clock.Now().Add(-time.Hour)
+
+	// No cartridge code on the Game Boy: only h: and x: identifiers.
+	expectErr(t, admin.upload(upload{code: "gb:APSE", data: save(1), savedAt: t0}), 400, "invalid_request")
+	ram := gameData(8<<10, 6)
+	withClock := append(bytes.Clone(ram), gameData(48, 7)...)
+	code := "gb:h:" + "0123456789abcdef0123456789abcdef01234567"
+	v := admin.uploadOK(upload{code: code, data: withClock, savedAt: t0, query: "?profile=mgba-gb"}, 201).Version
+	if v.Size != 8<<10 || admin.chipSize(code) != 8<<10 {
+		t.Fatalf("the 48-byte clock must be removed: %+v", v)
+	}
+	var games struct{ Games []gameJSON }
+	admin.get("/api/v1/games?system=gb").json(t, &games)
+	if len(games.Games) != 1 || games.Games[0].System != "gb" || games.Games[0].Region != nil {
+		t.Fatalf("games: %+v", games.Games)
+	}
+	// Gambatte keeps a 64 KiB RAM in 128 KiB: the padding is cut.
+	big := admin.uploadOK(upload{code: "gb:x:big", data: gameData(64<<10, 8), savedAt: t0}, 201).Version
+	r := admin.uploadOK(upload{code: "gb:x:big", data: fill(gameData(64<<10, 9), 128<<10, 0x00), savedAt: t0.Add(time.Minute), base: big.ID}, 201)
+	if r.Version.Size != 64<<10 || r.Version.SizeEvent == nil || r.Version.SizeEvent.Type != "trimmed" {
+		t.Fatalf("Gambatte's padding must be cut: %+v", r.Version)
+	}
+}

@@ -237,9 +237,10 @@ func TestProfilesMatchCode(t *testing.T) {
 			if pf.Footer != nil {
 				t.Errorf("raw must not declare a footer")
 			}
-		case "mgba":
-			if pf.Footer == nil || pf.Footer.Length != MGBARTCLength || !pf.Footer.Optional || pf.Footer.SizeModulo != 256 {
-				t.Errorf("mgba footer differs from the code: %+v", pf.Footer)
+		case "mgba", "mgba-gb":
+			want := map[string]int{"mgba": MGBARTCLength, "mgba-gb": MGBAGBRTCLength}[id]
+			if pf.Footer == nil || pf.Footer.Length != want || !pf.Footer.Optional || pf.Footer.SizeModulo != 256 {
+				t.Errorf("%s footer differs from the code: %+v", id, pf.Footer)
 			}
 		case "desmume":
 			if pf.Footer == nil || pf.Footer.Length != DeSmuMEFooterLength ||
@@ -251,25 +252,42 @@ func TestProfilesMatchCode(t *testing.T) {
 }
 
 func TestMGBAClock(t *testing.T) {
+	mgba, _ := Get("mgba")
 	save := pattern(32 << 10)
 	withClock := append(bytes.Clone(save), pattern(MGBARTCLength)...)
-	got, err := MGBA{}.Decode(withClock)
+	got, err := mgba.Decode(withClock)
 	if err != nil || !bytes.Equal(got, save) {
 		t.Fatalf("the clock must be removed (%d bytes, %v)", len(got), err)
 	}
 	// EEPROM 512 B: the clock sits right after the save (512 & ~0xFF = 512).
 	small := append(pattern(512), pattern(MGBARTCLength)...)
-	if got, _ := (MGBA{}).Decode(small); len(got) != 512 {
+	if got, _ := mgba.Decode(small); len(got) != 512 {
 		t.Errorf("512 B save with clock gives %d bytes", len(got))
 	}
 	// Without a clock, nothing is removed; nothing is ever added.
-	if got, _ := (MGBA{}).Decode(save); !bytes.Equal(got, save) {
+	if got, _ := mgba.Decode(save); !bytes.Equal(got, save) {
 		t.Error("a save without clock must be unchanged")
 	}
-	if out, _ := (MGBA{}).Encode(save); !bytes.Equal(out, save) {
+	if out, _ := mgba.Encode(save); !bytes.Equal(out, save) {
 		t.Error("the clock is never written")
 	}
 	if !Supports("mgba", "gba") || Supports("mgba", "nds") || !Supports("raw", "gba") || Supports("desmume", "gba") {
+		t.Error("profiles and consoles")
+	}
+}
+
+func TestMGBAGameBoyClock(t *testing.T) {
+	gb, _ := Get("mgba-gb")
+	ram := pattern(8 << 10)
+	got, _ := gb.Decode(append(bytes.Clone(ram), pattern(MGBAGBRTCLength)...))
+	if !bytes.Equal(got, ram) {
+		t.Fatalf("the 48-byte clock must be removed (%d bytes)", len(got))
+	}
+	// MBC2 in mGBA: 256 bytes, then the clock never applies (no MBC2 clock).
+	if got, _ := gb.Decode(pattern(256)); len(got) != 256 {
+		t.Error("a save without clock is unchanged")
+	}
+	if !Supports("mgba-gb", "gb") || Supports("mgba-gb", "gba") || !Supports("raw", "gb") {
 		t.Error("profiles and consoles")
 	}
 }
