@@ -501,6 +501,14 @@ Sony (PS1, PSP, PS2, PS3, Vita) suit avec les mêmes principes ; ses détails se
 - Homebrews Wii, Wii U et Switch : seulement quand quelqu'un peut les tester sur sa console (comme Android). En attendant, ces consoles sont synchronisées entre émulateurs.
 - Un ancien client ignore les jeux d'une console qu'il ne connaît pas (à vérifier et tester pour l'appli 0.6 et le homebrew 0.6).
 
+**Game Boy Advance (7.1)** (vérifié sur les sources de mGBA : `src/gba/savedata.c`, `include/mgba/internal/gba/memory.h`, `src/core/config.c`, `src/core/directories.c`, `src/platform/libretro/libretro.c`)
+
+- Identification : titre interne à `0x0A0` (12 octets), code du jeu à `0x0AC` (4 octets ASCII, `^[A-Z0-9]{4}$`, 4e caractère = région comme sur DS). Sans code valide : `gba:h:<SHA-1 de la ROM>`. ROMs `.gba`, aussi dans un `.zip` ou un `.7z`.
+- Tailles de puce valides : 512 o (EEPROM 4 Kbit), 8 Kio (EEPROM 64 Kbit), 32 Kio (SRAM), 64 Kio (Flash 512 Kbit ou SRAM 64 Kio), 128 Kio (Flash 1 Mbit). Pas de base de tailles : la première save fixe `chip_size`, puis les règles de « Taille réelle » s'appliquent comme pour la DS.
+- mGBA (standalone) : `<nom de la ROM sans extension>.sav` (nom de l'archive pour une ROM dans un `.zip`/`.7z`), dans le dossier de la ROM, ou dans `savegamePath` s'il est réglé (section `[ports.qt]` de `config.ini`, puis la section sans nom ; un chemin relatif part du dossier de configuration). Dossier de configuration : celui du `portable.ini` s'il existe (à côté de `mGBA.exe` sous Windows, dans le dossier de travail ou à côté de `mGBA.app` ailleurs), sinon `%APPDATA%\mGBA` sous Windows et `$XDG_CONFIG_HOME/mgba` ou `~/.config/mgba` sous Linux comme sous macOS ; Flatpak `io.mgba.mGBA` : `~/.var/app/io.mgba.mGBA/config/mgba`. Exécutable : `mgba-qt` (Linux), `mGBA.exe`, `mGBA.app`.
+- Horloge des cartouches (Pokémon Rubis, Saphir et Émeraude, Boktai…) : mGBA ajoute 16 octets après la save (heure en BCD sur 7 octets, octet de contrôle, dernier relevé sur 8 octets LE), à l'offset `taille & ~0xFF`, donc reconnaissables à une taille de fichier dont le reste modulo 256 vaut 16. Ce n'est pas le contenu de la puce : le profil `mgba` les retire à l'envoi et ne les écrit pas au téléchargement (mGBA les rajoute ; le jeu repart de l'heure de l'appareil).
+- RetroArch avec le cœur mGBA : `<rom>.srm` brut, à la taille exacte de la puce, sans l'horloge, dans le dossier des saves de RetroArch (mêmes règles que pour melonDS DS, nom de bibliothèque `mGBA`). Tant que le jeu n'a pas sauvegardé, le type de puce n'est pas connu et le fichier fait 128 Kio de 0xFF ; les règles de taille absorbent ce remplissage. Cœur `mgba_libretro.so`, `.dll` ou `.dylib`.
+
 **Compatibilité**
 
 - Niveau d'API 3 : identifiants préfixés, `system` dans les réponses, saves en dossier. Les clients qui synchronisent une autre console que la DS demandent le niveau 3 ; ceux qui ne gèrent que la DS se contentent du niveau 2.
