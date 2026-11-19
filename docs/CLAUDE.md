@@ -4,8 +4,9 @@ Synchronisation auto-hébergée des saves de consoles Nintendo (DS, GBA, Game
 Boy et Game Boy Color ; les autres suivent, voir « Multi-consoles » dans la
 spec) : un serveur Go, un
 site Svelte embarqué dans le binaire, un client Flutter (Linux, macOS,
-Windows), et un homebrew 3DS (C). Les phases 1 à 4 et les étapes 7.1 (GBA)
-et 7.2 (Game Boy et Game Boy Color), en émulation, sont livrées.
+Windows), et un homebrew 3DS (C). Les phases 1 à 4 et les étapes 7.1 (GBA),
+7.2 (Game Boy et Game Boy Color), en émulation, et 7.3 (saves en dossier)
+sont livrées.
 
 ## Référence
 
@@ -142,6 +143,11 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
   comparaison passe par les règles de taille du serveur : `size_rule.dart` et
   `3ds/core/size_rule.c` doivent rester identiques à
   `server/internal/syncrule/size.go`.
+- Saves en dossier : l'archive canonique existe en trois implémentations
+  (`server/internal/tree`, `SaveTree` de `romsync_core`, `3ds/core/tree.c`),
+  tenues identiques par les vecteurs de `testdata/tree` (régénérés par
+  `generate.py`). Un profil de type `tree` fait lire et écrire la save comme
+  un dossier ; le serveur remet tout tar reçu sous forme canonique.
 - Consoles : la liste existe en trois copies (`server/internal/systems`,
   `GameSystem` de `romsync_core`, `SYSTEMS` du site). Une nouvelle console
   ajoute son préfixe d'identifiant, ses tailles de puce, ses émulateurs
@@ -183,5 +189,5 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 - Phases suivantes : 5 (Android, en attente d'un testeur :
   l'utilisateur n'a pas de téléphone Android, recherches dans
   `docs/research/android.md`), 6 (iOS, à étudier, rien n'est codé), 7
-  (multi-consoles, étapes 7.3 et suivantes ; seule une 2DS est disponible
+  (multi-consoles, étapes 7.4 et suivantes ; seule une 2DS est disponible
   pour les tests sur console).
