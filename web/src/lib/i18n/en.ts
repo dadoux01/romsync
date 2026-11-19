@@ -24,6 +24,7 @@ export const en = {
   'system.nds': 'DS',
   'system.gba': 'GBA',
   'system.gb': 'GB',
+  'system.3ds': '3DS',
 
   'nav.games': 'Games',
   'nav.import': 'Import',
@@ -164,6 +165,7 @@ export const en = {
   'import.saveOf': '{size} save',
   'import.format.desmume': 'DeSmuME (.dsv)',
   'import.format.raw': 'raw (.sav)',
+  'import.format.tar': 'save folder (.tar)',
   'import.format.mgba': 'raw or mGBA (.sav)',
   'import.format.mgbaClock': 'mGBA (.sav), cartridge clock removed',
   'import.game': 'Game',

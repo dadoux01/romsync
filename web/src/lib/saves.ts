@@ -16,19 +16,25 @@ export function isDeSmuME(data: Uint8Array): boolean {
 }
 
 /** Consoles of RomSync (docs/SPEC.md, "Multi-consoles"). */
-export type GameSystem = 'nds' | 'gba' | 'gb';
-export const SYSTEMS: GameSystem[] = ['nds', 'gba', 'gb'];
+export type GameSystem = 'nds' | 'gba' | 'gb' | '3ds';
+export const SYSTEMS: GameSystem[] = ['nds', 'gba', 'gb', '3ds'];
+
+/** Consoles whose saves are folders, exchanged as a .tar archive (docs/SPEC.md, "Saves en dossier"). */
+export function isTreeSystem(system: GameSystem): boolean {
+  return system === '3ds';
+}
 
 /** Console of a game identifier: its prefix, none for the DS. */
 export function systemOf(code: string): GameSystem {
   if (code.startsWith('gba:')) return 'gba';
   if (code.startsWith('gb:')) return 'gb';
+  if (code.startsWith('3ds:')) return '3ds';
   return 'nds';
 }
 
 /** Consoles whose ROM header has no game code: identified by the SHA-1 of the ROM. */
 export function hasCartridgeCode(system: GameSystem): boolean {
-  return system !== 'gb';
+  return system === 'nds' || system === 'gba';
 }
 
 /** Console of a ROM file name, or null. */
@@ -58,6 +64,7 @@ export function hasMgbaClock(data: Uint8Array, profile = 'mgba'): boolean {
 export function profileFor(system: GameSystem, data: Uint8Array): 'raw' | 'desmume' | 'mgba' | 'mgba-gb' {
   if (system === 'gba') return 'mgba';
   if (system === 'gb') return 'mgba-gb';
+  if (isTreeSystem(system)) return 'raw'; // the .tar of the folder
   return isDeSmuME(data) ? 'desmume' : 'raw';
 }
 
@@ -102,7 +109,8 @@ export function parseRomHeader(header: Uint8Array, fileName = ''): RomHeader | n
   return { title, code, system: gba ? 'gba' : 'nds' };
 }
 
-const GAME_CODE_RE = /^((gba:)?[A-Z0-9]{4}|((gba|gb):)?(h:[0-9a-f]{40}|x:[a-z0-9-]{1,32}))$/;
+const GAME_CODE_RE =
+  /^((gba:)?[A-Z0-9]{4}|((gba|gb):)?(h:[0-9a-f]{40}|x:[a-z0-9-]{1,32})|3ds:([0-9A-F]{16}|x:[a-z0-9-]{1,32}))$/;
 
 export function isValidGameCode(code: string): boolean {
   return GAME_CODE_RE.test(code);

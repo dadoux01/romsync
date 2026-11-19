@@ -5,6 +5,7 @@
   import {
     SYSTEMS,
     hasMgbaClock,
+    isTreeSystem,
     isValidGameCode,
     parseRomHeader,
     romTitleGb,
@@ -148,7 +149,7 @@
   <form class="card stack" onsubmit={(e) => submit(e)}>
     <label>
       {t('import.file')}
-      <input type="file" accept=".sav,.dsv,.srm,application/octet-stream" onchange={pickSave} required />
+      <input type="file" accept=".sav,.dsv,.srm,.tar,application/octet-stream,application/x-tar" onchange={pickSave} required />
     </label>
     {#if data}
       <p class="muted small">
@@ -160,7 +161,9 @@
               ? hasMgbaClock(data, profile)
                 ? t('import.format.mgbaClock')
                 : t('import.format.mgba')
-              : t('import.format.raw')}</strong
+              : isTreeSystem(systemOf(code))
+                ? t('import.format.tar')
+                : t('import.format.raw')}</strong
         > ·
         {t('import.saveOf', { size: formatSize(rawSize(data, profile)) })}
       </p>

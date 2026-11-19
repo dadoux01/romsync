@@ -2,7 +2,7 @@
   import { api, type Game, type Version } from '../lib/api';
   import { session } from '../lib/session.svelte';
   import { describeSizeEvent, formatDate, formatSize, relativeDate, shortHash } from '../lib/format';
-  import { regionName } from '../lib/saves';
+  import { isTreeSystem, regionName } from '../lib/saves';
   import { t } from '../lib/i18n/index.svelte';
   import RetentionEditor from '../components/RetentionEditor.svelte';
 
@@ -186,7 +186,7 @@
                   {v.pinned ? t('game.unpin') : t('game.pin')}
                 </button>
                 <button onclick={() => editNote(v)}>{t('game.note')}</button>
-                <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
+                <a class="button" href={api.exportURL(v.id, 'raw')} download>{isTreeSystem(game.system) ? '.tar' : '.sav'}</a>
                 {#if game.system === 'nds'}
                   <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
                   <a class="button" href={api.exportURL(v.id, 'flashcard')} download title={t('game.flashcard.title')}>{t('game.flashcard')}</a>

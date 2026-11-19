@@ -122,3 +122,15 @@ describe('Game Boy', () => {
     expect(rawSize(withClock, 'mgba-gb')).toBe(8192);
   });
 });
+
+describe('3DS', () => {
+  it('identifies games by their title ID and exchanges a .tar', async () => {
+    const { isValidGameCode, systemOf, isTreeSystem, profileFor } = await import('./saves');
+    expect(isValidGameCode('3ds:0004000000055D00')).toBe(true);
+    expect(isValidGameCode('3ds:0004000000055d00')).toBe(false);
+    expect(isValidGameCode('3ds:h:' + 'a'.repeat(40))).toBe(false);
+    expect(systemOf('3ds:x:y')).toBe('3ds');
+    expect(isTreeSystem('3ds')).toBe(true);
+    expect(profileFor('3ds', new Uint8Array(1024))).toBe('raw');
+  });
+});
