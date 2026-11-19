@@ -27,8 +27,17 @@ enum GameSystem {
   ),
 
   /// Nintendo 3DS: saves made of a folder, games identified by their title
-  /// ID. Its ROMs and emulators come with phase 7.4.
-  n3ds('3ds', '3ds:', [], '', [], hasCartridgeCode: false, titleId: true, tree: true);
+  /// ID (docs/SPEC.md, "Jeux 3DS").
+  n3ds(
+    '3ds',
+    '3ds:',
+    ['.3ds', '.cci', '.cxi', '.cia'],
+    'azahar',
+    [],
+    hasCartridgeCode: false,
+    titleId: true,
+    tree: true,
+  );
 
   const GameSystem(
     this.id,

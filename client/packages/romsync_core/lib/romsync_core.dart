@@ -3,6 +3,7 @@ library;
 
 export 'src/api/api_client.dart';
 export 'src/api/models.dart';
+export 'src/emulators/azahar.dart';
 export 'src/emulators/desmume.dart';
 export 'src/emulators/emulator.dart';
 export 'src/emulators/flatpak.dart';
@@ -12,6 +13,7 @@ export 'src/emulators/registry.dart';
 export 'src/emulators/retroarch.dart';
 export 'src/message.dart';
 export 'src/profiles/profile.dart';
+export 'src/rom/ctr_header.dart';
 export 'src/rom/game_id.dart';
 export 'src/rom/game_system.dart';
 export 'src/rom/nds_header.dart';

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../message.dart';
+import 'ctr_header.dart';
 import 'game_id.dart';
 import 'game_system.dart';
 import 'nds_header.dart';
@@ -78,7 +79,7 @@ class RomScanner {
         try {
           switch (ext) {
             case _ when GameSystem.ofRomName(entity.path) != null:
-              roms.add(await identify(PlainRomFile(entity.path)));
+              _add(roms, await identify(PlainRomFile(entity.path)));
             case '.zip':
               final zip = await ZipReader.open(entity.path);
               for (final e in zip.entries) {
@@ -87,7 +88,7 @@ class RomScanner {
                   issues.add(ScanIssue('${entity.path}#${e.name}', const CoreMessage(Msg.scanUnsupportedCompression)));
                   continue;
                 }
-                roms.add(await identify(ZipRomFile(entity.path, zip, e)));
+                _add(roms, await identify(ZipRomFile(entity.path, zip, e)));
               }
             case '.7z':
               final tool = sevenZip;
@@ -97,7 +98,7 @@ class RomScanner {
               }
               for (final name in await tool.list(entity.path)) {
                 if (GameSystem.ofRomName(name) == null) continue;
-                roms.add(await identify(SevenZipRomFile(entity.path, tool, name)));
+                _add(roms, await identify(SevenZipRomFile(entity.path, tool, name)));
               }
           }
         } catch (e) {
@@ -109,17 +110,23 @@ class RomScanner {
     return ScanResult(roms, issues);
   }
 
+  static void _add(List<ScannedRom> roms, ScannedRom? rom) {
+    if (rom != null) roms.add(rom);
+  }
+
   /// Reads the header of [file] and derives its identifier. The SHA-1 of the
-  /// whole ROM is only computed when the header has no valid code.
-  static Future<ScannedRom> identify(RomFile file) async {
+  /// whole ROM is only computed when the header has no valid code. Null for
+  /// a 3DS ROM that is not a game (update, DLC…) or has no readable title
+  /// ID: 3DS games are only identified by it.
+  static Future<ScannedRom?> identify(RomFile file) async {
     final system = GameSystem.ofRomName(file.romName) ?? GameSystem.nds;
     final RomHeader? header = switch (system) {
       GameSystem.nds => NdsHeader.parse(await file.readStart(NdsHeader.length)),
       GameSystem.gba => GbaHeader.parse(await file.readStart(GbaHeader.length)),
       GameSystem.gb => GbHeader.parse(await file.readStart(GbHeader.length)),
-      // 3DS games are not ROM files of a folder (phase 7.4).
-      GameSystem.n3ds => null,
+      GameSystem.n3ds => CtrHeader.parse(await file.readStart(CtrHeader.length)),
     };
+    if (system == GameSystem.n3ds && (header == null || !header.hasValidCode)) return null;
     final id = header != null && header.hasValidCode
         ? system.gameId(header.gameCode)
         : GameId.fromRomSha1(await file.sha1Hex(), system);

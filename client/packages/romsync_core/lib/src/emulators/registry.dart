@@ -1,5 +1,6 @@
 import '../rom/game_system.dart';
 import '../state/config.dart';
+import 'azahar.dart';
 import 'desmume.dart';
 import 'emulator.dart';
 import 'melonds.dart';
@@ -12,6 +13,7 @@ const emulatorIdsBySystem = {
   GameSystem.nds: ['melonds', 'desmume', 'retroarch-melondsds'],
   GameSystem.gba: ['mgba', 'retroarch-mgba'],
   GameSystem.gb: ['mgba', 'retroarch-gambatte', 'retroarch-mgba'],
+  GameSystem.n3ds: ['azahar'],
 };
 
 /// Every emulator once, console after console (mGBA serves several).
@@ -34,6 +36,7 @@ String emulatorName(String id) => switch (id) {
   'mgba' => 'mGBA',
   'retroarch-mgba' => 'RetroArch (mGBA)',
   'retroarch-gambatte' => 'RetroArch (Gambatte)',
+  'azahar' => 'Azahar',
   _ => id,
 };
 
@@ -62,6 +65,9 @@ EmulatorSettings defaultEmulatorSettings(String id, HostPlatform platform) {
     ('mgba', HostPlatform.linux) => ('mgba-qt', 'io.mgba.mGBA'),
     ('mgba', HostPlatform.macos) => ('/Applications/mGBA.app', 'io.mgba.mGBA'),
     ('mgba', HostPlatform.windows) => ('mGBA.exe', 'io.mgba.mGBA'),
+    ('azahar', HostPlatform.linux) => ('azahar', 'org.azahar_emu.Azahar'),
+    ('azahar', HostPlatform.macos) => ('/Applications/Azahar.app', 'org.azahar_emu.Azahar'),
+    ('azahar', HostPlatform.windows) => ('azahar.exe', 'org.azahar_emu.Azahar'),
     _ => throw ArgumentError('unknown emulator $id'),
   };
   return EmulatorSettings(id: id, executable: exe, flatpakId: flatpak);
@@ -121,6 +127,14 @@ EmulatorProfile createEmulator(
     searchPath: searchPath,
   ),
   'retroarch-mgba' => RetroArchMGBA(
+    settings: settings,
+    platform: platform,
+    home: home,
+    environment: environment,
+    run: run,
+    searchPath: searchPath,
+  ),
+  'azahar' => Azahar(
     settings: settings,
     platform: platform,
     home: home,
