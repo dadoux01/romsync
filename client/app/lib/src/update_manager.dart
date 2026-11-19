@@ -285,7 +285,11 @@ Future<void> installAndRestart(
     if (Platform.isMacOS) {
       await Process.start('open', ['-n', target], mode: ProcessStartMode.detached);
     } else {
-      await Process.start(p.join(target, launchPath()), const [], mode: ProcessStartMode.detached);
+      // RomSync is a unique GTK application: without this flag, the new
+      // version would only bring back the window of this one, still running.
+      await Process.start(p.join(target, launchPath()), const [
+        '--gapplication-replace',
+      ], mode: ProcessStartMode.detached);
     }
   }
   await quit();

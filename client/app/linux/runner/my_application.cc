@@ -10,6 +10,9 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  // The main window, kept so that a second launch shows it again instead of
+  // starting another RomSync (the window may be hidden in the system tray).
+  GtkWindow* window;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -22,8 +25,17 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  // The application is unique: launching RomSync again (e.g. the AppImage)
+  // activates the running instance over D-Bus, which brings its window back.
+  if (self->window != nullptr) {
+    gtk_window_present(self->window);
+    return;
+  }
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
+  self->window = window;
+  g_object_add_weak_pointer(G_OBJECT(window),
+                            reinterpret_cast<gpointer*>(&self->window));
 
   // Use a header bar when running in GNOME as this is the common style used
   // by applications and is the setup most users will be using (e.g. Ubuntu
@@ -83,8 +95,21 @@ static gboolean my_application_local_command_line(GApplication* application,
                                                   gchar*** arguments,
                                                   int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
-  // Strip out the first argument as it is the binary name.
-  self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
+  // Strip out the first argument as it is the binary name, and
+  // --gapplication-replace: after an update, the new version takes over from
+  // the running one (still quitting) instead of activating it.
+  GPtrArray* args = g_ptr_array_new_null_terminated(0, g_free, TRUE);
+  for (gchar** arg = *arguments + 1; *arg != nullptr; arg++) {
+    if (g_strcmp0(*arg, "--gapplication-replace") == 0) {
+      g_application_set_flags(application, static_cast<GApplicationFlags>(
+                                               g_application_get_flags(application) |
+                                               G_APPLICATION_REPLACE));
+    } else {
+      g_ptr_array_add(args, g_strdup(*arg));
+    }
+  }
+  self->dart_entrypoint_arguments =
+      reinterpret_cast<char**>(g_ptr_array_free(args, FALSE));
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {
@@ -144,5 +169,5 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     G_APPLICATION_ALLOW_REPLACEMENT, nullptr));
 }
