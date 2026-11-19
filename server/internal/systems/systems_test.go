@@ -22,6 +22,10 @@ func TestParse(t *testing.T) {
 		{"gb:h:" + "0123456789012345678901234567890123456789", "gb", "h:0123456789012345678901234567890123456789", true},
 		{"gb:x:red-fr", "gb", "x:red-fr", true},
 		{"gb:APSE", "gb", "APSE", false}, // no cartridge code on the Game Boy
+		{"3ds:0004000000055D00", "3ds", "0004000000055D00", true},
+		{"3ds:0004000000055d00", "3ds", "0004000000055d00", false},
+		{"3ds:x:pokemon-y", "3ds", "x:pokemon-y", true},
+		{"3ds:h:" + "0123456789012345678901234567890123456789", "3ds", "h:0123456789012345678901234567890123456789", false},
 	}
 	for _, c := range cases {
 		s, local, ok := Parse(c.code)

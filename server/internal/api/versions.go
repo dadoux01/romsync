@@ -20,6 +20,7 @@ import (
 	"github.com/dadoux01/romsync/server/internal/db"
 	"github.com/dadoux01/romsync/server/internal/syncrule"
 	"github.com/dadoux01/romsync/server/internal/systems"
+	"github.com/dadoux01/romsync/server/internal/tree"
 )
 
 // versionJSON is the public representation of a save version.
@@ -351,7 +352,13 @@ func (s *Server) postVersion(w http.ResponseWriter, r *http.Request) error {
 				return s.blobs.Read(g.ActiveVersion.SHA256)
 			}
 			sys, _, _ := systems.Parse(code)
-			sized, err := syncrule.ResolveSize(data, chip, activeData, req.forceSize, sys.IsValidChipSize)
+			var sized syncrule.SizeResult
+			if sys.Tree {
+				// A folder has no chip size: its canonical archive is stored as is.
+				sized = syncrule.SizeResult{Data: data}
+			} else {
+				sized, err = syncrule.ResolveSize(data, chip, activeData, req.forceSize, sys.IsValidChipSize)
+			}
 			if errors.Is(err, syncrule.ErrSizeMismatch) {
 				return errSizeMismatch(fmt.Sprintf("this game's saves are %d bytes, got %d", chip, len(data)))
 			}
@@ -446,7 +453,8 @@ func profileParam(r *http.Request, code string) (convert.Profile, error) {
 	if !ok {
 		return nil, errInvalid("unknown profile (expected one of " + strings.Join(convert.IDs(), ", ") + ")")
 	}
-	if sys, _, _ := systems.Parse(code); !convert.Supports(id, sys.ID) {
+	// A save made of a folder is only exchanged as its archive ("raw").
+	if sys, _, _ := systems.Parse(code); (sys.Tree && id != "raw") || (!sys.Tree && !convert.Supports(id, sys.ID)) {
 		return nil, errInvalid("the " + id + " profile does not convert " + sys.ID + " saves")
 	}
 	return p, nil
@@ -461,6 +469,12 @@ func (s *Server) decodeUpload(r *http.Request, body []byte, code string) ([]byte
 	data, err := p.Decode(body)
 	if err != nil {
 		return nil, errInvalid(err.Error())
+	}
+	// A save made of a folder: any tar becomes its canonical archive.
+	if sys, _, _ := systems.Parse(code); sys.Tree {
+		if data, err = tree.Canonicalize(data); err != nil {
+			return nil, errInvalid(err.Error())
+		}
 	}
 	return data, nil
 }
@@ -494,7 +508,7 @@ func (s *Server) exportVersion(w http.ResponseWriter, r *http.Request) error {
 		return errInvalid(err.Error())
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, prof.Extension())))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, saveExtension(v.GameCode, prof.Extension()))))
 	w.Header().Set("Content-Length", strconv.Itoa(len(out)))
 	w.Header().Set("X-Content-SHA256", blobs.Sum(out))
 	w.WriteHeader(http.StatusOK)
@@ -538,6 +552,14 @@ func (s *Server) versionParam(r *http.Request) (versionJSON, int64, error) {
 	return s.loadVersion(r.Context(), s.db, principalFrom(r.Context()).UserID, id)
 }
 
+// saveExtension is ext, or ".tar" for a save made of a folder.
+func saveExtension(code, ext string) string {
+	if sys, _, _ := systems.Parse(code); sys.Tree {
+		return ".tar"
+	}
+	return ext
+}
+
 // safeFilename turns a game code into a file name.
 func safeFilename(code, ext string) string {
 	return strings.ReplaceAll(code, ":", "_") + ext
@@ -555,7 +577,7 @@ func (s *Server) getContent(w http.ResponseWriter, r *http.Request) error {
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, ".sav")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename(v.GameCode, saveExtension(v.GameCode, ".sav"))))
 	w.Header().Set("X-Content-SHA256", v.SHA256)
 	w.Header().Set("ETag", `"`+v.SHA256+`"`)
 	http.ServeContent(w, r, "", time.Time{}, f)

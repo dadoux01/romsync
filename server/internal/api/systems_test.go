@@ -1,10 +1,15 @@
 package api
 
 import (
+	"archive/tar"
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/dadoux01/romsync/server/internal/blobs"
+	"github.com/dadoux01/romsync/server/internal/tree"
 )
 
 // docs/SPEC.md, "Multi-consoles": GBA games next to DS games.
@@ -109,4 +114,42 @@ func TestGameBoyGames(t *testing.T) {
 	if r.Version.Size != 64<<10 || r.Version.SizeEvent == nil || r.Version.SizeEvent.Type != "trimmed" {
 		t.Fatalf("Gambatte's padding must be cut: %+v", r.Version)
 	}
+}
+
+// docs/SPEC.md, "Saves en dossier": a 3DS save is a folder, stored as its
+// canonical archive.
+func TestFolderSaves(t *testing.T) {
+	e := newTestEnv(t)
+	admin := e.setupAdmin()
+	t0 := e.clock.Now().Add(-time.Hour)
+	const code = "3ds:0004000000055D00"
+
+	// A tar made by another tool (owners, dates, "./"), no folder entries.
+	var buf bytes.Buffer
+	w := tar.NewWriter(&buf)
+	for _, f := range []struct{ name, data string }{{"./00000001/main", "progress"}, {"./00000001/extra", "x"}} {
+		_ = w.WriteHeader(&tar.Header{Name: f.name, Mode: 0o600, Size: int64(len(f.data)), Uid: 1000, ModTime: t0, Typeflag: tar.TypeReg})
+		_, _ = w.Write([]byte(f.data))
+	}
+	_ = w.Close()
+	v := admin.uploadOK(upload{code: code, data: buf.Bytes(), savedAt: t0}, 201).Version
+	want, _ := tree.Canonical([]tree.Entry{{Path: "00000001/main", Data: []byte("progress")}, {Path: "00000001/extra", Data: []byte("x")}})
+	if v.SHA256 != blobs.Sum(want) || v.Size != int64(len(want)) {
+		t.Fatalf("the archive must be stored in canonical form: %+v", v)
+	}
+	r := admin.get(fmt.Sprintf("/api/v1/versions/%d/content", v.ID))
+	if !bytes.Equal(r.body, want) || !strings.Contains(r.header.Get("Content-Disposition"), ".tar") {
+		t.Fatal("content must be the canonical .tar")
+	}
+	// The same content as a canonical archive: nothing new.
+	admin.uploadOK(upload{code: code, data: want, savedAt: t0.Add(time.Minute), base: v.ID}, 200)
+
+	var games struct{ Games []gameJSON }
+	admin.get("/api/v1/games?system=3ds").json(t, &games)
+	if len(games.Games) != 1 || games.Games[0].ChipSize != nil || games.Games[0].Region != nil {
+		t.Fatalf("a folder has no chip size: %+v", games.Games)
+	}
+	expectErr(t, admin.upload(upload{code: code, data: []byte("not a tar"), savedAt: t0}), 400, "invalid_request")
+	expectErr(t, admin.upload(upload{code: "3ds:x:other", data: want, savedAt: t0, query: "?profile=desmume"}), 400, "invalid_request")
+	expectErr(t, admin.upload(upload{code: "3ds:0004000000055d00", data: want, savedAt: t0}), 400, "invalid_request")
 }

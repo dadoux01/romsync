@@ -20,11 +20,18 @@ type System struct {
 	// NoCartridgeCode: the ROM header has no reliable game code, so the
 	// identifiers are only h:<sha1> and x:<name> (Game Boy).
 	NoCartridgeCode bool
+	// TitleID: games are identified by their 16-digit title ID instead of a
+	// cartridge code or a ROM hash (3DS), or x:<name>.
+	TitleID bool
+	// Tree: a save is a folder, stored as its canonical archive (package
+	// tree); there is no chip size.
+	Tree bool
 }
 
 // Identifier forms after the prefix (docs/SPEC.md, "Identification des jeux").
 var (
 	cartridgeRE = regexp.MustCompile(`^[A-Z0-9]{4}$`)
+	titleIDRE   = regexp.MustCompile(`^[0-9A-F]{16}$`)
 	romHashRE   = regexp.MustCompile(`^h:[0-9a-f]{40}$`)
 	customRE    = regexp.MustCompile(`^x:[a-z0-9-]{1,32}$`)
 )
@@ -44,8 +51,12 @@ var (
 	GB = &System{ID: "gb", Prefix: "gb:", NoCartridgeCode: true,
 		ChipSizes: []int64{256, 512, 2 << 10, 8 << 10, 32 << 10, 64 << 10, 128 << 10}}
 
+	// N3DS is the Nintendo 3DS: saves made of a folder (docs/SPEC.md,
+	// "Saves en dossier").
+	N3DS = &System{ID: "3ds", Prefix: "3ds:", TitleID: true, Tree: true}
+
 	// All lists the consoles, the Nintendo DS first.
-	All = []*System{NDS, GBA, GB}
+	All = []*System{NDS, GBA, GB, N3DS}
 )
 
 // ByID returns the console with the given ID.
@@ -67,6 +78,9 @@ func Parse(code string) (s *System, local string, ok bool) {
 			s, local = sys, code[len(sys.Prefix):]
 			break
 		}
+	}
+	if s.TitleID {
+		return s, local, titleIDRE.MatchString(local) || customRE.MatchString(local)
 	}
 	ok = (!s.NoCartridgeCode && cartridgeRE.MatchString(local)) || romHashRE.MatchString(local) || customRE.MatchString(local)
 	return s, local, ok
