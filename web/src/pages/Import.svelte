@@ -2,15 +2,25 @@
   import { api, ApiError, type Game, type Profile, type UploadResult } from '../lib/api';
   import { route } from '../lib/router.svelte';
   import { describeSizeEvent, formatDate, formatSize } from '../lib/format';
-  import { isDeSmuME, isValidGameCode, parseRomHeader, rawSize } from '../lib/saves';
+  import {
+    SYSTEMS,
+    hasMgbaClock,
+    isValidGameCode,
+    parseRomHeader,
+    profileFor,
+    rawSize,
+    systemOf,
+    withSystem,
+    type GameSystem,
+  } from '../lib/saves';
   import { randomId } from '../lib/sha256';
   import { t } from '../lib/i18n/index.svelte';
 
   let games = $state<Game[]>([]);
   let file = $state<File | null>(null);
   let data = $state<Uint8Array | null>(null);
-  let profile = $state<Profile>('raw');
   let target = $state(new URLSearchParams(route.search).get('game') ?? '');
+  let newSystem = $state<GameSystem>('nds');
   let newCode = $state('');
   let newTitle = $state('');
   let savedAt = $state('');
@@ -23,8 +33,12 @@
 
   const isNew = $derived(target === '__new__' || (games.length === 0 && target === ''));
   // Cartridge codes are upper case; x: and h: identifiers are lower case.
-  const code = $derived(isNew ? (newCode.includes(':') ? newCode.trim() : newCode.trim().toUpperCase()) : target);
+  const code = $derived(
+    isNew ? withSystem(newSystem, newCode.includes(':') ? newCode.trim() : newCode.trim().toUpperCase()) : target,
+  );
   const selected = $derived(games.find((g) => g.code === code));
+  // The server removes the DeSmuME footer (DS) or mGBA's cartridge clock (GBA).
+  const profile = $derived<Profile>(data ? profileFor(systemOf(code), data) : 'raw');
 
   $effect(() => {
     api.games().then((g) => {
@@ -47,7 +61,6 @@
     if (!f) return;
     file = f;
     data = new Uint8Array(await f.arrayBuffer());
-    profile = isDeSmuME(data) ? 'desmume' : 'raw';
     savedAt = toLocalInput(new Date(f.lastModified));
   }
 
@@ -55,17 +68,18 @@
     const f = (e.currentTarget as HTMLInputElement).files?.[0];
     if (!f) return;
     // Only the header is read, locally: the ROM never leaves the browser.
-    const header = parseRomHeader(new Uint8Array(await f.slice(0, 512).arrayBuffer()));
+    const header = parseRomHeader(new Uint8Array(await f.slice(0, 512).arrayBuffer()), f.name);
     if (!header) {
       error = t('import.romNoCode');
       return;
     }
     error = '';
-    const existing = games.find((g) => g.code === header.code);
+    const existing = games.find((g) => g.code === withSystem(header.system, header.code));
     if (existing) {
       target = existing.code;
     } else {
       target = '__new__';
+      newSystem = header.system;
       newCode = header.code;
       newTitle = header.title;
     }
@@ -129,7 +143,16 @@
     </label>
     {#if data}
       <p class="muted small">
-        {t('import.detected')} <strong>{profile === 'desmume' ? t('import.format.desmume') : t('import.format.raw')}</strong> ·
+        {t('import.detected')}
+        <strong
+          >{profile === 'desmume'
+            ? t('import.format.desmume')
+            : profile === 'mgba'
+              ? hasMgbaClock(data)
+                ? t('import.format.mgbaClock')
+                : t('import.format.mgba')
+              : t('import.format.raw')}</strong
+        > ·
         {t('import.saveOf', { size: formatSize(rawSize(data, profile)) })}
       </p>
 
@@ -146,13 +169,19 @@
 
       {#if isNew}
         <div class="row">
+          <label>
+            {t('system.label')}
+            <select bind:value={newSystem}>
+              {#each SYSTEMS as s (s)}<option value={s}>{t(`system.${s}`)}</option>{/each}
+            </select>
+          </label>
           <label>{t('import.code')} <input bind:value={newCode} placeholder="IRBF" required class="mono" /></label>
           <label style="flex: 1">{t('import.titleLabel')} <input bind:value={newTitle} placeholder={t('import.titlePlaceholder')} maxlength="128" /></label>
         </div>
       {/if}
       <label>
         <span>{t('import.rom')} <span class="muted small">{t('import.romHelp')}</span></span>
-        <input type="file" accept=".nds,.dsi,.srl" onchange={pickRom} />
+        <input type="file" accept=".nds,.dsi,.srl,.gba" onchange={pickRom} />
       </label>
 
       <label>

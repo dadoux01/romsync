@@ -1,16 +1,21 @@
 <script lang="ts">
   import { api, type Game } from '../lib/api';
   import { formatSize, relativeDate } from '../lib/format';
-  import { regionName } from '../lib/saves';
+  import { regionName, type GameSystem } from '../lib/saves';
   import { t } from '../lib/i18n/index.svelte';
 
   let games = $state<Game[] | null>(null);
   let error = $state('');
   let filter = $state('');
+  let system = $state<GameSystem | ''>('');
 
+  // Consoles present in the list: the filter only shows with more than one.
+  const systems = $derived([...new Set((games ?? []).map((g) => g.system))]);
   const shown = $derived(
     (games ?? []).filter(
-      (g) => !filter || g.title.toLowerCase().includes(filter.toLowerCase()) || g.code.toLowerCase().includes(filter.toLowerCase()),
+      (g) =>
+        (!system || g.system === system) &&
+        (!filter || g.title.toLowerCase().includes(filter.toLowerCase()) || g.code.toLowerCase().includes(filter.toLowerCase())),
     ),
   );
 
@@ -25,6 +30,12 @@
 <div class="spread">
   <h1>{t('games.title')}</h1>
   <div class="row">
+    {#if systems.length > 1}
+      <select bind:value={system} aria-label={t('system.label')}>
+        <option value="">{t('system.all')}</option>
+        {#each systems as s (s)}<option value={s}>{t(`system.${s}`)}</option>{/each}
+      </select>
+    {/if}
     {#if games && games.length > 6}
       <input type="search" placeholder={t('games.filter')} bind:value={filter} aria-label={t('games.filterLabel')} />
     {/if}
@@ -45,7 +56,7 @@
   <div class="card table-wrap">
     <table class="responsive">
       <thead>
-        <tr><th>{t('games.col.game')}</th><th>{t('games.col.code')}</th><th>{t('games.col.lastSave')}</th><th>{t('games.col.device')}</th><th>{t('games.col.versions')}</th></tr>
+        <tr><th>{t('games.col.game')}</th><th>{t('system.label')}</th><th>{t('games.col.code')}</th><th>{t('games.col.lastSave')}</th><th>{t('games.col.device')}</th><th>{t('games.col.versions')}</th></tr>
       </thead>
       <tbody>
         {#each shown as g (g.code)}
@@ -54,6 +65,7 @@
               <a href={`/games/${encodeURIComponent(g.code)}`}><strong>{g.title}</strong></a>
               {#if g.conflict}<span class="badge warn" title={t('games.conflict.title')}>{t('games.conflict')}</span>{/if}
             </td>
+            <td>{t(`system.${g.system}`)}</td>
             <td class="mono">{g.code}{#if regionName(g.region)} <span class="muted small">({regionName(g.region)})</span>{/if}</td>
             <td>{g.active_version ? relativeDate(g.active_version.saved_at) : '—'}</td>
             <td>{g.active_version?.device_name ?? (g.active_version ? t('common.website') : '—')}</td>

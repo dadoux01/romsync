@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sha256Pure } from './sha256';
-import { isDeSmuME, parseRomHeader, isValidGameCode, rawSize } from './saves';
+import { hasMgbaClock, isDeSmuME, parseRomHeader, isValidGameCode, profileFor, rawSize, systemOf, withSystem } from './saves';
 import { formatSize } from './format';
 import { setLanguage } from './i18n/index.svelte';
 import { createHash } from 'node:crypto';
@@ -38,10 +38,36 @@ describe('save detection', () => {
     const h = new Uint8Array(512);
     h.set(enc.encode('POKEMON B'), 0);
     h.set(enc.encode('IRBF'), 0x0c);
-    expect(parseRomHeader(h)).toEqual({ title: 'POKEMON B', code: 'IRBF' });
+    expect(parseRomHeader(h)).toEqual({ title: 'POKEMON B', code: 'IRBF', system: 'nds' });
     const homebrew = new Uint8Array(512);
     homebrew.set(enc.encode('####'), 0x0c);
     expect(parseRomHeader(homebrew)).toBeNull();
+  });
+  it('reads GBA headers', () => {
+    const h = new Uint8Array(512);
+    h.set(enc.encode('POKEMON EMER'), 0xa0);
+    h.set(enc.encode('BPEF'), 0xac);
+    h[0xb2] = 0x96;
+    expect(parseRomHeader(h)).toEqual({ title: 'POKEMON EMER', code: 'BPEF', system: 'gba' });
+    // The file name is enough, even without the fixed byte.
+    h[0xb2] = 0;
+    expect(parseRomHeader(h, 'Emeraude.GBA')?.system).toBe('gba');
+  });
+  it('prefixes the identifiers of other consoles than the DS', () => {
+    expect(withSystem('nds', 'IRBF')).toBe('IRBF');
+    expect(withSystem('gba', 'BPEF')).toBe('gba:BPEF');
+    expect(systemOf('gba:x:hack')).toBe('gba');
+    expect(systemOf('x:hack')).toBe('nds');
+    expect(isValidGameCode('gba:BPEF')).toBe(true);
+    expect(isValidGameCode('gba:bpef')).toBe(false);
+  });
+  it("recognises mGBA's cartridge clock", () => {
+    const withClock = new Uint8Array(32768 + 16);
+    expect(hasMgbaClock(withClock)).toBe(true);
+    expect(hasMgbaClock(new Uint8Array(32768))).toBe(false);
+    expect(profileFor('gba', withClock)).toBe('mgba');
+    expect(rawSize(withClock, 'mgba')).toBe(32768);
+    expect(profileFor('nds', new Uint8Array(512))).toBe('raw');
   });
   it('validates game codes like the server', () => {
     expect(isValidGameCode('IRBF')).toBe(true);

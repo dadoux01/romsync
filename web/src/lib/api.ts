@@ -1,6 +1,7 @@
 // Typed client of the RomSync API (see api/openapi.yaml).
 
 import { hasKey, t } from './i18n/index.svelte';
+import type { GameSystem } from './saves';
 import { randomId, sha256Hex } from './sha256';
 
 export interface RetentionPolicy {
@@ -60,6 +61,8 @@ export interface Version {
 
 export interface Game {
   code: string;
+  /** Console of the game (API level 3). */
+  system: GameSystem;
   title: string;
   region: string | null;
   chip_size: number | null;
@@ -77,7 +80,7 @@ export interface UploadResult {
   conflict: boolean;
 }
 
-export type Profile = 'raw' | 'desmume' | 'flashcard';
+export type Profile = 'raw' | 'desmume' | 'flashcard' | 'mgba';
 
 export class ApiError extends Error {
   constructor(

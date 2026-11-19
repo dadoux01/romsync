@@ -119,7 +119,7 @@
     <a class="button primary" href={`/import?game=${encodeURIComponent(code)}`}>{t('games.import')}</a>
   </div>
   <p class="muted">
-    <span class="mono">{game.code}</span>
+    {t(`system.${game.system}`)} · <span class="mono">{game.code}</span>
     {#if game.region}· {regionName(game.region) ?? t('game.region', { region: game.region })}{/if}
     · {t('game.summary', { size: formatSize(game.chip_size), seen: relativeDate(game.first_seen_at) })}
   </p>
@@ -187,8 +187,10 @@
                 </button>
                 <button onclick={() => editNote(v)}>{t('game.note')}</button>
                 <a class="button" href={api.exportURL(v.id, 'raw')} download>.sav</a>
-                <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
-                <a class="button" href={api.exportURL(v.id, 'flashcard')} download title={t('game.flashcard.title')}>{t('game.flashcard')}</a>
+                {#if game.system === 'nds'}
+                  <a class="button" href={api.exportURL(v.id, 'desmume')} download>.dsv</a>
+                  <a class="button" href={api.exportURL(v.id, 'flashcard')} download title={t('game.flashcard.title')}>{t('game.flashcard')}</a>
+                {/if}
                 {#if !v.is_active && !v.pinned}
                   <button class="danger" onclick={() => remove(v)}>{t('game.delete')}</button>
                 {:else}

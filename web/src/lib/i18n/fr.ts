@@ -19,6 +19,11 @@ export const fr = {
   'language.system': 'Langue du système',
   'language.help': 'Gardée dans ce navigateur.',
 
+  'system.label': 'Console',
+  'system.all': 'Toutes les consoles',
+  'system.nds': 'DS',
+  'system.gba': 'GBA',
+
   'nav.games': 'Jeux',
   'nav.import': 'Importer',
   'nav.devices': 'Appareils',
@@ -145,7 +150,7 @@ export const fr = {
 
   'import.title': 'Importer une save',
   'import.intro.html':
-    'Pour une DS avec flashcard (DSTT, R4…) ou en dépannage : envoie un fichier <code>.sav</code> (brut) ou <code>.dsv</code> (DeSmuME). Pour récupérer une save dans un format donné, ouvre le jeu et télécharge la version voulue.',
+    'Pour une DS avec flashcard (DSTT, R4…) ou en dépannage : envoie un fichier <code>.sav</code> (brut, ou mGBA pour la GBA) ou <code>.dsv</code> (DeSmuME). Pour récupérer une save dans un format donné, ouvre le jeu et télécharge la version voulue.',
   'import.romNoCode': 'Cette ROM n’a pas de code de jeu valide (homebrew ?) : saisis un identifiant x:nom.',
   'import.invalidCode': 'Identifiant de jeu invalide : 4 caractères (ex. IRBF), h:<sha1> ou x:nom-en-minuscules.',
   'import.done': 'Version importée.',
@@ -159,6 +164,8 @@ export const fr = {
   'import.saveOf': 'save de {size}',
   'import.format.desmume': 'DeSmuME (.dsv)',
   'import.format.raw': 'brut (.sav)',
+  'import.format.mgba': 'brut ou mGBA (.sav)',
+  'import.format.mgbaClock': 'mGBA (.sav), horloge de la cartouche retirée',
   'import.game': 'Jeu',
   'import.chooseGame': 'Choisir un jeu…',
   'import.newGame': 'Nouveau jeu…',

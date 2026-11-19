@@ -19,6 +19,11 @@ export const en = {
   'language.system': 'System language',
   'language.help': 'Kept in this browser.',
 
+  'system.label': 'Console',
+  'system.all': 'All consoles',
+  'system.nds': 'DS',
+  'system.gba': 'GBA',
+
   'nav.games': 'Games',
   'nav.import': 'Import',
   'nav.devices': 'Devices',
@@ -144,7 +149,7 @@ export const en = {
 
   'import.title': 'Import a save',
   'import.intro.html':
-    'For a DS with a flashcard (DSTT, R4…) or to troubleshoot: send a <code>.sav</code> (raw) or <code>.dsv</code> (DeSmuME) file. To get a save in a given format, open the game and download the version you want.',
+    'For a DS with a flashcard (DSTT, R4…) or to troubleshoot: send a <code>.sav</code> (raw, or mGBA for the GBA) or <code>.dsv</code> (DeSmuME) file. To get a save in a given format, open the game and download the version you want.',
   'import.romNoCode': 'This ROM has no valid game code (homebrew?): type an x:name identifier.',
   'import.invalidCode': 'Invalid game identifier: 4 characters (e.g. IRBF), h:<sha1> or x:lower-case-name.',
   'import.done': 'Version imported.',
@@ -158,6 +163,8 @@ export const en = {
   'import.saveOf': '{size} save',
   'import.format.desmume': 'DeSmuME (.dsv)',
   'import.format.raw': 'raw (.sav)',
+  'import.format.mgba': 'raw or mGBA (.sav)',
+  'import.format.mgbaClock': 'mGBA (.sav), cartridge clock removed',
   'import.game': 'Game',
   'import.chooseGame': 'Choose a game…',
   'import.newGame': 'New game…',
