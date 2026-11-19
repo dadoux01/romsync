@@ -126,3 +126,21 @@ Préparation : serveur à jour (0.5.0 ou plus) avec le relais actif, console sou
 | 10.4 | Bouton HOME pendant la liste, puis retour | L'appli reprend normalement |
 | 10.5 | Un homebrew `.nds` dans le dossier de ROMs | Identifié par `h:<sha1>` ; au démarrage suivant, il n'est pas relu en entier (identifiant en cache, démarrage plus rapide) |
 | 10.6 | Placer un profil `twilight.json` modifié dans `sd:/3ds/romsync/profiles/` | Il remplace celui intégré à l'appli (un profil invalide affiche « Profils de la carte SD ignorés ») |
+
+## 11. Jeux 3DS (à partir de la 0.7)
+
+Préparation : un jeu 3DS installé (eShop ou CIA) qui a déjà une save, noté
+**jeu C** ; si possible une cartouche 3DS ; Azahar sur le PC avec la ROM du
+jeu C (`.3ds`, `.cci`, `.cxi` ou `.cia`) et l'appli RomSync configurée.
+Faire d'abord une sauvegarde du jeu C avec Checkpoint.
+
+| # | Action | Résultat attendu |
+| --- | --- | --- |
+| 11.1 | Lancer RomSync | Le jeu C apparaît dans la section « 3DS » avec son nom (ou son code produit) ; mises à jour, DLC et titres système n'apparaissent pas |
+| 11.2 | Premier démarrage avec le jeu C | Sa save est envoyée ; le site la montre (`.tar`) avec les mêmes fichiers que la sauvegarde de Checkpoint |
+| 11.3 | Jouer au jeu C dans Azahar sur le PC et sauvegarder, puis relancer RomSync sur la console | La save du PC est téléchargée ; une copie `.tar` est dans `sd:/3ds/romsync/backup/3ds/` |
+| 11.4 | Lancer le jeu C sur la console | Le jeu charge la save du PC, sans message de save corrompue (valeur de sécurité) |
+| 11.5 | Sauvegarder sur la console, relancer RomSync, puis lancer le jeu dans Azahar | La save de la console est sur le serveur, puis dans Azahar ; le jeu la charge |
+| 11.6 | Un jeu installé jamais lancé, dont une save existe sur le serveur | « Lancer le jeu une fois » : rien n'est écrit |
+| 11.7 | Cartouche 3DS insérée (si disponible) | Le jeu apparaît ; envoi et téléchargement comme 11.2 à 11.4 |
+| 11.8 | Restaurer avec Checkpoint la sauvegarde du début | Le jeu retrouve son état initial |
