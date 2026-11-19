@@ -1,6 +1,7 @@
 # RomSync
 
-Self-hosted save synchronisation for Nintendo DS games.
+Self-hosted save synchronisation for Nintendo DS and Game Boy Advance games,
+other Nintendo consoles to come.
 
 RomSync keeps one up-to-date save per game and per account on your own server.
 Each device pulls the active save before you play and sends it back afterwards,
@@ -11,9 +12,12 @@ stays in the history and can be restored, within a retention policy you choose.
 > **Status:** phase 4 of the [roadmap](docs/SPEC.md#dépôt-roadmap-et-questions-ouvertes):
 > the server, the web interface, the **desktop client** for Linux (x86-64
 > and ARM64), macOS and Windows, with melonDS, DeSmuME and RetroArch
-> (melonDS DS), and the **3DS homebrew** (TWiLight Menu++ and nds-bootstrap,
+> (melonDS DS) for the DS, mGBA and RetroArch (mGBA) for the GBA, and the
+> **3DS homebrew** (DS games) (TWiLight Menu++ and nds-bootstrap,
 > see [`3ds/README.md`](3ds/README.md)) are usable. Android waits for a tester
-> (see `docs/research/android.md`) and iOS is still being studied.
+> (see `docs/research/android.md`) and iOS is still being studied. Phase 7
+> brings the other Nintendo consoles, then Sony's (see "Multi-consoles" in
+> the specification).
 
 ## Features
 

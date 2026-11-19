@@ -117,6 +117,8 @@ Le 4e caractère du code donne la région (`F` France, `E` USA, `P` Europe, `J` 
 
 Dans les URL, l'identifiant est encodé normalement (`h%3A…` ou `h:…` sont tous deux acceptés).
 
+Pour les autres consoles que la DS, ces trois formes sont précédées du préfixe de la console (`gba:BPEF`, `gba:h:…`, `gba:x:…`), voir « Multi-consoles ».
+
 ## Format canonique et conversion
 
 Le serveur ne stocke qu'un format : le contenu brut de la puce de save, à sa taille réelle. Chaque client convertit vers et depuis le format de son émulateur, ce qui permet de passer une save de melonDS à DeSmuME, à la 3DS ou à une flashcard sans manipulation.
@@ -317,7 +319,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 | POST | `/pair` | aucune | Échange un code contre un jeton d'appareil |
 | GET | `/devices` | session | Liste les appareils du compte |
 | DELETE | `/devices/{id}` | session | Révoque un appareil |
-| GET | `/games` | session ou jeton | Liste les jeux et leur version active |
+| GET | `/games` | session ou jeton | Liste les jeux, leur console (`system`) et leur version active ; `?system=gba` n'en garde qu'une |
 | PATCH | `/games/{code}` | session | Renomme le jeu, change sa rétention |
 | GET | `/games/{code}/active` | session ou jeton | Métadonnées de la version active (id, hash, taille, saved\_at) et `chip_size` du jeu, pour comparer une save locale après les règles de taille |
 | GET | `/games/{code}/versions` | session ou jeton | Historique paginé |
@@ -406,7 +408,7 @@ Toutes les routes sont préfixées `/api/v1`, échangent du JSON (sauf le conten
 **Compatibilité**
 
 - `GET /server` (sans authentification) donne `version`, `api_level` et `min_client_version`. Un serveur sans cette route (avant 0.5.0) compte comme niveau 1.
-- Niveaux : 2 = `X-Activate` (choix après une divergence), `chip_size` de `GET /games/{code}/active`, suppression d'une version, relais des mises à jour. Les clients 0.5.0 demandent le niveau 2.
+- Niveaux : 2 = `X-Activate` (choix après une divergence), `chip_size` de `GET /games/{code}/active`, suppression d'une version, relais des mises à jour. Les clients 0.5.0 demandent le niveau 2. 3 = autres consoles que la DS (identifiants préfixés, `system`, `?system=`, profil `mgba`) : l'appli garde les envois de ces consoles dans sa file tant que le serveur est sous ce niveau, et le dit au lancement d'un de leurs jeux ; la DS ne demande toujours que le niveau 2.
 - Serveur trop ancien : les applis l'affichent clairement (« mets d'abord à jour le serveur »), et le choix en cas de divergence n'est pas envoyé : il dépend de `X-Activate`, qu'un ancien serveur ignorerait en appliquant « la plus récente gagne ». Rien n'est envoyé ni écrasé, et les envois retenus restent en file.
 - Application trop ancienne (version inférieure à `min_client_version`) : message « mets-la à jour ».
 

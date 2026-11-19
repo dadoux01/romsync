@@ -1,8 +1,10 @@
 # RomSync — guide pour Claude Code
 
-Synchronisation auto-hébergée des saves Nintendo DS : un serveur Go, un site
-Svelte embarqué dans le binaire, un client Flutter (Linux, macOS, Windows),
-et un homebrew 3DS (C). Les phases 1 à 4 de la roadmap sont livrées.
+Synchronisation auto-hébergée des saves de consoles Nintendo (DS, puis GBA ;
+les autres suivent, voir « Multi-consoles » dans la spec) : un serveur Go, un
+site Svelte embarqué dans le binaire, un client Flutter (Linux, macOS,
+Windows), et un homebrew 3DS (C). Les phases 1 à 4 et l'étape 7.1 (GBA en
+émulation) de la roadmap sont livrées.
 
 ## Référence
 
@@ -139,6 +141,13 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
   comparaison passe par les règles de taille du serveur : `size_rule.dart` et
   `3ds/core/size_rule.c` doivent rester identiques à
   `server/internal/syncrule/size.go`.
+- Consoles : la liste existe en trois copies (`server/internal/systems`,
+  `GameSystem` de `romsync_core`, `SYSTEMS` du site). Une nouvelle console
+  ajoute son préfixe d'identifiant, ses tailles de puce, ses émulateurs
+  (`emulatorIdsBySystem`) et des profils dont `systems` la cite. Les
+  identifiants DS restent sans préfixe. Un serveur sous le niveau 3 ne
+  connaît que la DS : les envois des autres consoles attendent dans la file
+  (`consolesServerApiLevel`), sans jamais partir dans `failed`.
 - Les dates envoyées sont à la seconde et le serveur garde la version active
   en cas d'égalité : dans les tests de bout en bout, attendre une seconde
   entre deux saves qui doivent se succéder.
@@ -164,6 +173,10 @@ Lint OpenAPI : `npx --yes @redocly/cli@1 lint api/openapi.yaml`.
 - Profil `twilight` (3DS) : `to_verify` jusqu'aux tests manuels de
   l'utilisateur sur sa 2DS (`docs/tests-manuels-3ds.md`) ; la couche 3DS et
   le `.cia` n'ont encore jamais tourné sur une console.
+- Profils `mgba` et `retroarch-mgba` : `to_verify` jusqu'à un aller-retour
+  avec les vrais émulateurs.
 - Phases suivantes : 5 (Android, en attente d'un testeur :
   l'utilisateur n'a pas de téléphone Android, recherches dans
-  `docs/research/android.md`), 6 (iOS, à étudier, rien n'est codé).
+  `docs/research/android.md`), 6 (iOS, à étudier, rien n'est codé), 7
+  (multi-consoles, étapes 7.2 et suivantes ; seule une 2DS est disponible
+  pour les tests sur console).
