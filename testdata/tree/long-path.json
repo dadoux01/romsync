@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "path": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/"
+    },
+    {
+      "path": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/"
+    },
+    {
+      "path": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff.bin",
+      "content_hex": "00ff00ff00ff"
+    }
+  ],
+  "sha256": "fccc46ac594f2c4caa75b745f46af56db909fd58fdec95b9a3255f43011ae607"
+}
