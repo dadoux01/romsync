@@ -2,6 +2,7 @@
  * rs.c - buffers, errors, strings and file helpers (see rs.h).
  */
 #include "rs.h"
+#include "msg.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -189,11 +190,11 @@ rs_status rs_mkdirs(const char *path, rs_error *err)
             continue;
         *p = 0;
         if (!rs_dir_exists(tmp) && mkdir(tmp, 0777) != 0 && errno != EEXIST)
-            return rs_fail(err, RS_ERR_IO, "Impossible de créer %s", tmp);
+            return rs_fail(err, RS_ERR_IO, RS_TR(CREATE_FAILED), tmp);
         *p = '/';
     }
     if (!rs_dir_exists(tmp) && mkdir(tmp, 0777) != 0 && errno != EEXIST)
-        return rs_fail(err, RS_ERR_IO, "Impossible de créer %s", tmp);
+        return rs_fail(err, RS_ERR_IO, RS_TR(CREATE_FAILED), tmp);
     return RS_OK;
 }
 
@@ -202,8 +203,8 @@ rs_status rs_read_file(const char *path, rs_buf *out, rs_error *err)
     FILE *f = fopen(path, "rb");
     if (!f) {
         if (errno == ENOENT || !rs_file_exists(path))
-            return rs_fail(err, RS_ERR_NOT_FOUND, "%s introuvable", path);
-        return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
+            return rs_fail(err, RS_ERR_NOT_FOUND, RS_TR(PATH_NOT_FOUND), path);
+        return rs_fail(err, RS_ERR_IO, RS_TR(READ_FAILED), path);
     }
     /* Read straight into the buffer, 16 KiB at a time: a chunk on the stack
      * would eat the 3DS's small stack. */
@@ -211,7 +212,7 @@ rs_status rs_read_file(const char *path, rs_buf *out, rs_error *err)
     for (;;) {
         if (!reserve(out, 16 * 1024)) {
             fclose(f);
-            return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante pour lire %s", path);
+            return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM_READING), path);
         }
         size_t n = fread(out->data + out->len, 1, out->cap - out->len, f);
         if (n == 0)
@@ -221,7 +222,7 @@ rs_status rs_read_file(const char *path, rs_buf *out, rs_error *err)
     bool failed = ferror(f);
     fclose(f);
     if (failed)
-        return rs_fail(err, RS_ERR_IO, "Lecture impossible : %s", path);
+        return rs_fail(err, RS_ERR_IO, RS_TR(READ_FAILED), path);
     return RS_OK;
 }
 
@@ -235,12 +236,12 @@ rs_status rs_write_file_atomic(const char *path, const void *data, size_t len, r
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     FILE *f = fopen(tmp, "wb");
     if (!f)
-        return rs_fail(err, RS_ERR_IO, "Écriture impossible : %s", tmp);
+        return rs_fail(err, RS_ERR_IO, RS_TR(WRITE_FAILED), tmp);
     bool ok = fwrite(data, 1, len, f) == len;
     ok = (fclose(f) == 0) && ok;
     if (!ok) {
         remove(tmp);
-        return rs_fail(err, RS_ERR_IO, "Écriture impossible : %s", tmp);
+        return rs_fail(err, RS_ERR_IO, RS_TR(WRITE_FAILED), tmp);
     }
     if (rename(tmp, path) != 0) {
         /* 3DS: the SD card driver refuses to rename over an existing file,
@@ -249,7 +250,7 @@ rs_status rs_write_file_atomic(const char *path, const void *data, size_t len, r
         remove(path);
         if (rename(tmp, path) != 0) {
             remove(tmp);
-            return rs_fail(err, RS_ERR_IO, "Écriture impossible : %s", path);
+            return rs_fail(err, RS_ERR_IO, RS_TR(WRITE_FAILED), path);
         }
     }
     return RS_OK;

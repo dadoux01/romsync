@@ -51,7 +51,7 @@ typedef struct {
     rs_status status;
     int http_status;    /* RS_ERR_API only */
     char code[32];      /* RS_ERR_API only: "size_mismatch", "unauthorized"... */
-    char message[256];  /* French, shown to the user */
+    char message[256];  /* shown to the user, in the language of msg.h */
 } rs_error;
 
 /* Fills err (when not NULL) and returns status. */

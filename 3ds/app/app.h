@@ -73,5 +73,7 @@ bool app_launch(app *a, int index);
 /* Settings menu. Returns true when a new version was installed: the app
  * must exit. */
 bool app_settings(app *a);
+/* Sets the language of the texts: the setting, else the console's. */
+void app_apply_language(const app *a);
 
 #endif

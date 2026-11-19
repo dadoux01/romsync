@@ -9,5 +9,6 @@ void run_state_tests(void);
 void run_sync_tests(void);
 void run_library_tests(void);
 void run_update_tests(void);
+void run_msg_tests(void);
 
 #endif

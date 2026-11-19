@@ -6,6 +6,7 @@
  * sync_test.dart.
  */
 #include "sync.h"
+#include "msg.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -136,7 +137,7 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
                 rs_buf_free(&data);
                 char(*grown)[RS_PATH_MAX] = realloc(held, (size_t)(n_held + 1) * sizeof *held);
                 if (!grown) {
-                    ret = rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+                    ret = rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
                     break;
                 }
                 held = grown;
@@ -153,7 +154,7 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
                         break;
                     }
                     emit(e, RS_EVENT_NEEDS_CHOICE, u.game_id,
-                         "Deux appareils ont joué sans se synchroniser : choix à faire");
+                         RS_TR(SYNC_NEEDS_CHOICE));
                 }
                 i++;
                 continue;
@@ -181,23 +182,23 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
             }
             res->sent++;
             emit(e, RS_EVENT_UPLOADED, u.game_id,
-                 !r.created                     ? "Save identique à la version active"
-                 : u.mode == RS_UPLOAD_ARCHIVE  ? "Save locale archivée sur le serveur"
-                 : r.active                     ? (r.conflict ? "Save envoyée (divergence)" : "Save envoyée")
-                                                : "Save envoyée, mais une version plus récente reste active");
+                 !r.created                     ? RS_TR(SYNC_IDENTICAL)
+                 : u.mode == RS_UPLOAD_ARCHIVE  ? RS_TR(SYNC_ARCHIVED)
+                 : r.active                     ? (r.conflict ? RS_TR(SYNC_UPLOADED_DIVERGENT) : RS_TR(SYNC_UPLOADED))
+                                                : RS_TR(SYNC_UPLOADED_NOT_ACTIVE));
             continue;
         }
         rs_buf_free(&data);
         if (transient(st, &up_err)) {
             res->offline = true;
             char msg[96];
-            snprintf(msg, sizeof msg, "Serveur injoignable : %d envoi(s) en attente", e->queue->count);
+            snprintf(msg, sizeof msg, RS_TR(SYNC_OFFLINE), e->queue->count);
             emit(e, RS_EVENT_OFFLINE, u.game_id, msg);
             break;
         }
         if (st == RS_ERR_API && up_err.http_status == 401) {
             res->unauthorized = true;
-            emit(e, RS_EVENT_FAILED, u.game_id, "Appareil non autorisé : appaire-le à nouveau");
+            emit(e, RS_EVENT_FAILED, u.game_id, RS_TR(SYNC_UNAUTHORIZED));
             break;
         }
         if (st != RS_ERR_API) {
@@ -225,7 +226,7 @@ rs_status rs_engine_flush(rs_engine *e, rs_flush_result *res, rs_error *err)
         }
         res->failures++;
         snprintf(res->failure_message, sizeof res->failure_message,
-                 "Envoi refusé (%s) : %s. Copie conservée : %s", up_err.code, up_err.message, failed);
+                 RS_TR(SYNC_REFUSED), up_err.code, up_err.message, failed);
         emit(e, RS_EVENT_FAILED, u.game_id, res->failure_message);
     }
     free(held);
@@ -250,7 +251,7 @@ static rs_status enqueue_mode(rs_engine *e, const rs_entry *entry, const rs_loca
         return st;
     if (queued)
         *queued = true;
-    emit(e, RS_EVENT_QUEUED, entry->game_id, "Save mise en file d'attente");
+    emit(e, RS_EVENT_QUEUED, entry->game_id, RS_TR(SYNC_QUEUED));
     return RS_OK;
 }
 
@@ -273,7 +274,7 @@ static rs_status go_offline(rs_engine *e, const rs_entry *entry, const rs_local_
             return st;
     }
     out->offline = true;
-    rs_strlcpy(out->message, "Serveur injoignable : les envois partiront dès que le serveur répondra.",
+    rs_strlcpy(out->message, RS_TR(SYNC_OFFLINE_LAUNCH),
                sizeof out->message);
     return RS_OK;
 }
@@ -300,7 +301,7 @@ static rs_status download(rs_engine *e, const rs_entry *entry, const rs_version 
     rs_buf_free(&file);
     if (st == RS_OK) {
         out->downloaded = true;
-        emit(e, RS_EVENT_DOWNLOADED, entry->game_id, "Save du serveur téléchargée");
+        emit(e, RS_EVENT_DOWNLOADED, entry->game_id, RS_TR(SYNC_DOWNLOADED));
     }
     return st;
 }
@@ -330,18 +331,19 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
     if (entry->unavailable[0])
         return rs_fail(err, RS_ERR_REFUSED, "%s", entry->unavailable);
     if (entry->needs_choice)
-        return rs_fail(err, RS_ERR_REFUSED,
-                       "Plusieurs ROMs partagent l'identifiant %s : choisis d'abord de partager ou séparer "
-                       "leur save.",
-                       entry->game_id);
+        return rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_SHARED_ID), entry->game_id);
 
     /* 1. Empty the queue if the server answers. */
     rs_flush_result flush;
     rs_status st = rs_engine_flush(e, &flush, err);
     if (st != RS_OK)
         return st;
-    if (flush.unauthorized)
-        return rs_fail(err, RS_ERR_REFUSED, "Appareil non autorisé : appaire-le à nouveau.");
+    if (flush.unauthorized) {
+        rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_UNAUTHORIZED));
+        if (err)
+            rs_strlcpy(err->code, "unauthorized", sizeof err->code);
+        return RS_ERR_REFUSED;
+    }
 
     rs_local_save local;
     st = rs_read_local_save(entry, &local, err);
@@ -412,14 +414,12 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
                     if (st != RS_OK)
                         goto done;
                     e->server_api_level = exists ? info.api_level : 1;
-                    rs_strlcpy(e->server_version, exists ? info.version : "antérieur à 0.5.0",
+                    rs_strlcpy(e->server_version, exists ? info.version : "",
                                sizeof e->server_version);
                 }
                 if (e->server_api_level < RS_REQUIRED_API_LEVEL) {
-                    st = rs_fail(err, RS_ERR_REFUSED,
-                                 "Le serveur RomSync (%s) est trop ancien pour appliquer ce choix : rien n'a été "
-                                 "envoyé ni écrasé. Mets d'abord à jour le serveur, puis recommence.",
-                                 e->server_version);
+                    st = rs_fail(err, RS_ERR_REFUSED, RS_TR(SYNC_SERVER_TOO_OLD),
+                                 e->server_version[0] ? e->server_version : RS_TR(SERVER_OLDER));
                     goto done;
                 }
             }
@@ -469,7 +469,7 @@ rs_status rs_engine_prepare(rs_engine *e, const rs_entry *entry, size_t chip_siz
             st = go_offline(e, entry, &local, out, err);
         goto done;
     }
-    emit(e, RS_EVENT_UP_TO_DATE, entry->game_id, "Save à jour");
+    emit(e, RS_EVENT_UP_TO_DATE, entry->game_id, RS_TR(SYNC_UP_TO_DATE));
 
 done:
     rs_local_save_free(&local);
@@ -481,7 +481,7 @@ rs_status rs_engine_offline_pass(rs_engine *e, const rs_entry *entry, rs_prepare
     memset(out, 0, sizeof *out);
     if (entry->unavailable[0] || entry->needs_choice)
         return rs_fail(err, RS_ERR_REFUSED, "%s",
-                       entry->unavailable[0] ? entry->unavailable : "Choix requis avant la synchronisation.");
+                       entry->unavailable[0] ? entry->unavailable : RS_TR(SYNC_CHOICE_REQUIRED));
     rs_local_save local;
     rs_status st = rs_read_local_save(entry, &local, err);
     if (st == RS_OK)
@@ -518,21 +518,21 @@ const char *rs_status_label(rs_save_status s)
 {
     switch (s) {
     case RS_STATUS_UP_TO_DATE:
-        return "à jour";
+        return RS_TR(STATUS_UP_TO_DATE);
     case RS_STATUS_TO_UPLOAD:
-        return "à envoyer";
+        return RS_TR(STATUS_TO_UPLOAD);
     case RS_STATUS_TO_DOWNLOAD:
-        return "à télécharger";
+        return RS_TR(STATUS_TO_DOWNLOAD);
     case RS_STATUS_OFFLINE:
-        return "hors ligne";
+        return RS_TR(STATUS_OFFLINE);
     case RS_STATUS_NEEDS_CHOICE:
-        return "choix requis";
+        return RS_TR(STATUS_NEEDS_CHOICE);
     case RS_STATUS_UNAVAILABLE:
-        return "indisponible";
+        return RS_TR(STATUS_UNAVAILABLE);
     case RS_STATUS_NO_SAVE:
-        return "pas de save";
+        return RS_TR(STATUS_NO_SAVE);
     case RS_STATUS_DIVERGED:
-        return "choix à faire";
+        return RS_TR(STATUS_DIVERGED);
     }
     return "?";
 }
@@ -651,6 +651,6 @@ rs_status rs_set_aside(const char *save_path, rs_time now, int keep, char *copy,
 {
     rs_status st = rs_backup(save_path, now, keep, copy, copy_size, err);
     if (st == RS_OK && copy_size && copy[0] && remove(save_path) != 0)
-        st = rs_fail(err, RS_ERR_IO, "Impossible de déplacer %s", save_path);
+        st = rs_fail(err, RS_ERR_IO, RS_TR(MOVE_FAILED), save_path);
     return st;
 }

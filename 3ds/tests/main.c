@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "../core/msg.h"
 #include "../core/rs.h"
 #include "suites.h"
 #include "test.h"
@@ -70,6 +71,8 @@ unsigned char *t_fake_rom(const char *title, const char *code, size_t size)
 
 int main(void)
 {
+    /* The tests check the French texts; test_msg.c checks the English ones. */
+    rs_set_language(RS_LANG_FR);
     run_hash_tests();
     run_nds_tests();
     run_profile_tests();
@@ -77,6 +80,7 @@ int main(void)
     run_sync_tests();
     run_library_tests();
     run_update_tests();
+    run_msg_tests();
     printf("%d checks, %d failures\n", t_checks, t_failures);
     return t_failures ? 1 : 0;
 }

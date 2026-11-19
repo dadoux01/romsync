@@ -2,6 +2,7 @@
  * app.c - actions of the 3DS app (see app.h).
  */
 #include "app.h"
+#include "text.h"
 
 #include <3ds.h>
 #include <stdio.h>
@@ -39,22 +40,24 @@ static void read_token(app *a)
 bool app_init(app *a)
 {
     memset(a, 0, sizeof *a);
+    app_apply_language(a); /* the console's, until the settings are read */
     rs_error err;
     rs_mkdirs(APP_DIR, NULL);
     if (rs_config_load(&a->config, APP_DIR "/config.json", &err) != RS_OK ||
         rs_state_open(&a->states, APP_DIR "/state.json", &err) != RS_OK ||
         rs_queue_open(&a->queue, APP_DIR "/queue", &err) != RS_OK) {
-        ui_message("Erreur", err.message);
+        ui_message(RS_TR(ERROR), err.message);
         return false;
     }
+    app_apply_language(a);
     /* Conversion profiles: the copies built into the app (romfs), replaced
      * by those of sd:/3ds/romsync/profiles/ when present. */
     if (rs_profiles_load_dir(&a->profiles, "romfs:/profiles", &err) != RS_OK) {
-        ui_message("Erreur", err.message);
+        ui_message(RS_TR(ERROR), err.message);
         return false;
     }
     if (rs_dir_exists(APP_DIR "/profiles") && rs_profiles_load_dir(&a->profiles, APP_DIR "/profiles", &err) != RS_OK)
-        ui_message("Profils de la carte SD ignorés", err.message);
+        ui_message(RS_TR(SD_PROFILES_IGNORED), err.message);
     a->twilight = rs_profiles_find(&a->profiles, "twilight");
 
     read_token(a);
@@ -69,7 +72,7 @@ bool app_init(app *a)
                           : a->states.warning[0] ? a->states.warning
                                                  : a->queue.warning;
     if (warning[0])
-        ui_message("Attention", warning);
+        ui_message(RS_TR(WARNING), warning);
     return true;
 }
 
@@ -94,23 +97,20 @@ bool app_pair(app *a)
     rs_strlcpy(name, a->config.device_name, sizeof name);
 
     for (;;) {
-        ui_progress("Appairage",
-                    "Sur le site de RomSync, clique « Ajouter un appareil » pour obtenir un code, puis saisis "
-                    "l'adresse du serveur (ex. http://192.168.1.10:8085), le code et le nom de cette console.\n\n"
-                    "Tailscale n'existe pas sur 3DS : le serveur doit être joignable sur le réseau local.");
-        if (!ui_keyboard("Adresse du serveur", url, sizeof url, false) ||
-            !ui_keyboard("Code d'appairage (ex. K7QM-4XPA)", code, sizeof code, false) ||
-            !ui_keyboard("Nom de cet appareil", name, sizeof name, false)) {
-            if (!ui_confirm("Appairage", "Appairage annulé.", "Recommencer", "Quitter"))
+        ui_progress(RS_TR(PAIRING), RS_TR(PAIRING_HELP));
+        if (!ui_keyboard(RS_TR(SERVER_ADDRESS), url, sizeof url, false) ||
+            !ui_keyboard(RS_TR(PAIRING_CODE), code, sizeof code, false) ||
+            !ui_keyboard(RS_TR(DEVICE_NAME), name, sizeof name, false)) {
+            if (!ui_confirm(RS_TR(PAIRING), RS_TR(PAIRING_CANCELLED), RS_TR(RETRY), RS_TR(QUIT)))
                 return false;
             continue;
         }
         char normalized[256];
         if (!rs_api_normalize_url(url, normalized, sizeof normalized)) {
-            ui_message("Adresse invalide", "Exemple d'adresse valide : http://192.168.1.10:8085");
+            ui_message(RS_TR(INVALID_ADDRESS), RS_TR(ADDRESS_EXAMPLE));
             continue;
         }
-        ui_progress("Appairage", "Connexion au serveur...");
+        ui_progress(RS_TR(PAIRING), RS_TR(CONNECTING));
         rs_strlcpy(a->api.base_url, normalized, sizeof a->api.base_url);
         a->api.token[0] = 0;
         char token[128];
@@ -119,26 +119,26 @@ bool app_pair(app *a)
         if (st != RS_OK) {
             char msg[400];
             if (st == RS_ERR_API && err.http_status == 410)
-                snprintf(msg, sizeof msg, "Code expiré ou déjà utilisé : génère un nouveau code sur le site.");
+                snprintf(msg, sizeof msg, RS_TR(CODE_EXPIRED));
             else if (st == RS_ERR_API && err.http_status == 429)
-                snprintf(msg, sizeof msg, "Trop d'essais : attends une minute.");
+                snprintf(msg, sizeof msg, RS_TR(TOO_MANY_TRIES));
             else
                 snprintf(msg, sizeof msg, "%s", err.message);
-            ui_message("Appairage impossible", msg);
+            ui_message(RS_TR(PAIRING_FAILED), msg);
             continue;
         }
         /* The token is stored in clear on the SD card, as the spec says: a
          * stolen token is revoked from the site, without changing the
          * password. */
         if (rs_write_file_atomic(TOKEN_FILE, token, strlen(token), &err) != RS_OK) {
-            ui_message("Erreur", err.message);
+            ui_message(RS_TR(ERROR), err.message);
             return false;
         }
         rs_strlcpy(a->api.token, token, sizeof a->api.token);
         rs_strlcpy(a->config.server_url, normalized, sizeof a->config.server_url);
         rs_strlcpy(a->config.device_name, name, sizeof a->config.device_name);
         rs_config_save(&a->config, NULL);
-        ui_message("Appairage réussi", "Cette console est maintenant reliée à ton compte RomSync.");
+        ui_message(RS_TR(PAIRING_DONE), RS_TR(PAIRING_DONE_TEXT));
         return true;
     }
 }
@@ -150,34 +150,34 @@ static void add_folder(app *a, const char *start)
     char dir[RS_PATH_MAX];
     if (!browse_folder(start, dir, sizeof dir))
         return;
-    bool recursive = ui_confirm("Sous-dossiers", "Chercher aussi les ROMs dans les sous-dossiers de ce dossier ?",
-                                "Oui", "Non");
+    bool recursive = ui_confirm(RS_TR(SUBFOLDERS), RS_TR(SUBFOLDERS_OF_THIS),
+                                RS_TR(YES), RS_TR(NO));
     if (!rs_config_add_folder(&a->config, dir, recursive))
-        ui_message("Dossiers de ROMs", "Huit dossiers au plus.");
+        ui_message(RS_TR(ROM_FOLDERS), RS_TR(EIGHT_FOLDERS_MAX));
     rs_config_save(&a->config, NULL);
 }
 
 void app_choose_folders(app *a)
 {
     if (a->config.folder_count == 0 && rs_dir_exists("sdmc:/roms/nds") &&
-        ui_confirm("Dossiers de ROMs", "Le dossier sdmc:/roms/nds/ existe. L'utiliser comme dossier de ROMs ?",
-                   "Oui", "Choisir un autre")) {
-        bool recursive = ui_confirm("Sous-dossiers", "Chercher aussi les ROMs dans ses sous-dossiers ?", "Oui", "Non");
+        ui_confirm(RS_TR(ROM_FOLDERS), RS_TR(USE_ROMS_NDS),
+                   RS_TR(YES), RS_TR(CHOOSE_ANOTHER))) {
+        bool recursive = ui_confirm(RS_TR(SUBFOLDERS), RS_TR(SUBFOLDERS_OF_IT), RS_TR(YES), RS_TR(NO));
         rs_config_add_folder(&a->config, "sdmc:/roms/nds", recursive);
         rs_config_save(&a->config, NULL);
     }
     while (a->config.folder_count == 0) {
-        ui_message("Dossiers de ROMs", "Choisis le dossier où sont tes ROMs DS.");
+        ui_message(RS_TR(ROM_FOLDERS), RS_TR(CHOOSE_ROM_FOLDER));
         add_folder(a, "sdmc:/");
     }
     while (a->config.folder_count < RS_MAX_FOLDERS &&
-           ui_confirm("Dossiers de ROMs", "Ajouter un autre dossier de ROMs ?", "Oui", "Non"))
+           ui_confirm(RS_TR(ROM_FOLDERS), RS_TR(ADD_ANOTHER_FOLDER), RS_TR(YES), RS_TR(NO)))
         add_folder(a, "sdmc:/");
 }
 
 void app_rescan(app *a)
 {
-    ui_progress("Recherche des ROMs", "Lecture des dossiers de ROMs...");
+    ui_progress(RS_TR(SCANNING), RS_TR(READING_FOLDERS));
     free(a->views);
     a->views = NULL;
     rs_library_free(&a->lib);
@@ -196,15 +196,17 @@ void app_rescan(app *a)
     for (int i = 0; i < a->config.folder_count; i++)
         if (a->scan.per_folder[i] == 0) {
             size_t n = strlen(msg);
-            snprintf(msg + n, sizeof msg - n, "Aucune ROM DS (.nds) trouvée dans %s%s.\n",
-                     a->config.folders[i].path, a->config.folders[i].recursive ? " ni ses sous-dossiers" : "");
+            if (a->config.folders[i].recursive)
+                snprintf(msg + n, sizeof msg - n, RS_TR(NO_ROM_IN_TREE), a->config.folders[i].path);
+            else
+                snprintf(msg + n, sizeof msg - n, RS_TR(NO_ROM_IN), a->config.folders[i].path);
         }
     if (a->scan.error[0]) {
         size_t n = strlen(msg);
         snprintf(msg + n, sizeof msg - n, "%s\n", a->scan.error);
     }
     if (msg[0])
-        ui_message("Dossiers de ROMs", msg);
+        ui_message(RS_TR(ROM_FOLDERS), msg);
 }
 
 /* ---- Sync -------------------------------------------------------------- */
@@ -218,19 +220,14 @@ static rs_choice handle_slot_change(app *a, rs_game *g)
         return RS_CHOICE_NONE;
     rs_choice choice = RS_CHOICE_LOCAL;
     char text[600];
-    snprintf(text, sizeof text,
-             "%s utilise maintenant l'emplacement de save %d (%s). Ce fichier existe mais n'a jamais été "
-             "synchronisé pour ce jeu : c'est sans doute une ancienne save.\n\n"
-             "A : la mettre de côté dans .backup (la save du serveur sera téléchargée)\n"
-             "B : l'envoyer quand même : elle deviendra la save active (l'autre reste dans l'historique)",
-             g->entry.title, g->slot, rs_basename(g->entry.save_path));
-    if (ui_confirm("Emplacement de save changé", text, "Mettre de côté", "Envoyer")) {
+    snprintf(text, sizeof text, RS_TR(SLOT_CHANGED_TEXT), g->entry.title, g->slot, rs_basename(g->entry.save_path));
+    if (ui_confirm(RS_TR(SLOT_CHANGED), text, RS_TR(SET_ASIDE), RS_TR(SEND))) {
         char copy[RS_PATH_MAX];
         rs_error err;
         choice = RS_CHOICE_NONE;
         if (rs_set_aside(g->entry.save_path, rs_engine_now(&a->engine), a->config.keep_backups, copy, sizeof copy,
                          &err) != RS_OK)
-            ui_message("Erreur", err.message);
+            ui_message(RS_TR(ERROR), err.message);
     }
     g->stale_after_slot_change = false;
     return choice;
@@ -243,16 +240,8 @@ static rs_choice ask_divergence(app *a, const rs_game *g, const rs_divergence *d
     rs_time t = d->server.saved_at - (a->states.clock.known ? a->states.clock.offset : 0);
     char at[32], text[600];
     rs_time_format_iso(t, at, sizeof at);
-    snprintf(text, sizeof text,
-             "%s\n\n"
-             "Deux appareils ont joué sans se synchroniser.\n"
-             "- Serveur : save du %.10s à %.5s (%s).\n"
-             "- Console : save modifiée depuis la dernière synchro, qui ne part pas de celle du serveur.\n\n"
-             "Envoyer la tienne : elle devient la save active.\n"
-             "Prendre celle du serveur : la tienne reste dans l'historique du site et dans .backup.\n"
-             "Plus tard : rien n'est envoyé ni écrasé.",
-             g->entry.title, at, at + 11, d->server.device_name[0] ? d->server.device_name : "site web");
-    switch (ui_choose("Choix à faire", text, "envoyer ma save locale", "prendre celle du serveur", "plus tard")) {
+    snprintf(text, sizeof text, RS_TR(DIVERGENCE_TEXT), g->entry.title, at, at + 11, d->server.device_name[0] ? d->server.device_name : RS_TR(WEBSITE));
+    switch (ui_choose(RS_TR(CHOICE_NEEDED), text, RS_TR(SEND_MY_SAVE), RS_TR(TAKE_SERVER), RS_TR(LATER))) {
     case 'A':
         return RS_CHOICE_LOCAL;
     case 'Y':
@@ -287,14 +276,14 @@ static void sync_game(app *a, int i, bool *offline)
             /* "Plus tard": asked again at the next start. */
             v->choice_pending = true;
             v->status = RS_STATUS_DIVERGED;
-            rs_strlcpy(v->message, "Choix reporté : rien n'a été envoyé ni écrasé.", sizeof v->message);
+            rs_strlcpy(v->message, RS_TR(CHOICE_POSTPONED), sizeof v->message);
             return;
         }
         st = rs_engine_prepare(&a->engine, &g->entry, 0, choice, &r, &err);
         if (st == RS_OK && r.needs_choice) { /* another device uploaded meanwhile */
             v->choice_pending = true;
             v->status = RS_STATUS_DIVERGED;
-            rs_strlcpy(v->message, "Une autre save vient d'arriver : relance la synchronisation.", sizeof v->message);
+            rs_strlcpy(v->message, RS_TR(ANOTHER_SAVE_ARRIVED), sizeof v->message);
             return;
         }
     }
@@ -302,7 +291,7 @@ static void sync_game(app *a, int i, bool *offline)
         v->error = true;
         v->status = g->entry.unavailable[0] ? RS_STATUS_UNAVAILABLE : RS_STATUS_TO_UPLOAD;
         rs_strlcpy(v->message, err.message, sizeof v->message);
-        if (st == RS_ERR_REFUSED && strstr(err.message, "non autorisé"))
+        if (st == RS_ERR_REFUSED && strcmp(err.code, "unauthorized") == 0)
             *offline = true; /* no point in trying the next games */
         return;
     }
@@ -314,9 +303,9 @@ static void sync_game(app *a, int i, bool *offline)
     } else {
         v->status = rs_file_exists(g->entry.save_path) ? RS_STATUS_UP_TO_DATE : RS_STATUS_NO_SAVE;
         if (r.downloaded)
-            rs_strlcpy(v->message, "Save du serveur téléchargée.", sizeof v->message);
+            rs_strlcpy(v->message, RS_TR(DOWNLOADED), sizeof v->message);
         else if (r.uploaded)
-            rs_strlcpy(v->message, "Save envoyée.", sizeof v->message);
+            rs_strlcpy(v->message, RS_TR(UPLOADED), sizeof v->message);
     }
 }
 
@@ -350,30 +339,28 @@ static void finish_sync(app *a, bool offline)
     rs_config_save(&a->config, NULL);
     rs_state_save(&a->states, NULL);
     if (offline)
-        snprintf(a->status_line, sizeof a->status_line, "Hors ligne : %d envoi(s) en attente", a->queue.count);
+        snprintf(a->status_line, sizeof a->status_line, RS_TR(OFFLINE_QUEUED), a->queue.count);
     else
-        snprintf(a->status_line, sizeof a->status_line, "Synchronisé");
+        snprintf(a->status_line, sizeof a->status_line, RS_TR(SYNCED));
 }
 
 void app_sync_all(app *a)
 {
     bool offline = !wifi_connected() || !a->api.token[0];
     if (!offline) {
-        ui_progress("Synchronisation", "Envoi des saves en attente...");
+        ui_progress(RS_TR(SYNC), RS_TR(SENDING_QUEUE));
         rs_flush_result f;
         rs_error err;
         if (rs_engine_flush(&a->engine, &f, &err) != RS_OK)
-            ui_message("Erreur", err.message);
+            ui_message(RS_TR(ERROR), err.message);
         else if (f.unauthorized)
-            ui_message("Appareil non autorisé",
-                       "Le serveur refuse cette console (appareil révoqué ?). Appaire-la de nouveau depuis les "
-                       "réglages (SELECT).");
+            ui_message(RS_TR(UNAUTHORIZED), RS_TR(UNAUTHORIZED_TEXT));
         offline = f.offline || f.unauthorized;
     }
     for (int i = 0; i < a->lib.count; i++) {
         char text[200];
         snprintf(text, sizeof text, "%s\n\n%d / %d", a->lib.games[i].entry.title, i + 1, a->lib.count);
-        ui_progress(offline ? "Hors ligne : mise en file" : "Synchronisation", text);
+        ui_progress(offline ? RS_TR(OFFLINE_QUEUING) : RS_TR(SYNC), text);
         sync_game(a, i, &offline);
     }
     finish_sync(a, offline);
@@ -384,11 +371,11 @@ void app_sync_one(app *a, int index)
     if (index < 0 || index >= a->lib.count)
         return;
     bool offline = !wifi_connected() || !a->api.token[0];
-    ui_progress("Synchronisation", a->lib.games[index].entry.title);
+    ui_progress(RS_TR(SYNC), a->lib.games[index].entry.title);
     sync_game(a, index, &offline);
     finish_sync(a, offline);
     if (a->views[index].error)
-        ui_message("Synchronisation", a->views[index].message);
+        ui_message(RS_TR(SYNC), a->views[index].message);
 }
 
 /* ---- Launch ------------------------------------------------------------ */
@@ -399,33 +386,31 @@ bool app_launch(app *a, int index)
         return false;
     rs_game *g = &a->lib.games[index];
     if (g->entry.needs_choice) {
-        ui_message("Lancer", "Plusieurs ROMs partagent l'identifiant de ce jeu : choisis d'abord de partager ou "
-                             "séparer leur save (Y).");
+        ui_message(RS_TR(LAUNCH), RS_TR(LAUNCH_SHARED_ID));
         return false;
     }
     char why[600];
     if (!launch_check(g->entry.rom_path, why, sizeof why)) {
-        ui_message("Lancement impossible", why);
+        ui_message(RS_TR(LAUNCH_FAILED), why);
         return false;
     }
 
-    /* Sync before launch (docs/SPEC.md, "Avant le lancement"). */
+    /* Sync before launch (docs/SPEC.md, RS_TR(BEFORE_LAUNCH)). */
     bool offline = !wifi_connected() || !a->api.token[0];
-    ui_progress("Avant le lancement", g->entry.title);
+    ui_progress(RS_TR(BEFORE_LAUNCH), g->entry.title);
     sync_game(a, index, &offline);
     finish_sync(a, offline);
     game_view *v = &a->views[index];
     if (v->choice_pending)
-        return false; /* "Plus tard": the game does not start */
-    if (v->error && !ui_confirm("Synchronisation", v->message, "Lancer quand même", "Annuler"))
+        return false; /* "Later": the game does not start */
+    if (v->error && !ui_confirm(RS_TR(SYNC), v->message, RS_TR(LAUNCH_ANYWAY), RS_TR(CANCEL)))
         return false;
     if (offline && !v->error)
-        ui_message("Hors ligne", "Serveur injoignable : la partie se lance avec la save locale. Rouvre RomSync après "
-                                 "avoir joué : ta save partira dès que le serveur répondra.");
+        ui_message(RS_TR(OFFLINE), RS_TR(OFFLINE_LAUNCH));
 
-    ui_progress("Lancement", "Démarrage du jeu...\n\nAprès la partie, rouvre RomSync pour envoyer ta save.");
+    ui_progress(RS_TR(LAUNCHING), RS_TR(STARTING_GAME));
     if (!launch_start(g->entry.rom_path, why, sizeof why)) {
-        ui_message("Lancement impossible", why);
+        ui_message(RS_TR(LAUNCH_FAILED), why);
         return false;
     }
     return true;
@@ -439,20 +424,16 @@ void app_choose_sharing(app *a, int index)
         return;
     rs_game *g = &a->lib.games[index];
     char text[500];
-    snprintf(text, sizeof text,
-             "%s partage l'identifiant %s avec %d autre(s) ROM(s) (variante, traduction, hack).\n\n"
-             "A : partager la même save\n"
-             "B : séparer (nouvel identifiant à nommer)",
-             rs_basename(g->entry.rom_path), g->detected_id, g->shared_count);
-    if (ui_confirm("Save partagée ?", text, "Partager", "Séparer")) {
+    snprintf(text, sizeof text, RS_TR(SHARING_TEXT), rs_basename(g->entry.rom_path), g->detected_id, g->shared_count);
+    if (ui_confirm(RS_TR(SHARED_SAVE), text, RS_TR(SHARE), RS_TR(SEPARATE))) {
         rs_config_set_choice(&a->config, g->entry.rom_path, true, NULL);
     } else {
         char name[40] = "";
         char id[RS_GAME_ID_MAX];
-        if (!ui_keyboard("Nom de la save séparée (a-z, 0-9, -)", name, sizeof name, false))
+        if (!ui_keyboard(RS_TR(SEPARATE_NAME), name, sizeof name, false))
             return;
         if (!rs_game_id_custom(name, id, sizeof id)) {
-            ui_message("Nom invalide", "Lettres sans accents, chiffres, espaces ou tirets, 32 au plus.");
+            ui_message(RS_TR(INVALID_NAME), RS_TR(INVALID_NAME_TEXT));
             return;
         }
         rs_config_set_choice(&a->config, g->entry.rom_path, false, id);
@@ -471,19 +452,18 @@ static void manage_folders(app *a)
         if (redraw) {
             ui_top();
             ui_clear();
-            ui_print(UI_CYAN "Dossiers de ROMs" UI_RESET "\n\n");
+            ui_print(UI_CYAN "%s" UI_RESET "\n\n", RS_TR(ROM_FOLDERS));
             for (int i = 0; i < a->config.folder_count; i++) {
                 ui_print(i == sel ? UI_INVERSE "> " : "  ");
                 char line[RS_PATH_MAX + 32];
                 snprintf(line, sizeof line, "%s%s", a->config.folders[i].path,
-                         a->config.folders[i].recursive ? " (+ sous-dossiers)" : "");
+                         a->config.folders[i].recursive ? RS_TR(WITH_SUBFOLDERS) : "");
                 ui_print_fit(line, UI_TOP_COLS - 3);
                 ui_print(UI_RESET "\n");
             }
             ui_bottom();
             ui_clear();
-            ui_print(UI_CYAN "Dossiers de ROMs" UI_RESET "\n\n");
-            ui_print("A : sous-dossiers oui/non\nX : ajouter un dossier\nY : retirer ce dossier\nB : retour\n");
+            ui_print(UI_CYAN "%s" UI_RESET "\n\n%s", RS_TR(ROM_FOLDERS), RS_TR(FOLDERS_KEYS));
             redraw = false;
         }
         ui_frame();
@@ -516,37 +496,72 @@ static void manage_folders(app *a)
     }
 }
 
+/* Language of the texts: the one chosen in the settings, else the
+ * console's (docs/SPEC.md, "Langues"). */
+void app_apply_language(const app *a)
+{
+    if (a->config.language[0]) {
+        rs_set_language(rs_lang_from_code(a->config.language));
+        return;
+    }
+    u8 lang = CFG_LANGUAGE_EN;
+    if (R_SUCCEEDED(cfguInit())) {
+        CFGU_GetSystemLanguage(&lang);
+        cfguExit();
+    }
+    rs_set_language(lang == CFG_LANGUAGE_FR ? RS_LANG_FR : RS_LANG_EN);
+}
+
+/* Console, then each language: the setting of the "Langue" line. */
+static const char *const languages[] = {"", "fr", "en"};
+enum { N_LANGUAGES = 3 };
+
+static const char *language_name(const char *code)
+{
+    return strcmp(code, "fr") == 0 ? "Français" : strcmp(code, "en") == 0 ? "English" : RS_TR(LANGUAGE_SYSTEM);
+}
+
+static void next_language(app *a, int step)
+{
+    int i = 0;
+    while (i < N_LANGUAGES && strcmp(languages[i], a->config.language) != 0)
+        i++;
+    i = ((i < N_LANGUAGES ? i : 0) + step + N_LANGUAGES) % N_LANGUAGES;
+    rs_strlcpy(a->config.language, languages[i], sizeof a->config.language);
+    rs_config_save(&a->config, NULL);
+    app_apply_language(a);
+}
+
 bool app_settings(app *a)
 {
-    static const char *items[] = {"Dossiers de ROMs",
-                                  "Copies .backup gardées par save",
-                                  "Rechercher les mises à jour au démarrage",
-                                  "Rechercher une mise à jour maintenant",
-                                  "Appairer de nouveau",
-                                  "Retour"};
-    enum { N_ITEMS = 6 };
+    enum { ITEM_FOLDERS, ITEM_LANGUAGE, ITEM_BACKUPS, ITEM_AUTO_UPDATE, ITEM_CHECK_NOW, ITEM_PAIR, ITEM_BACK, N_ITEMS };
     int sel = 0;
     bool redraw = true;
     while (aptMainLoop()) {
         if (redraw) {
+            /* Built at each drawing: the language may have just changed. */
+            const char *items[N_ITEMS] = {RS_TR(ROM_FOLDERS),       RS_TR(SETTING_LANGUAGE),  RS_TR(SETTING_BACKUPS),
+                                          RS_TR(SETTING_AUTO_UPDATE), RS_TR(SETTING_CHECK_NOW), RS_TR(SETTING_PAIR_AGAIN),
+                                          RS_TR(BACK)};
             ui_top();
             ui_clear();
-            ui_print(UI_CYAN "Réglages" UI_RESET "\n\n");
+            ui_print(UI_CYAN "%s" UI_RESET "\n\n", RS_TR(SETTINGS));
             for (int i = 0; i < N_ITEMS; i++) {
                 ui_print(i == sel ? UI_INVERSE "> " : "  ");
-                if (i == 1)
+                if (i == ITEM_LANGUAGE)
+                    ui_print("%s : %s", items[i], language_name(a->config.language));
+                else if (i == ITEM_BACKUPS)
                     ui_print("%s : %d", items[i], a->config.keep_backups);
-                else if (i == 2)
-                    ui_print("%s : %s", items[i], a->config.check_updates ? "oui" : "non");
+                else if (i == ITEM_AUTO_UPDATE)
+                    ui_print("%s : %s", items[i], a->config.check_updates ? RS_TR(YES_LOWER) : RS_TR(NO_LOWER));
                 else
                     ui_print("%s", items[i]);
                 ui_print(UI_RESET "\n");
             }
-            ui_print("\nServeur : %s\nAppareil : %s\nRomSync %s\n", a->config.server_url, a->config.device_name,
-                     RS_VERSION);
+            ui_print(RS_TR(SETTINGS_INFO), a->config.server_url, a->config.device_name, RS_VERSION);
             ui_bottom();
             ui_clear();
-            ui_print(UI_CYAN "Réglages" UI_RESET "\n\nA : choisir\nGauche/Droite : nombre de copies\nB : retour\n");
+            ui_print(UI_CYAN "%s" UI_RESET "%s", RS_TR(SETTINGS), RS_TR(SETTINGS_KEYS));
             redraw = false;
         }
         ui_frame();
@@ -558,27 +573,32 @@ bool app_settings(app *a)
             sel++, redraw = true;
         if ((k & KEY_UP) && sel > 0)
             sel--, redraw = true;
-        if (sel == 1 && (k & (KEY_LEFT | KEY_RIGHT))) {
+        if (sel == ITEM_LANGUAGE && (k & (KEY_A | KEY_LEFT | KEY_RIGHT))) {
+            next_language(a, (k & KEY_LEFT) ? -1 : 1);
+            redraw = true;
+            continue;
+        }
+        if (sel == ITEM_BACKUPS && (k & (KEY_LEFT | KEY_RIGHT))) {
             int n = a->config.keep_backups + ((k & KEY_RIGHT) ? 1 : -1);
             a->config.keep_backups = n < 1 ? 1 : n > 50 ? 50 : n;
             a->engine.keep_backups = a->config.keep_backups;
             rs_config_save(&a->config, NULL);
             redraw = true;
         }
-        if (sel == 2 && (k & (KEY_A | KEY_LEFT | KEY_RIGHT))) {
+        if (sel == ITEM_AUTO_UPDATE && (k & (KEY_A | KEY_LEFT | KEY_RIGHT))) {
             a->config.check_updates = !a->config.check_updates;
             rs_config_save(&a->config, NULL);
             redraw = true;
             continue;
         }
         if (k & KEY_A) {
-            if (sel == 0)
+            if (sel == ITEM_FOLDERS)
                 manage_folders(a);
-            else if (sel == 3 && app_check_update(a, true))
+            else if (sel == ITEM_CHECK_NOW && app_check_update(a, true))
                 return true;
-            else if (sel == 4)
+            else if (sel == ITEM_PAIR)
                 app_pair(a);
-            else if (sel == 5)
+            else if (sel == ITEM_BACK)
                 break;
             redraw = true;
         }

@@ -2,6 +2,7 @@
  * library.c - ROM scan and library entries (see library.h).
  */
 #include "library.h"
+#include "msg.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -65,7 +66,7 @@ static int scan_dir(rs_config *c, rs_scan_result *out, const char *dir, bool rec
     DIR *d = opendir(dir);
     if (!d) {
         if (!out->error[0])
-            snprintf(out->error, sizeof out->error, "Dossier illisible : %s", dir);
+            snprintf(out->error, sizeof out->error, RS_TR(FOLDER_UNREADABLE), dir);
         return 0;
     }
     /* Read the names first: the ROMs are opened after closedir, so that
@@ -171,7 +172,7 @@ void rs_build_library(const rs_scan_result *scan, const rs_config *c, const rs_s
         e->profile = profile;
         rs_strlcpy(e->emulator, "twilight", sizeof e->emulator);
         if (!profile)
-            rs_strlcpy(e->unavailable, "Profil de conversion « twilight » introuvable.", sizeof e->unavailable);
+            rs_strlcpy(e->unavailable, RS_TR(TWILIGHT_PROFILE_MISSING), sizeof e->unavailable);
 
         g->slot = rs_twl_save_slot(sd_root, RS_LAUNCHER_TWILIGHT, r->path);
         if (rs_twl_save_location(sd_root, RS_LAUNCHER_TWILIGHT) == RS_SAVE_NEXT_TO_ROM)

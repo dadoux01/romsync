@@ -6,6 +6,7 @@
  * {"error": {"code", "message"}}), then read the JSON answer with cJSON.
  */
 #include "api.h"
+#include "msg.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -109,10 +110,10 @@ static rs_status api_send(rs_api *api, rs_http_request *req, rs_http_response *r
 static rs_status json_body(rs_http_response *res, cJSON **out, rs_error *err)
 {
     if (!rs_buf_terminate(&res->body))
-        return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+        return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     *out = cJSON_Parse((const char *)res->body.data);
     if (!*out)
-        return rs_fail(err, RS_ERR_FORMAT, "Réponse illisible du serveur");
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(SERVER_BAD_REPLY));
     return RS_OK;
 }
 
@@ -153,7 +154,7 @@ rs_status rs_api_pair(rs_api *api, const char *code, const char *name, const cha
     if (st == RS_OK) {
         const char *t = rs_json_str(j, "token", NULL);
         if (!t || strlen(t) + 1 > token_size)
-            st = rs_fail(err, RS_ERR_FORMAT, "Jeton absent de la réponse");
+            st = rs_fail(err, RS_ERR_FORMAT, RS_TR(TOKEN_MISSING));
         else
             rs_strlcpy(token, t, token_size);
     }
@@ -255,7 +256,7 @@ rs_status rs_api_download(rs_api *api, int64_t version_id, rs_buf *out, rs_error
         char sha[65];
         rs_sha256_hex(res.body.data, res.body.len, sha);
         if (strcmp(sha, res.content_sha256) != 0)
-            st = rs_fail(err, RS_ERR_FORMAT, "Save téléchargée corrompue (hash différent)");
+            st = rs_fail(err, RS_ERR_FORMAT, RS_TR(DOWNLOAD_CORRUPT));
     }
     if (st == RS_OK) {
         /* Hand the body over instead of copying it. */
@@ -284,7 +285,7 @@ rs_status rs_api_games(rs_api *api, rs_remote_game **games, int *count, rs_error
         int n = cJSON_GetArraySize(list);
         *games = calloc(n > 0 ? (size_t)n : 1, sizeof **games);
         if (!*games) {
-            st = rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+            st = rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
         } else {
             const cJSON *g;
             cJSON_ArrayForEach(g, list)
@@ -403,7 +404,7 @@ rs_status rs_api_get_file(rs_api *api, const char *path, rs_buf *out, rs_error *
 {
     /* Only the relay's files: a path of this server, never another host. */
     if (strncmp(path, "/api/v1/updates/files/", 22) != 0 || strstr(path, ".."))
-        return rs_fail(err, RS_ERR_FORMAT, "Adresse de fichier inattendue");
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(UNEXPECTED_FILE_URL));
     char url[512];
     snprintf(url, sizeof url, "%s%s", api->base_url, path);
     rs_http_request req = {.method = "GET", .url = url};

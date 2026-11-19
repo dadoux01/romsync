@@ -2,6 +2,7 @@
  * profile.c - conversion profiles (see profile.h).
  */
 #include "profile.h"
+#include "msg.h"
 
 #include <dirent.h>
 #include <stdlib.h>
@@ -23,10 +24,10 @@ static bool copy_string(const cJSON *obj, const char *key, char *out, size_t siz
 static rs_status parse_field(const char *profile, const cJSON *j, rs_profile_field *f, rs_error *err)
 {
     if (!copy_string(j, "name", f->name, sizeof f->name))
-        return rs_fail(err, RS_ERR_FORMAT, "profil %s : champ sans nom", profile);
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_FIELD_NO_NAME), profile);
     const cJSON *type = cJSON_GetObjectItemCaseSensitive(j, "type");
     if (!cJSON_IsString(type) || strcmp(type->valuestring, "u32le") != 0)
-        return rs_fail(err, RS_ERR_FORMAT, "profil %s : type de champ non géré", profile);
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_FIELD_TYPE), profile);
     const cJSON *v = cJSON_GetObjectItemCaseSensitive(j, "value");
     if (cJSON_IsNumber(v)) {
         f->kind = RS_FIELD_NUMBER;
@@ -38,7 +39,7 @@ static rs_status parse_field(const char *profile, const cJSON *j, rs_profile_fie
     } else if (cJSON_IsString(v) && strcmp(v->valuestring, "desmume_addr_size") == 0) {
         f->kind = RS_FIELD_DESMUME_ADDR_SIZE;
     } else {
-        return rs_fail(err, RS_ERR_FORMAT, "profil %s : valeur calculée inconnue", profile);
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_COMPUTED), profile);
     }
     return RS_OK;
 }
@@ -48,17 +49,17 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
     memset(p, 0, sizeof *p);
     cJSON *j = cJSON_Parse(json);
     if (!j)
-        return rs_fail(err, RS_ERR_FORMAT, "profil : JSON invalide");
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_JSON));
     rs_status st = RS_OK;
     if (!copy_string(j, "id", p->id, sizeof p->id) || !copy_string(j, "name", p->name, sizeof p->name) ||
         !copy_string(j, "status", p->status, sizeof p->status) ||
         !copy_string(j, "extension", p->extension, sizeof p->extension)) {
-        st = rs_fail(err, RS_ERR_FORMAT, "profil : champ obligatoire manquant");
+        st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_REQUIRED));
         goto done;
     }
     const cJSON *header = cJSON_GetObjectItemCaseSensitive(j, "header");
     if (header && !cJSON_IsNull(header)) {
-        st = rs_fail(err, RS_ERR_FORMAT, "profil %s : les en-têtes ne sont pas encore gérés", p->id);
+        st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_HEADERS), p->id);
         goto done;
     }
 
@@ -69,7 +70,7 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
         const cJSON *cookie = cJSON_GetObjectItemCaseSensitive(footer, "cookie");
         const cJSON *fields = cJSON_GetObjectItemCaseSensitive(footer, "fields");
         if (!cJSON_IsNumber(len)) {
-            st = rs_fail(err, RS_ERR_FORMAT, "profil %s : longueur du pied manquante", p->id);
+            st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_FOOTER_LENGTH), p->id);
             goto done;
         }
         p->has_footer = true;
@@ -80,7 +81,7 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
         cJSON_ArrayForEach(f, fields)
         {
             if (p->field_count == RS_PROFILE_MAX_FIELDS) {
-                st = rs_fail(err, RS_ERR_FORMAT, "profil %s : trop de champs", p->id);
+                st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_TOO_MANY_FIELDS), p->id);
                 goto done;
             }
             st = parse_field(p->id, f, &p->fields[p->field_count++], err);
@@ -89,7 +90,7 @@ rs_status rs_profile_parse(const char *json, rs_profile *p, rs_error *err)
         }
         size_t declared = strlen(p->footer_prefix) + 4 * (size_t)p->field_count + strlen(p->footer_cookie);
         if (declared != p->footer_length) {
-            st = rs_fail(err, RS_ERR_FORMAT, "profil %s : pied de %zu octets, %zu déclarés", p->id,
+            st = rs_fail(err, RS_ERR_FORMAT, RS_TR(PROFILE_FOOTER_SIZE), p->id,
                          p->footer_length, declared);
             goto done;
         }
@@ -159,14 +160,14 @@ rs_status rs_profile_decode(const rs_profile *p, const uint8_t *file, size_t len
 {
     out->len = 0;
     if (!p->has_footer)
-        return rs_buf_append(out, file, len) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+        return rs_buf_append(out, file, len) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     if (len < p->footer_length)
-        return rs_fail(err, RS_ERR_FORMAT, "%s : fichier trop court pour son pied de %zu octets", p->name,
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(FILE_TOO_SHORT), p->name,
                        p->footer_length);
     size_t start = len - p->footer_length;
     if (!matches(file, len, start, p->footer_prefix) ||
         !matches(file, len, len - strlen(p->footer_cookie), p->footer_cookie))
-        return rs_fail(err, RS_ERR_FORMAT, "%s : pied de fichier introuvable", p->name);
+        return rs_fail(err, RS_ERR_FORMAT, RS_TR(FOOTER_NOT_FOUND), p->name);
     /* Fixed numeric values (e.g. the version) must match, and the size the
      * footer announces must be the size of the data before it. */
     size_t off = start + strlen(p->footer_prefix);
@@ -174,12 +175,12 @@ rs_status rs_profile_decode(const rs_profile *p, const uint8_t *file, size_t len
         const rs_profile_field *f = &p->fields[i];
         uint32_t v = load_le32(file + off);
         if (f->kind == RS_FIELD_NUMBER && v != f->number)
-            return rs_fail(err, RS_ERR_FORMAT, "%s : %s inattendu (%u)", p->name, f->name, (unsigned)v);
+            return rs_fail(err, RS_ERR_FORMAT, RS_TR(FOOTER_UNEXPECTED), p->name, f->name, (unsigned)v);
         if (f->kind == RS_FIELD_RAW_SIZE && strcmp(f->name, "pad_size") == 0 && v != start)
-            return rs_fail(err, RS_ERR_FORMAT, "%s : le pied annonce %u octets, le fichier en a %zu",
+            return rs_fail(err, RS_ERR_FORMAT, RS_TR(FOOTER_SIZE_MISMATCH),
                            p->name, (unsigned)v, start);
     }
-    return rs_buf_append(out, file, start) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+    return rs_buf_append(out, file, start) ? RS_OK : rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
 }
 
 rs_status rs_profile_encode(const rs_profile *p, const uint8_t *raw, size_t len, size_t chip_size,
@@ -201,7 +202,7 @@ rs_status rs_profile_encode(const rs_profile *p, const uint8_t *raw, size_t len,
         }
         ok = ok && rs_buf_append(out, p->footer_cookie, strlen(p->footer_cookie));
     }
-    return ok ? RS_OK : rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+    return ok ? RS_OK : rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
 }
 
 /* ---- Sets of profiles -------------------------------------------------- */
@@ -215,7 +216,7 @@ rs_status rs_profiles_load_dir(rs_profiles *set, const char *dir, rs_error *err)
 {
     DIR *d = opendir(dir);
     if (!d)
-        return rs_fail(err, RS_ERR_NOT_FOUND, "Dossier de profils introuvable : %s", dir);
+        return rs_fail(err, RS_ERR_NOT_FOUND, RS_TR(PROFILES_DIR_NOT_FOUND), dir);
     char *names[64];
     int n = 0;
     struct dirent *e;
@@ -232,7 +233,7 @@ rs_status rs_profiles_load_dir(rs_profiles *set, const char *dir, rs_error *err)
         rs_buf b = {0};
         st = rs_read_file(path, &b, err);
         if (st == RS_OK && !rs_buf_terminate(&b))
-            st = rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+            st = rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
         rs_profile p;
         if (st == RS_OK)
             st = rs_profile_parse((const char *)b.data, &p, err);
@@ -246,7 +247,7 @@ rs_status rs_profiles_load_dir(rs_profiles *set, const char *dir, rs_error *err)
                 slot = k;
         if (slot == RS_MAX_PROFILES) {
             rs_profile_free(&p);
-            st = rs_fail(err, RS_ERR_FORMAT, "Trop de profils dans %s", dir);
+            st = rs_fail(err, RS_ERR_FORMAT, RS_TR(TOO_MANY_PROFILES), dir);
             break;
         }
         if (slot < set->count)

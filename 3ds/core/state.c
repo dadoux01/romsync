@@ -9,6 +9,7 @@
  * The "saves" object has the same shape as the Flutter client's.
  */
 #include "state.h"
+#include "msg.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -83,7 +84,7 @@ static rs_status put(rs_state_store *s, const char *save_path, const char *game_
     if (!st) {
         rs_save_state *items = realloc(s->items, (size_t)(s->count + 1) * sizeof *items);
         if (!items)
-            return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+            return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
         s->items = items;
         st = &s->items[s->count++];
         memset(st, 0, sizeof *st);

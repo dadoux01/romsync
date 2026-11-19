@@ -47,6 +47,7 @@ typedef struct {
     int folder_count;
     int keep_backups;
     bool check_updates; /* look for a new version at start (true by default) */
+    char language[8];   /* "fr", "en", or "" to follow the console */
 
     rs_rom_choice *choices;
     int choice_count;

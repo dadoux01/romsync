@@ -7,6 +7,7 @@
  *   client's ("mode": "auto", "local" or "archive").
  */
 #include "queue.h"
+#include "msg.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,7 +108,7 @@ rs_status rs_queue_open(rs_queue *q, const char *dir, rs_error *err)
         if (!u.upload_id[0] || !rs_file_exists(content))
             continue;
         if (!push(q, &u)) {
-            st = rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+            st = rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
             break;
         }
     }
@@ -144,7 +145,7 @@ rs_status rs_queue_add(rs_queue *q, const char *game_id, const char *save_path, 
     if (st != RS_OK)
         return st;
     if (!push(q, &u))
-        return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+        return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     if (added)
         *added = u;
     return persist(q, err);

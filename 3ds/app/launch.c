@@ -2,6 +2,7 @@
  * launch.c - starting a DS game through a YANBF forwarder (see launch.h).
  */
 #include "launch.h"
+#include "text.h"
 
 #include <3ds.h>
 #include <stdio.h>
@@ -53,22 +54,15 @@ bool launch_check(const char *rom_path, char *why, size_t size)
     /* Each missing piece gets its own message: "it does not work" is hard
      * to fix without knowing which part is missing. */
     if (!rs_file_exists(FORWARDER_DIR "/sdcard.nds")) {
-        snprintf(why, size,
-                 "sd:/_nds/ntr-forwarder/sdcard.nds est introuvable%s.\n\n"
-                 "Dans le « DS Game Forwarder Pack » (github.com/RocketRobz/NTR_Forwarder, page Releases), copie "
-                 "le contenu du dossier « for SD Card root » (le dossier _nds) à la racine de la carte SD, pas le "
-                 "dossier lui-même.",
-                 rs_dir_exists("sdmc:/for SD Card root") ? " (le dossier « for SD Card root » a été copié tel quel)"
+        snprintf(why, size, RS_TR(FORWARDER_MISSING),
+                 rs_dir_exists("sdmc:/for SD Card root") ? RS_TR(FORWARDER_COPIED_AS_IS)
                                                          : "");
         return false;
     }
     Result rc;
     title_state state = title_installed(YANBF_BOOTSTRAP_TID, &rc);
     if (state == TITLE_MISSING) {
-        rs_strlcpy(why,
-                   "bootstrap.cia de YANBF n'est pas installé.\n\n"
-                   "Télécharge bootstrap.cia (github.com/YANBForwarder/YANBF, page Releases) et installe-le avec FBI.",
-                   size);
+        rs_strlcpy(why, RS_TR(BOOTSTRAP_MISSING), size);
         return false;
     }
     /* TITLE_UNKNOWN: the list of titles cannot be read (the .3dsx runs with
@@ -107,11 +101,7 @@ bool launch_start(const char *rom_path, char *why, size_t size)
         rc = APT_DoApplicationJump(param, sizeof param, hmac);
     }
     if (R_FAILED(rc)) {
-        snprintf(why, size,
-                 "Le système a refusé de lancer bootstrap.cia (erreur 0x%08lX). Vérifie qu'il est installé "
-                 "(avec FBI), et installe RomSync en .cia : le lancement peut ne pas fonctionner depuis le "
-                 "Homebrew Launcher.",
-                 (unsigned long)rc);
+        snprintf(why, size, RS_TR(BOOTSTRAP_REFUSED), (unsigned long)rc);
         return false;
     }
     return true;

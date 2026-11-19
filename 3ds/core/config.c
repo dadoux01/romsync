@@ -37,6 +37,7 @@ rs_status rs_config_load(rs_config *c, const char *path, rs_error *err)
     rs_strlcpy(c->device_name, rs_json_str(doc, "device_name", "3DS"), sizeof c->device_name);
     c->keep_backups = (int)rs_json_num(doc, "backup_count", 10);
     c->check_updates = rs_json_bool(doc, "check_updates", true);
+    rs_strlcpy(c->language, rs_json_str(doc, "language", ""), sizeof c->language);
     const cJSON *e;
     cJSON_ArrayForEach(e, cJSON_GetObjectItemCaseSensitive(doc, "rom_folders"))
         rs_config_add_folder(c, rs_json_str(e, "path", ""), rs_json_bool(e, "recursive", true));
@@ -67,6 +68,7 @@ rs_status rs_config_save(const rs_config *c, rs_error *err)
     cJSON_AddStringToObject(doc, "device_name", c->device_name);
     cJSON_AddNumberToObject(doc, "backup_count", c->keep_backups);
     cJSON_AddBoolToObject(doc, "check_updates", c->check_updates);
+    cJSON_AddStringToObject(doc, "language", c->language);
     cJSON *folders = cJSON_AddArrayToObject(doc, "rom_folders");
     for (int i = 0; i < c->folder_count; i++) {
         cJSON *f = cJSON_CreateObject();

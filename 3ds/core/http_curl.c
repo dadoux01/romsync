@@ -12,6 +12,7 @@
 #include <strings.h>
 
 #include "http.h"
+#include "msg.h"
 
 /* libcurl hands the body over in pieces: append them to the buffer. */
 static size_t on_body(char *data, size_t size, size_t count, void *userdata)
@@ -54,7 +55,7 @@ rs_status rs_http_curl_send(void *ctx, const rs_http_request *req, rs_http_respo
     (void)ctx;
     CURL *curl = curl_easy_init();
     if (!curl)
-        return rs_fail(err, RS_ERR_NOMEM, "Initialisation réseau impossible");
+        return rs_fail(err, RS_ERR_NOMEM, RS_TR(NETWORK_INIT));
 
     struct curl_slist *headers = NULL;
     char line[512];
@@ -95,7 +96,7 @@ rs_status rs_http_curl_send(void *ctx, const rs_http_request *req, rs_http_respo
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
         res->status = (int)status;
     } else {
-        st = rs_fail(err, RS_ERR_OFFLINE, "Serveur injoignable (%s)", curl_easy_strerror(rc));
+        st = rs_fail(err, RS_ERR_OFFLINE, RS_TR(SERVER_UNREACHABLE_DETAIL), curl_easy_strerror(rc));
     }
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);

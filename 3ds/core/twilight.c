@@ -2,6 +2,7 @@
  * twilight.c - TWiLight Menu++ and NTR forwarder settings (see twilight.h).
  */
 #include "twilight.h"
+#include "msg.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -140,11 +141,11 @@ static const char *location_label(rs_save_location loc)
 {
     switch (loc) {
     case RS_SAVE_NEXT_TO_ROM:
-        return "à côté de la ROM";
+        return RS_TR(TWL_NEXT_TO_ROM);
     case RS_SAVE_IN_TWLM_FOLDER:
-        return "dossier de TWiLight Menu++";
+        return RS_TR(TWL_TWLM_FOLDER);
     default:
-        return "dossier saves";
+        return RS_TR(TWL_SAVES_FOLDER);
     }
 }
 
@@ -159,17 +160,10 @@ void rs_forwarder_mismatch(const char *sd_root, const char *rom_path, char *why,
     rs_save_location lt = rs_twl_save_location(sd_root, RS_LAUNCHER_TWILIGHT);
     rs_save_location lf = rs_twl_save_location(sd_root, RS_LAUNCHER_FORWARDER);
     if (lt != lf) {
-        snprintf(why, size,
-                 "TWiLight Menu++ range les saves dans : %s ; le forwarder dans : %s. Mets le même emplacement : "
-                 "SAVE_LOCATION=%d dans la section [NTR-FORWARDER] de sd:/_nds/ntr_forwarder.ini.",
-                 location_label(lt), location_label(lf), (int)lt);
+        snprintf(why, size, RS_TR(TWL_LOCATION_MISMATCH), location_label(lt), location_label(lf), (int)lt);
         return;
     }
     int st = rs_twl_save_slot(sd_root, RS_LAUNCHER_TWILIGHT, rom_path);
     int sf = rs_twl_save_slot(sd_root, RS_LAUNCHER_FORWARDER, rom_path);
-    snprintf(why, size,
-             "Emplacement de save différent pour ce jeu : %d dans TWiLight Menu++, %d dans le forwarder. "
-             "Choisis le même numéro de save dans les réglages du jeu des deux côtés (forwarder : maintenir Y "
-             "au lancement).",
-             lt == RS_SAVE_NEXT_TO_ROM ? 0 : st, sf);
+    snprintf(why, size, RS_TR(TWL_SLOT_MISMATCH), lt == RS_SAVE_NEXT_TO_ROM ? 0 : st, sf);
 }

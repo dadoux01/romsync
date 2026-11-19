@@ -5,6 +5,7 @@
  * it holds directly. Bottom screen: the keys.
  */
 #include "browser.h"
+#include "text.h"
 
 #include <3ds.h>
 #include <dirent.h>
@@ -67,9 +68,9 @@ static void draw(const char *dir, const listing *l, int sel, int scroll)
     ui_print(UI_CYAN);
     ui_print_fit(dir, UI_TOP_COLS);
     ui_print(UI_RESET);
-    ui_print("%d ROM(s) DS dans ce dossier\n\n", l->roms);
+    ui_print(RS_TR(BROWSER_ROMS), l->roms);
     if (l->count == 0)
-        ui_print("(aucun sous-dossier)\n");
+        ui_print(RS_TR(BROWSER_NO_SUBFOLDER));
     for (int i = scroll; i < l->count && i < scroll + LIST_ROWS; i++) {
         ui_print(i == sel ? UI_INVERSE "> " : "  ");
         ui_print_fit(l->names[i], UI_TOP_COLS - 3);
@@ -78,12 +79,8 @@ static void draw(const char *dir, const listing *l, int sel, int scroll)
 
     ui_bottom();
     ui_clear();
-    ui_print(UI_CYAN "Choisir un dossier de ROMs" UI_RESET "\n\n");
-    ui_print("Haut/Bas : se déplacer\n");
-    ui_print("A        : ouvrir le dossier\n");
-    ui_print("B        : dossier parent\n");
-    ui_print("X        : choisir ce dossier\n");
-    ui_print("START    : annuler\n");
+    ui_print(UI_CYAN "%s" UI_RESET "\n\n", RS_TR(BROWSER_TITLE));
+    ui_print("%s", RS_TR(BROWSER_KEYS));
 }
 
 bool browse_folder(const char *start, char *out, size_t size)

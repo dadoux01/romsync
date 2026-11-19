@@ -14,6 +14,7 @@
 #include <time.h>
 
 #include "../core/twilight.h"
+#include "text.h"
 #include "app.h"
 #include "ui.h"
 #include "updater.h"
@@ -63,12 +64,12 @@ static void draw_list(const app *a, int sel, int scroll)
     ui_print_fit(header, UI_TOP_COLS);
     ui_print(UI_RESET);
     if (a->lib.count == 0)
-        ui_print("\nAucune ROM DS trouvée.\nSELECT : réglages, pour choisir les dossiers.\n");
+        ui_print(RS_TR(NO_ROMS));
     for (int i = scroll; i < a->lib.count && i < scroll + LIST_ROWS; i++) {
         const rs_game *g = &a->lib.games[i];
         const game_view *v = &a->views[i];
         char label[24];
-        snprintf(label, sizeof label, "%s%s", v->error ? "erreur" : rs_status_label(v->status),
+        snprintf(label, sizeof label, "%s%s", v->error ? RS_TR(ERROR_LOWER) : rs_status_label(v->status),
                  v->conflict ? "*" : "");
         ui_print(i == sel ? UI_INVERSE "> " : "  ");
         ui_print_fit(g->entry.title, 30);
@@ -77,7 +78,7 @@ static void draw_list(const app *a, int sel, int scroll)
         ui_print(UI_RESET "\n");
     }
     ui_move(UI_ROWS - 1, 0);
-    ui_print("* conflit résolu automatiquement");
+    ui_print(RS_TR(CONFLICT_FOOTNOTE));
 }
 
 static void draw_details(const app *a, int sel)
@@ -91,38 +92,41 @@ static void draw_details(const app *a, int sel)
         ui_print(UI_CYAN);
         ui_print_fit(g->entry.title, UI_BOTTOM_COLS);
         ui_print(UI_RESET);
-        ui_print("Identifiant : %s\n", g->entry.game_id);
-        ui_print("ROM : ");
+        ui_print(RS_TR(DETAIL_ID), g->entry.game_id);
+        ui_print(RS_TR(DETAIL_ROM));
         ui_print_fit(rs_basename(g->entry.rom_path), UI_BOTTOM_COLS - 7);
-        ui_print("\nSave : ");
+        ui_print(RS_TR(DETAIL_SAVE));
         ui_print_fit(rs_basename(g->entry.save_path), UI_BOTTOM_COLS - 8);
-        ui_print("\nEmplacement de save : %d%s\n", g->slot, g->slot ? "" : " (.sav)");
-        ui_print("État : %s%s" UI_RESET "\n", status_color(v->status, v->error), rs_status_label(v->status));
+        ui_print(RS_TR(DETAIL_SLOT), g->slot, g->slot ? "" : " (.sav)");
+        ui_print(RS_TR(DETAIL_STATE), status_color(v->status, v->error), rs_status_label(v->status));
+        ui_print(UI_RESET "\n");
         if (s) {
             char at[32];
             rs_time_format_iso(s->synced_at, at, sizeof at);
-            ui_print("Dernière synchro : %.10s %.5s\n", at, at + 11);
+            ui_print(RS_TR(DETAIL_LAST_SYNC), at, at + 11);
         }
         int pending = rs_queue_count_for(&a->queue, g->entry.save_path);
         if (pending)
-            ui_print(UI_YELLOW "%d envoi(s) en attente" UI_RESET "\n", pending);
+            ui_print(UI_YELLOW);
+            ui_print(RS_TR(DETAIL_PENDING), pending);
+            ui_print(UI_RESET "\n");
         if (v->choice_pending)
-            ui_print(UI_RED "Choix à faire : deux appareils ont\njoué sans se synchroniser (A)." UI_RESET "\n");
+            ui_print(UI_RED "%s" UI_RESET "\n", RS_TR(DETAIL_CHOICE));
         else if (v->conflict)
-            ui_print(UI_YELLOW "Divergence : voir l'historique\nsur le site." UI_RESET "\n");
+            ui_print(UI_YELLOW "%s" UI_RESET "\n", RS_TR(DETAIL_CONFLICT));
         if (g->shared_count)
-            ui_print("Partage l'identifiant %s\navec %d autre(s) ROM(s).\n", g->detected_id, g->shared_count);
+            ui_print(RS_TR(DETAIL_SHARED), g->detected_id, g->shared_count);
         if (v->message[0]) {
             ui_print("\n");
             ui_print_wrapped(v->message, UI_BOTTOM_COLS);
         }
     }
     ui_move(UI_ROWS - 5, 0);
-    ui_print("A : synchroniser ce jeu   R : tout\n");
-    ui_print("X : lancer");
+    ui_print(RS_TR(KEYS_SYNC));
+    ui_print(RS_TR(KEYS_LAUNCH));
     if (sel < a->lib.count && a->lib.games[sel].shared_count)
-        ui_print("   Y : partager/séparer");
-    ui_print("\nSELECT : réglages   START : quitter\n");
+        ui_print(RS_TR(KEYS_SHARE));
+    ui_print(RS_TR(KEYS_MENU));
 }
 
 int main(void)
@@ -138,9 +142,9 @@ int main(void)
 
     bool ok = app_init(&a);
     if (ok && !network)
-        ui_message("Réseau", "Le service réseau n'a pas démarré : RomSync fonctionnera hors ligne.");
+        ui_message(RS_TR(NETWORK), RS_TR(NETWORK_DOWN));
     if (ok && !a.twilight)
-        ui_message("Profil manquant", "Le profil de conversion « twilight » est introuvable : réinstalle RomSync.");
+        ui_message(RS_TR(PROFILE_MISSING), RS_TR(PROFILE_MISSING_TEXT));
 
     /* First start: pairing, then ROM folders. */
     if (ok && (!a.api.token[0] || !a.config.server_url[0]))
@@ -148,9 +152,7 @@ int main(void)
     if (ok && a.config.folder_count == 0)
         app_choose_folders(&a);
     if (ok && !rs_twl_installed(SD_ROOT))
-        ui_message("TWiLight Menu++",
-                   "sd:/_nds/TWiLightMenu/ est introuvable : RomSync suppose les réglages par défaut (saves dans "
-                   "le dossier saves/ de chaque dossier de ROMs).");
+        ui_message("TWiLight Menu++", RS_TR(TWLM_MISSING));
     bool updated = false;
     if (ok) {
         app_rescan(&a);

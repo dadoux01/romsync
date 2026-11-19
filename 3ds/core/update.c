@@ -2,6 +2,7 @@
  * update.c - see update.h.
  */
 #include "update.h"
+#include "msg.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -138,17 +139,17 @@ rs_status rs_verify_release(const uint8_t *sums, size_t sums_len, const char *si
     uint8_t sig[64], key[32];
     if (rs_base64_decode(signature_b64, sig, sizeof sig) != 64 ||
         rs_base64_decode(public_key_b64, key, sizeof key) != 32)
-        return rs_fail(err, RS_ERR_REFUSED, "Signature illisible : mise à jour refusée.");
+        return rs_fail(err, RS_ERR_REFUSED, RS_TR(UPDATE_SIGNATURE_UNREADABLE));
     if (!rs_ed25519_verify(sig, key, sums, sums_len))
         return rs_fail(err, RS_ERR_REFUSED,
-                       "Signature invalide : cette mise à jour ne vient pas de RomSync, elle est refusée.");
+                       RS_TR(UPDATE_SIGNATURE_INVALID));
     char expected[65], actual[65];
     if (!rs_sum_for((const char *)sums, sums_len, file_name, expected))
-        return rs_fail(err, RS_ERR_REFUSED, "%s ne figure pas dans SHA256SUMS : mise à jour refusée.", file_name);
+        return rs_fail(err, RS_ERR_REFUSED, RS_TR(UPDATE_NOT_LISTED), file_name);
     rs_sha256_hex(data, len, actual);
     if (strcmp(actual, expected) != 0)
         return rs_fail(err, RS_ERR_REFUSED,
-                       "Le fichier téléchargé est altéré (hash différent) : mise à jour refusée.");
+                       RS_TR(UPDATE_HASH_MISMATCH));
     return RS_OK;
 }
 

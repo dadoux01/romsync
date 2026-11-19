@@ -2,6 +2,7 @@
  * json_file.c - JSON documents on disk (see json_file.h).
  */
 #include "json_file.h"
+#include "msg.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +21,7 @@ rs_status rs_json_read(const char *path, cJSON **out, char *warning, size_t warn
         return st;
     if (!rs_buf_terminate(&b)) {
         rs_buf_free(&b);
-        return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+        return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     }
     *out = cJSON_Parse((const char *)b.data);
     rs_buf_free(&b);
@@ -32,7 +33,7 @@ rs_status rs_json_read(const char *path, cJSON **out, char *warning, size_t warn
         remove(aside);
         rename(path, aside);
         if (warning)
-            snprintf(warning, warning_size, "Fichier illisible mis de côté : %s", aside);
+            snprintf(warning, warning_size, RS_TR(STATE_FILE_SET_ASIDE), aside);
     }
     return RS_OK;
 }
@@ -41,7 +42,7 @@ rs_status rs_json_write(const char *path, const cJSON *doc, rs_error *err)
 {
     char *text = cJSON_Print(doc);
     if (!text)
-        return rs_fail(err, RS_ERR_NOMEM, "Mémoire insuffisante");
+        return rs_fail(err, RS_ERR_NOMEM, RS_TR(NOMEM));
     rs_status st = rs_write_file_atomic(path, text, strlen(text), err);
     free(text);
     return st;
