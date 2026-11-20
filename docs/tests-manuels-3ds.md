@@ -136,11 +136,11 @@ Faire d'abord une sauvegarde du jeu C avec Checkpoint.
 
 | # | Action | Résultat attendu |
 | --- | --- | --- |
-| 11.1 | Lancer RomSync | Le jeu C apparaît dans la section « 3DS » avec son nom (ou son code produit) ; mises à jour, DLC et titres système n'apparaissent pas |
+| 11.1 | Lancer RomSync | Le jeu C apparaît dans la section « 3DS » avec son nom anglais (le code produit `CTR-P-XXXX` seulement si ce nom a des caractères que la console ne sait pas afficher) ; mises à jour, DLC, titres système et homebrews installés en CIA (ftpd, RetroArch…) n'apparaissent pas |
 | 11.2 | Premier démarrage avec le jeu C | Sa save est envoyée ; le site la montre (`.tar`) avec les mêmes fichiers que la sauvegarde de Checkpoint |
 | 11.3 | Jouer au jeu C dans Azahar sur le PC et sauvegarder, puis relancer RomSync sur la console | La save du PC est téléchargée ; une copie `.tar` est dans `sd:/3ds/romsync/backup/3ds/` |
 | 11.4 | Lancer le jeu C sur la console | Le jeu charge la save du PC, sans message de save corrompue (valeur de sécurité) |
 | 11.5 | Sauvegarder sur la console, relancer RomSync, puis lancer le jeu dans Azahar | La save de la console est sur le serveur, puis dans Azahar ; le jeu la charge |
-| 11.6 | Un jeu installé jamais lancé, dont une save existe sur le serveur | « Lancer le jeu une fois » : rien n'est écrit |
+| 11.6 | Un jeu installé jamais lancé, dont une save existe sur le serveur | Le jeu n'apparaît pas ; après l'avoir lancé et sauvegardé une fois, il apparaît et se synchronise (comme 11.2 à 11.4) |
 | 11.7 | Cartouche 3DS insérée (si disponible) | Le jeu apparaît ; envoi et téléchargement comme 11.2 à 11.4 |
 | 11.8 | Restaurer avec Checkpoint la sauvegarde du début | Le jeu retrouve son état initial |

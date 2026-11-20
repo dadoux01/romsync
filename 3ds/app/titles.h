@@ -17,7 +17,7 @@ typedef struct {
     u64 id;
     FS_MediaType media;
     char name[64];  /* English short title of the icon, else the product code */
-    bool has_save;  /* the save archive opens: the game created its save */
+    bool has_save;  /* the save archive opens (always, for a listed title) */
     rs_save_io io;  /* ctx = this title */
 } ctr_title;
 
@@ -29,7 +29,9 @@ typedef struct {
 } ctr_titles;
 
 /* Lists the games (title IDs 00040000xxxxxxxx) of the SD card and of the
- * cartridge; a cartridge whose game is also installed is left out. */
+ * cartridge that have a save archive (as Checkpoint: this leaves out the
+ * homebrews installed as CIA and the games never started); a cartridge
+ * whose game is also installed is left out. */
 void titles_list(ctr_titles *out);
 void titles_free(ctr_titles *t);
 

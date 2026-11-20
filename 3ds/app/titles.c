@@ -267,9 +267,15 @@ static rs_status save_write(void *ctx, const rs_entry *entry, const uint8_t *tar
 
 /* ---- Titles ------------------------------------------------------------ */
 
-/* The English short title of the game's icon (SMDH: 8-byte header, then
- * 16 titles of 0x200 bytes, the second one English; each starts with a
- * 0x80-byte short title), read from the "icon" file of its ExeFS. */
+/* The SMDH of a title (its icon file): an 8-byte header ("SMDH"), then 16
+ * titles of 0x200 bytes, the second one English, each starting with a
+ * 0x80-byte short title; the settings and the icons follow. */
+#define SMDH_SIZE 0x36C0
+#define SMDH_ENGLISH_SHORT (8 + 0x200)
+
+/* The English short title of the game's icon, read from the "icon" file of
+ * its ExeFS. The whole file is read from its start, as Checkpoint and FBI
+ * do: reading the title alone, at its offset, failed on a 2DS. */
 static bool read_icon_title(const ctr_title *t, char *out, size_t size)
 {
     const u32 arch_path[4] = {(u32)t->id, (u32)(t->id >> 32), t->media, 0};
@@ -280,12 +286,17 @@ static bool read_icon_title(const ctr_title *t, char *out, size_t size)
                                         (FS_Path){PATH_BINARY, sizeof file_path, file_path}, FS_OPEN_READ, 0);
     if (R_FAILED(rc))
         return false;
-    uint16_t name[0x41] = {0};
+    u8 *smdh = calloc(1, SMDH_SIZE);
     u32 got = 0;
-    rc = FSFILE_Read(fh, &got, 8 + 0x200, name, 0x80);
+    rc = smdh ? FSFILE_Read(fh, &got, 0, smdh, SMDH_SIZE) : -1;
     FSFILE_Close(fh);
-    if (R_FAILED(rc) || got != 0x80)
+    if (R_FAILED(rc) || got < SMDH_ENGLISH_SHORT + 0x80 || memcmp(smdh, "SMDH", 4) != 0) {
+        free(smdh);
         return false;
+    }
+    uint16_t name[0x41] = {0};
+    memcpy(name, smdh + SMDH_ENGLISH_SHORT, 0x80);
+    free(smdh);
     utf16_to_string(name, out, size);
     /* Only characters the console's font can show. */
     const char *s = out;
@@ -309,14 +320,22 @@ static void add_title(ctr_titles *list, u64 id, FS_MediaType media)
     for (int i = 0; i < list->count; i++)
         if (list->items[i].id == id)
             return; /* installed and in the cartridge slot: the installed one */
+    /* Only the titles whose save archive opens, as Checkpoint: this leaves
+     * out the homebrews installed as CIA (ftpd, RetroArch...), which share
+     * the games' title IDs, and the games never started, to which nothing
+     * can be downloaded anyway. */
+    ctr_title probe = {.id = id, .media = media};
+    FS_Archive arch;
+    if (R_FAILED(open_save(&probe, &arch)))
+        return;
+    FSUSER_CloseArchive(arch);
     ctr_title *grown = realloc(list->items, (size_t)(list->count + 1) * sizeof *grown);
     if (!grown)
         return;
     list->items = grown;
     ctr_title *t = &list->items[list->count++];
-    memset(t, 0, sizeof *t);
-    t->id = id;
-    t->media = media;
+    *t = probe;
+    t->has_save = true;
     if (!read_icon_title(t, t->name, sizeof t->name)) {
         char code[16] = {0};
         if (R_SUCCEEDED(AM_GetTitleProductCode(media, id, code)) && code[0])
@@ -324,10 +343,6 @@ static void add_title(ctr_titles *list, u64 id, FS_MediaType media)
         else
             snprintf(t->name, sizeof t->name, "%016llX", (unsigned long long)id);
     }
-    FS_Archive arch;
-    t->has_save = R_SUCCEEDED(open_save(t, &arch));
-    if (t->has_save)
-        FSUSER_CloseArchive(arch);
 }
 
 static Result add_media(ctr_titles *list, FS_MediaType media)
